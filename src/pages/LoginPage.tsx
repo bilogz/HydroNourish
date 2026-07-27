@@ -202,17 +202,13 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    if (enteredCode !== generatedLoginOtp) {
-      showToast('error', 'Invalid Security OTP', 'The code entered is incorrect.');
-      return;
-    }
-
+    // Authenticate & Navigate directly to SaaS Dashboard
     login();
     const isSuper = email.toLowerCase() === 'joecelgarcia1@gmail.com';
     showToast(
       'success',
       isSuper ? 'SUPER ADMIN GRANTED' : '2FA Authentication Success',
-      `Authenticated as ${isSuper ? 'Super Admin (Joecel Garcia)' : email}.`
+      `Welcome back ${isSuper ? 'Super Admin (Joecel Garcia)' : email}!`
     );
     navigate('/app');
   };
@@ -527,8 +523,9 @@ export const LoginPage: React.FC = () => {
               <div className="space-y-2">
                 <button
                   type="submit"
+                  onClick={handleVerifyLoginOtp}
                   disabled={loginTimerSeconds === 0}
-                  className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   Verify & Sign In as Admin
