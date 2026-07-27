@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { useAppContext } from '../hooks/useAppContext';
 import { Modal } from '../components/Modal';
-import { sendLoginOtp, sendForgotPasswordOtp } from '../services/emailService';
+import { sendLoginOtp, sendForgotPasswordOtp, SYSTEM_OTP_SENDER_EMAIL } from '../services/emailService';
 import {
   LogIn,
   ArrowLeft,
@@ -358,11 +358,18 @@ export const LoginPage: React.FC = () => {
               </div>
               <h3 className="text-lg font-extrabold text-slate-900">2-Factor Security Verification</h3>
               <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                A dynamic 6-digit OTP code was sent to:
+                A dynamic 6-digit OTP code was dispatched:
               </p>
-              <span className="inline-block px-3 py-1 rounded-full bg-slate-100 font-bold text-slate-900 text-xs">
-                {email}
-              </span>
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] space-y-1">
+                <div className="flex items-center justify-between text-slate-500">
+                  <span>System OTP Sender:</span>
+                  <span className="font-bold text-teal-700">{SYSTEM_OTP_SENDER_EMAIL}</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-800 font-bold border-t border-slate-200/60 pt-1">
+                  <span>Recipient:</span>
+                  <span className="text-slate-900 font-mono">{email}</span>
+                </div>
+              </div>
             </div>
 
             {/* Live 1-Minute Countdown Badge */}
