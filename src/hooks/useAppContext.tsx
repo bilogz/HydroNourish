@@ -37,6 +37,9 @@ interface AppContextType {
   settings: ClinicSettings;
   toasts: ToastMessage[];
   
+  currentUser: ClinicUser;
+  setCurrentUser: React.Dispatch<React.SetStateAction<ClinicUser>>;
+  
   // Navigation & UI State
   sidebarCollapsed: boolean;
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
@@ -44,6 +47,7 @@ interface AppContextType {
   setMobileSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isAuthenticated: boolean;
   login: () => void;
+  loginAsUser: (email: string) => void;
   logout: () => void;
 
   // Actions & State Modifiers
@@ -130,9 +134,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
+  // Current Active User State (Defaults to Super Admin Joecel Garcia)
+  const [currentUser, setCurrentUser] = useState<ClinicUser>(() => {
+    const saved = localStorage.getItem('hn_current_user');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return initialUsers[0]; // Joecel Garcia (Super Admin)
+  });
+
+  useEffect(() => {
+    localStorage.setItem('hn_current_user', JSON.stringify(currentUser));
+  }, [currentUser]);
+
   const login = () => {
     setIsAuthenticated(true);
     showToast('success', 'Signed In', 'Welcome back to HydroNourish Dashboard.');
+  };
+
+  const loginAsUser = (userEmail: string) => {
+    const found = users.find(u => u.email.toLowerCase() === userEmail.toLowerCase()) || {
+      id: 'USR-SUPER-01',
+      name: 'Joecel Garcia',
+      email: 'joecelgarcia1@gmail.com',
+      role: 'Super Admin' as const,
+      department: 'Chief Executive & Master System Controller',
+      status: 'Active' as const,
+      lastActive: 'Now (Active)'
+    };
+    setCurrentUser(found);
+    setIsAuthenticated(true);
+    showToast('success', `${found.role} Access`, `Welcome back, ${found.name}!`);
   };
 
   const logout = () => {
@@ -290,13 +322,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         devices,
         users,
         settings,
-        toasts,
+        currentUser,
+        setCurrentUser,
         sidebarCollapsed,
         setSidebarCollapsed,
         mobileSidebarOpen,
         setMobileSidebarOpen,
         isAuthenticated,
         login,
+        loginAsUser,
         logout,
         addPet,
         updatePet,

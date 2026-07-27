@@ -202,7 +202,7 @@ export const LoginPage: React.FC = () => {
     }
 
     // Authenticate & Navigate directly to SaaS Dashboard
-    login();
+    loginAsUser(email || 'joecelgarcia1@gmail.com');
     const isSuper = email.toLowerCase() === 'joecelgarcia1@gmail.com';
     showToast(
       'success',
