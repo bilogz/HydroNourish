@@ -26,7 +26,7 @@ import {
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, loginAsUser, showToast } = useAppContext();
+  const { login, loginAsUser, users, showToast } = useAppContext();
 
   // Authentication Step:
   // 1 = Email & Password Login
@@ -129,6 +129,20 @@ export const LoginPage: React.FC = () => {
         showToast('error', 'Account Locked (30s)', '3 failed attempts recorded. IP flagged for security cooldown.');
       } else {
         showToast('error', 'Invalid Super Admin Password', `Incorrect password for ${email}. (${3 - newFailed} attempts remaining)`);
+      }
+      return;
+    }
+
+    // Validate password for provisioned user accounts
+    const existingUser = (users ?? []).find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (existingUser && existingUser.password && password !== existingUser.password) {
+      const newFailed = failedAttempts + 1;
+      setFailedAttempts(newFailed);
+      if (newFailed >= 3) {
+        setLockoutTimer(30);
+        showToast('error', 'Account Locked (30s)', '3 failed attempts recorded. IP flagged for security cooldown.');
+      } else {
+        showToast('error', 'Invalid Password', `Incorrect password for ${email}. (${3 - newFailed} attempts remaining)`);
       }
       return;
     }

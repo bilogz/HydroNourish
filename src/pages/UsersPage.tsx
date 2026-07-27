@@ -30,6 +30,7 @@ export const UsersPage: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    password: '',
     role: 'Veterinarian' as UserRole,
     department: 'General Veterinary Care',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'
@@ -42,17 +43,32 @@ export const UsersPage: React.FC = () => {
       return;
     }
 
+    if (!formData.name || !formData.email || !formData.password) {
+      showToast('warning', 'Incomplete Form', 'Please enter Full Name, Email, and Password.');
+      return;
+    }
+
     addUser({
       name: formData.name,
       email: formData.email,
+      password: formData.password,
       role: formData.role,
       department: formData.department,
       status: 'Active',
       avatarUrl: formData.avatarUrl
     });
 
+    setFormData({
+      name: '',
+      email: '',
+      password: '',
+      role: 'Veterinarian',
+      department: 'General Veterinary Care',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'
+    });
+
     setAddModalOpen(false);
-    showToast('success', 'User Account Created', `New account for ${formData.name} (${formData.role}) has been created.`);
+    showToast('success', 'User Account Created', `New account for ${formData.name} (${formData.role}) has been created with secure password.`);
   };
 
   return (
@@ -276,6 +292,20 @@ export const UsersPage: React.FC = () => {
               className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-mono"
               placeholder="staff.name@heritageanimalclinic.com"
             />
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 uppercase mb-1">Account Password *</label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={formData.password}
+              onChange={e => setFormData({ ...formData, password: e.target.value })}
+              className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-mono"
+              placeholder="••••••••"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">Set the initial password for this newly provisioned staff account (min 6 characters).</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

@@ -107,6 +107,7 @@ export interface ClinicUser {
   id: string;
   name: string;
   email: string;
+  password?: string;
   role: UserRole;
   department: string;
   status: 'Active' | 'Inactive';
