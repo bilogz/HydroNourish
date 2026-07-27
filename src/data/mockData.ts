@@ -344,6 +344,16 @@ export const initialDevices: Device[] = [
 
 export const initialUsers: ClinicUser[] = [
   {
+    id: 'USR-SUPER-01',
+    name: 'Joecel Garcia',
+    email: 'joecelgarcia1@gmail.com',
+    role: 'Super Admin',
+    department: 'Chief Executive & Master System Controller',
+    status: 'Active',
+    lastActive: 'Now (Active)',
+    avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200'
+  },
+  {
     id: 'USR-00',
     name: 'Heritage System Admin',
     email: 'heritagelink45@gmail.com',

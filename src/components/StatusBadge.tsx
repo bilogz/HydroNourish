@@ -24,6 +24,9 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
   } else if (normalized === 'info') {
     badgeStyle = 'bg-sky-50 text-sky-700 border-sky-200';
     dotColor = 'bg-sky-500';
+  } else if (normalized === 'super admin') {
+    badgeStyle = 'bg-purple-50 text-purple-700 border-purple-300 font-extrabold shadow-xs';
+    dotColor = 'bg-purple-600 animate-pulse';
   }
 
   const pxClass = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs font-medium';

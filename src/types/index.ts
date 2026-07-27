@@ -2,7 +2,7 @@ export type HealthStatus = 'Healthy' | 'Attention Needed' | 'Critical';
 export type DeviceStatus = 'Online' | 'Offline' | 'Warning';
 export type AlertSeverity = 'Info' | 'Warning' | 'Critical';
 export type ReviewStatus = 'Unreviewed' | 'In Review' | 'Resolved';
-export type UserRole = 'Administrator' | 'Veterinarian' | 'Clinic Staff';
+export type UserRole = 'Super Admin' | 'Administrator' | 'Veterinarian' | 'Clinic Staff';
 
 export interface Pet {
   id: string;
