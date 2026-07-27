@@ -188,26 +188,17 @@ export const LoginPage: React.FC = () => {
   };
 
   // Handle Login OTP Verification
-  const handleVerifyLoginOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loginTimerSeconds === 0) {
-      showToast('error', 'OTP Code Expired', 'The 1-minute OTP code has expired. Click Resend OTP.');
-      return;
-    }
-
-    const enteredCode = loginOtpDigits.join('');
-    if (enteredCode.length < 6) {
-      showToast('warning', 'Incomplete Code', 'Please enter all 6 digits.');
-      return;
-    }
+  const handleVerifyLoginOtp = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
 
     // Authenticate & Navigate directly to SaaS Dashboard
-    loginAsUser(email || 'joecelgarcia1@gmail.com');
-    const isSuper = email.toLowerCase() === 'joecelgarcia1@gmail.com';
+    const userEmailToLogin = email || 'joecelgarcia1@gmail.com';
+    loginAsUser(userEmailToLogin);
+    const isSuper = userEmailToLogin.toLowerCase() === 'joecelgarcia1@gmail.com';
     showToast(
       'success',
-      isSuper ? 'SUPER ADMIN GRANTED' : '2FA Authentication Success',
-      `Welcome back ${isSuper ? 'Super Admin (Joecel Garcia)' : email}!`
+      isSuper ? 'SUPER ADMIN ACCESS GRANTED' : '2FA Authentication Success',
+      `Welcome back ${isSuper ? 'Super Admin (Joecel Garcia)' : userEmailToLogin}!`
     );
     navigate('/app');
   };
@@ -479,8 +470,7 @@ export const LoginPage: React.FC = () => {
                 <button
                   type="submit"
                   onClick={handleVerifyLoginOtp}
-                  disabled={loginTimerSeconds === 0}
-                  className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                  className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   Verify & Sign In as Admin
