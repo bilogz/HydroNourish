@@ -506,19 +506,6 @@ export const LoginPage: React.FC = () => {
               </span>
             </div>
 
-            {/* OTP Code Dev Inspection Banner */}
-            {generatedLoginOtp && (
-              <div className="p-3 rounded-xl bg-teal-50 border border-teal-200 text-xs text-teal-900 flex items-center justify-between">
-                <span className="font-bold flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                  Security OTP Code:
-                </span>
-                <span className="font-mono font-extrabold bg-white px-2.5 py-0.5 rounded border border-teal-300 text-teal-950 text-sm">
-                  {generatedLoginOtp}
-                </span>
-              </div>
-            )}
-
             {/* 6 Input Boxes */}
             <form onSubmit={handleVerifyLoginOtp} className="space-y-6">
               <div className="flex items-center justify-between gap-2">
@@ -600,19 +587,6 @@ export const LoginPage: React.FC = () => {
                 {resetTimerSeconds > 0 ? `00:${String(resetTimerSeconds).padStart(2, '0')}` : 'Expired'}
               </span>
             </div>
-
-            {/* Reset Code Dev Inspection Banner */}
-            {generatedResetOtp && (
-              <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs text-sky-900 flex items-center justify-between">
-                <span className="font-bold flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-sky-600" />
-                  Reset Code:
-                </span>
-                <span className="font-mono font-extrabold bg-white px-2 py-0.5 rounded border border-sky-300 text-sky-950">
-                  {generatedResetOtp}
-                </span>
-              </div>
-            )}
 
             <form onSubmit={handleVerifyResetOtp} className="space-y-4">
               {/* 6 Digit Inputs */}
