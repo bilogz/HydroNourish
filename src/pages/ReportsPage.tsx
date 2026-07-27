@@ -271,15 +271,15 @@ export const ReportsPage: React.FC = () => {
           <div className="space-y-3 text-xs">
             <div className="flex justify-between">
               <span className="text-slate-500">Total AI Health Observations:</span>
-              <span className="font-bold text-slate-900">{alerts.length}</span>
+              <span className="font-bold text-slate-900">{(alerts || []).length}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Resolved by Veterinary Staff:</span>
-              <span className="font-bold text-slate-900">{alerts.filter(a => a.reviewStatus === 'Resolved').length}</span>
+              <span className="font-bold text-slate-900">{(alerts || []).filter(a => a.reviewStatus === 'Resolved').length}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Pending Review:</span>
-              <span className="font-bold text-slate-900">{alerts.filter(a => a.reviewStatus !== 'Resolved').length}</span>
+              <span className="font-bold text-slate-900">{(alerts || []).filter(a => a.reviewStatus !== 'Resolved').length}</span>
             </div>
           </div>
         </div>

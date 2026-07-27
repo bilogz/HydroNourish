@@ -79,7 +79,7 @@ export const DevicesPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <StatCard
           title="Connected Hardware Nodes"
-          value={devices.length}
+          value={(devices || []).length}
           subtitle="ESP32 Feeder/Hydrator Nodes"
           icon={Cpu}
           iconBgColor="bg-indigo-50"
@@ -89,7 +89,7 @@ export const DevicesPage: React.FC = () => {
         />
         <StatCard
           title="Online Telemetry Status"
-          value={`${devices.filter(d => d.status === 'Online').length} Online`}
+          value={`${(devices || []).filter(d => d.status === 'Online').length} Online`}
           subtitle="Real-time MQTT / REST sync"
           icon={Radio}
           iconBgColor="bg-emerald-50"

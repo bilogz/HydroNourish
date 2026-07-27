@@ -70,7 +70,7 @@ export const HydrationPage: React.FC = () => {
         />
         <StatCard
           title="Avg Reservoir Level"
-          value={`${Math.round(devices.reduce((acc, d) => acc + d.waterLevelPct, 0) / devices.length)}%`}
+          value={`${Math.round((devices || []).reduce((acc, d) => acc + d.waterLevelPct, 0) / Math.max((devices || []).length, 1))}%`}
           subtitle="6 Dispenser Fountains"
           icon={Cpu}
           iconBgColor="bg-indigo-50"
@@ -80,13 +80,13 @@ export const HydrationPage: React.FC = () => {
         />
         <StatCard
           title="Low Water Warnings"
-          value={lowWaterDevices.length}
+          value={(lowWaterDevices || []).length}
           subtitle="Refill Action Required"
           icon={AlertTriangle}
           iconBgColor="bg-amber-50"
           iconTextColor="text-amber-600"
-          badgeText={lowWaterDevices.length > 0 ? 'Needs Refill' : 'All Clear'}
-          badgeType={lowWaterDevices.length > 0 ? 'warning' : 'success'}
+          badgeText={(lowWaterDevices || []).length > 0 ? 'Needs Refill' : 'All Clear'}
+          badgeType={(lowWaterDevices || []).length > 0 ? 'warning' : 'success'}
         />
       </div>
 

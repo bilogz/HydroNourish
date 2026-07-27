@@ -17,15 +17,15 @@ export const AIAlertsPage: React.FC = () => {
   const { alerts, acknowledgeAlert, resolveAlert } = useAppContext();
   const [activeTab, setActiveTab] = useState<'All' | 'Unresolved' | 'Critical'>('All');
 
-  const filteredAlerts = alerts.filter(a => {
+  const filteredAlerts = (alerts || []).filter(a => {
     if (activeTab === 'Unresolved') return a.reviewStatus !== 'Resolved';
     if (activeTab === 'Critical') return a.severity === 'Critical';
     return true;
   });
 
-  const criticalCount = alerts.filter(a => a.severity === 'Critical' && a.reviewStatus !== 'Resolved').length;
-  const warningCount = alerts.filter(a => a.severity === 'Warning' && a.reviewStatus !== 'Resolved').length;
-  const resolvedCount = alerts.filter(a => a.reviewStatus === 'Resolved').length;
+  const criticalCount = (alerts || []).filter(a => a.severity === 'Critical' && a.reviewStatus !== 'Resolved').length;
+  const warningCount = (alerts || []).filter(a => a.severity === 'Warning' && a.reviewStatus !== 'Resolved').length;
+  const resolvedCount = (alerts || []).filter(a => a.reviewStatus === 'Resolved').length;
 
   return (
     <DashboardLayout pageTitle="AI-Assisted Health Observations" breadcrumbs={[{ label: 'AI Health Alerts' }]}>

@@ -96,7 +96,7 @@ export const VitalSignsPage: React.FC = () => {
         />
         <StatCard
           title="Active Monitoring"
-          value={`${pets.length} Pets`}
+          value={`${(pets || []).length} Pets`}
           subtitle="Continuous Sensing"
           icon={Activity}
           iconBgColor="bg-sky-50"
@@ -106,7 +106,7 @@ export const VitalSignsPage: React.FC = () => {
         />
         <StatCard
           title="Elevated Vitals Alerts"
-          value={vitals.filter(v => v.status !== 'Normal').length}
+          value={(vitals || []).filter(v => v.status !== 'Normal').length}
           subtitle="Attention Flags"
           icon={ShieldAlert}
           iconBgColor="bg-amber-50"

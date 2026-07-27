@@ -120,7 +120,7 @@ export const UsersPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <StatCard
               title="Total Staff Accounts"
-              value={users.length}
+              value={(users || []).length}
               subtitle="Heritage Animal Clinic Personnel"
               icon={Users}
               iconBgColor="bg-teal-50"
@@ -130,7 +130,7 @@ export const UsersPage: React.FC = () => {
             />
             <StatCard
               title="Veterinarians"
-              value={users.filter(u => u.role === 'Veterinarian').length}
+              value={(users || []).filter(u => u.role === 'Veterinarian').length}
               subtitle="Clinical Medical Staff"
               icon={Stethoscope}
               iconBgColor="bg-emerald-50"
@@ -140,7 +140,7 @@ export const UsersPage: React.FC = () => {
             />
             <StatCard
               title="Super Admin Accounts"
-              value={users.filter(u => u.role === 'Super Admin').length}
+              value={(users || []).filter(u => u.role === 'Super Admin').length}
               subtitle="Master System Controllers"
               icon={ShieldCheck}
               iconBgColor="bg-purple-50"

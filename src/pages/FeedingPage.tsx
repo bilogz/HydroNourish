@@ -76,7 +76,7 @@ export const FeedingPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <StatCard
           title="Total Meals Served Today"
-          value={feedingLogs.length}
+          value={(feedingLogs || []).length}
           subtitle="All Heritage Ward Patients"
           icon={Utensils}
           iconBgColor="bg-teal-50"
@@ -86,7 +86,7 @@ export const FeedingPage: React.FC = () => {
         />
         <StatCard
           title="Pending Schedules"
-          value={schedules.filter(s => s.dispenseStatus === 'Pending').length}
+          value={(schedules || []).filter(s => s.dispenseStatus === 'Pending').length}
           subtitle="Remaining Today"
           icon={Clock}
           iconBgColor="bg-amber-50"
