@@ -26,7 +26,7 @@ import {
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, showToast } = useAppContext();
+  const { login, loginAsUser, showToast } = useAppContext();
 
   // Authentication Step:
   // 1 = Email & Password Login
