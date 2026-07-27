@@ -344,6 +344,16 @@ export const initialDevices: Device[] = [
 
 export const initialUsers: ClinicUser[] = [
   {
+    id: 'USR-00',
+    name: 'Heritage System Admin',
+    email: 'heritagelink45@gmail.com',
+    role: 'Administrator',
+    department: 'Lead Security & IT Systems',
+    status: 'Active',
+    lastActive: 'Now (Active 2FA)',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'
+  },
+  {
     id: 'USR-01',
     name: 'Dr. Sarah Jenkins',
     email: 's.jenkins@heritageanimalclinic.com',
