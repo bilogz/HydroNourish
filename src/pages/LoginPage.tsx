@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { useAppContext } from '../hooks/useAppContext';
 import { Modal } from '../components/Modal';
+import { sendLoginOtp, sendForgotPasswordOtp } from '../services/emailService';
 import {
   LogIn,
   ArrowLeft,
@@ -13,159 +14,226 @@ import {
   RefreshCw,
   CheckCircle2,
   Lock,
-  Mail
+  Mail,
+  Send,
+  Key
 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login, showToast } = useAppContext();
 
-  // Authentication Flow Step: 1 = Email & Password, 2 = 2FA OTP Security Verification
-  const [step, setStep] = useState<1 | 2>(1);
+  // Authentication Step:
+  // 1 = Email & Password Login
+  // 2 = 2FA Login OTP Security Check (1-Min Timer)
+  // 3 = Forgot Password Reset OTP Verification (1-Min Timer)
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
-  // Form State
+  // Login Credentials State
   const [email, setEmail] = useState('heritagelink45@gmail.com');
   const [password, setPassword] = useState('••••••••••••');
   const [rememberMe, setRememberMe] = useState(true);
 
-  // 2FA OTP & 1-Minute (60s) Timer State
-  const [generatedOtp, setGeneratedOtp] = useState<string>('');
-  const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
-  const [timerSeconds, setTimerSeconds] = useState<number>(60);
-  const [isTimerActive, setIsTimerActive] = useState<boolean>(false);
+  // OTP State for 2FA Login
+  const [generatedLoginOtp, setGeneratedLoginOtp] = useState<string>('');
+  const [loginOtpDigits, setLoginOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const [loginTimerSeconds, setLoginTimerSeconds] = useState<number>(60);
+  const [isLoginTimerActive, setIsLoginTimerActive] = useState<boolean>(false);
+  const [isDispatchingOtp, setIsDispatchingOtp] = useState<boolean>(false);
 
-  // Modals
+  // Forgot Password State
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotEmail, setForgotEmail] = useState('heritagelink45@gmail.com');
+  const [generatedResetOtp, setGeneratedResetOtp] = useState<string>('');
+  const [resetOtpDigits, setResetOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const [resetTimerSeconds, setResetTimerSeconds] = useState<number>(60);
+  const [isResetTimerActive, setIsResetTimerActive] = useState<boolean>(false);
+  const [newPassword, setNewPassword] = useState('');
 
-  // Input Refs for 6-digit OTP fields
-  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  // Input Refs
+  const loginOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const resetOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Timer Countdown Effect
+  // 1-Minute Countdown Effect for Login 2FA
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-    if (isTimerActive && timerSeconds > 0) {
+    if (isLoginTimerActive && loginTimerSeconds > 0) {
       interval = setInterval(() => {
-        setTimerSeconds(prev => prev - 1);
+        setLoginTimerSeconds(prev => prev - 1);
       }, 1000);
-    } else if (timerSeconds === 0) {
-      setIsTimerActive(false);
+    } else if (loginTimerSeconds === 0) {
+      setIsLoginTimerActive(false);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isTimerActive, timerSeconds]);
+  }, [isLoginTimerActive, loginTimerSeconds]);
 
-  // Generate random 6-digit OTP
-  const generateNewOtp = () => {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(code);
-    setTimerSeconds(60);
-    setIsTimerActive(true);
-    setOtpDigits(['', '', '', '', '', '']);
-    return code;
-  };
+  // 1-Minute Countdown Effect for Reset Password OTP
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isResetTimerActive && resetTimerSeconds > 0) {
+      interval = setInterval(() => {
+        setResetTimerSeconds(prev => prev - 1);
+      }, 1000);
+    } else if (resetTimerSeconds === 0) {
+      setIsResetTimerActive(false);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isResetTimerActive, resetTimerSeconds]);
 
-  // Step 1 Submit: Trigger 2FA OTP Dispatch
-  const handleStep1Submit = (e: React.FormEvent) => {
+  // Handle Step 1 Submit (Dispatch Login OTP)
+  const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
-      showToast('warning', 'Email Required', 'Please enter a valid email address.');
+      showToast('warning', 'Email Required', 'Please enter your clinic Gmail address.');
       return;
     }
 
-    const code = generateNewOtp();
+    setIsDispatchingOtp(true);
+    const result = await sendLoginOtp(email);
+    setIsDispatchingOtp(false);
+
+    setGeneratedLoginOtp(result.code);
+    setLoginTimerSeconds(60);
+    setIsLoginTimerActive(true);
+    setLoginOtpDigits(['', '', '', '', '', '']);
     setStep(2);
 
-    showToast(
-      'info',
-      'SECURITY OTP DISPATCHED',
-      `Dynamic 6-Digit Verification Code [${code}] sent to ${email}. Valid for 1 minute.`
-    );
+    showToast('info', 'DYNAMIC OTP DISPATCHED', `${result.message} Valid for 1 minute.`);
   };
 
-  // Quick Demo Admin Login
-  const handleAdminQuickLogin = () => {
+  // Handle Quick Admin Login
+  const handleQuickAdminLogin = async () => {
     setEmail('heritagelink45@gmail.com');
-    setPassword('admin-secure-pass-2026');
-    const code = generateNewOtp();
+    setPassword('admin-pass-2026');
+
+    setIsDispatchingOtp(true);
+    const result = await sendLoginOtp('heritagelink45@gmail.com');
+    setIsDispatchingOtp(false);
+
+    setGeneratedLoginOtp(result.code);
+    setLoginTimerSeconds(60);
+    setIsLoginTimerActive(true);
+    setLoginOtpDigits(['', '', '', '', '', '']);
     setStep(2);
-    showToast(
-      'success',
-      'ADMIN 2FA CODE GENERATED',
-      `Security OTP [${code}] dispatched to heritagelink45@gmail.com (1 Minute Timer).`
-    );
+
+    showToast('success', 'ADMIN OTP GENERATED', `Sent 6-digit code [${result.code}] to heritagelink45@gmail.com (1-Min Timer).`);
   };
 
-  // Step 2 Submit: Validate OTP
-  const handleVerifyOtpSubmit = (e: React.FormEvent) => {
+  // Handle Login OTP Verification
+  const handleVerifyLoginOtp = (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (timerSeconds === 0) {
-      showToast('error', 'OTP Code Expired', 'The 1-minute verification window has expired. Please click Resend OTP.');
+    if (loginTimerSeconds === 0) {
+      showToast('error', 'OTP Expired', 'The 1-minute OTP code has expired. Click Resend OTP.');
       return;
     }
 
-    const enteredOtp = otpDigits.join('');
-    if (enteredOtp.length < 6) {
-      showToast('warning', 'Incomplete Code', 'Please enter all 6 digits of the OTP security code.');
+    const enteredCode = loginOtpDigits.join('');
+    if (enteredCode.length < 6) {
+      showToast('warning', 'Incomplete Code', 'Please enter all 6 digits.');
       return;
     }
 
-    if (enteredOtp !== generatedOtp) {
-      showToast('error', 'Invalid Security OTP', 'The 6-digit code entered does not match.');
+    if (enteredCode !== generatedLoginOtp) {
+      showToast('error', 'Invalid Security OTP', 'The code entered is incorrect.');
       return;
     }
 
-    // Success: Authenticate user & navigate to SaaS dashboard
     login();
-    showToast('success', '2FA Authentication Success', `Signed in as Primary Administrator (${email}).`);
+    showToast('success', '2FA Authentication Success', `Welcome back to Heritage Animal Clinic Portal (${email}).`);
     navigate('/app');
   };
 
-  // Resend OTP Action
-  const handleResendOtp = () => {
-    const code = generateNewOtp();
-    showToast(
-      'info',
-      'NEW OTP DISPATCHED',
-      `Fresh 6-Digit Security Code [${code}] sent to ${email}. Timer reset to 60s.`
-    );
+  // Resend Login OTP
+  const handleResendLoginOtp = async () => {
+    setIsDispatchingOtp(true);
+    const result = await sendLoginOtp(email);
+    setIsDispatchingOtp(false);
+
+    setGeneratedLoginOtp(result.code);
+    setLoginTimerSeconds(60);
+    setIsLoginTimerActive(true);
+    setLoginOtpDigits(['', '', '', '', '', '']);
+
+    showToast('info', 'NEW OTP DISPATCHED', `Sent new code [${result.code}] to ${email}. Timer reset to 60s.`);
   };
 
-  // OTP Input Digit Handlers
-  const handleOtpChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
-    const newDigits = [...otpDigits];
-    newDigits[index] = value.slice(-1);
-    setOtpDigits(newDigits);
-
-    // Auto-advance to next input
-    if (value && index < 5) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpInputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    const pastedData = e.clipboardData.getData('text').trim();
-    if (/^\d{6}$/.test(pastedData)) {
-      const digits = pastedData.split('');
-      setOtpDigits(digits);
-      otpInputRefs.current[5]?.focus();
-    }
-  };
-
-  const handleForgotSubmit = (e: React.FormEvent) => {
+  // Handle Forgot Password Request Dispatch
+  const handleForgotRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setForgotModalOpen(false);
-    showToast('info', 'Password Reset Link', `Reset instructions dispatched to ${forgotEmail || email}.`);
+
+    setIsDispatchingOtp(true);
+    const result = await sendForgotPasswordOtp(forgotEmail || email);
+    setIsDispatchingOtp(false);
+
+    setGeneratedResetOtp(result.code);
+    setResetTimerSeconds(60);
+    setIsResetTimerActive(true);
+    setResetOtpDigits(['', '', '', '', '', '']);
+    setStep(3);
+
+    showToast('info', 'RESET CODE DISPATCHED', `${result.message} Valid for 1 minute.`);
+  };
+
+  // Handle Password Reset OTP Submit
+  const handleVerifyResetOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (resetTimerSeconds === 0) {
+      showToast('error', 'Reset Code Expired', 'The 1-minute reset window expired. Please request a new code.');
+      return;
+    }
+
+    const enteredCode = resetOtpDigits.join('');
+    if (enteredCode.length < 6) {
+      showToast('warning', 'Incomplete Code', 'Please enter all 6 digits.');
+      return;
+    }
+
+    if (enteredCode !== generatedResetOtp) {
+      showToast('error', 'Invalid Reset Code', 'The code entered does not match.');
+      return;
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      showToast('warning', 'Weak Password', 'New password must be at least 6 characters.');
+      return;
+    }
+
+    setPassword(newPassword);
+    setStep(1);
+    showToast('success', 'Password Updated', 'Your password has been reset successfully. Please sign in.');
+  };
+
+  // OTP Digit Change Handlers
+  const handleDigitChange = (
+    index: number,
+    value: string,
+    digits: string[],
+    setDigits: (d: string[]) => void,
+    refs: React.MutableRefObject<(HTMLInputElement | null)[]>
+  ) => {
+    if (!/^\d*$/.test(value)) return;
+    const newDigits = [...digits];
+    newDigits[index] = value.slice(-1);
+    setDigits(newDigits);
+    if (value && index < 5) {
+      refs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>,
+    digits: string[],
+    refs: React.MutableRefObject<(HTMLInputElement | null)[]>
+  ) => {
+    if (e.key === 'Backspace' && !digits[index] && index > 0) {
+      refs.current[index - 1]?.focus();
+    }
   };
 
   return (
@@ -181,14 +249,14 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        {/* STEP 1: CREDENTIALS FORM */}
-        {step === 1 ? (
+        {/* STEP 1: CREDENTIALS INPUT FORM */}
+        {step === 1 && (
           <div className="p-8 space-y-6 animate-fade-in">
             <form onSubmit={handleStep1Submit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-teal-600" />
-                  Clinic Email Address *
+                  Clinic Gmail Address *
                 </label>
                 <input
                   type="email"
@@ -212,7 +280,7 @@ export const LoginPage: React.FC = () => {
                       setForgotEmail(email);
                       setForgotModalOpen(true);
                     }}
-                    className="text-xs font-semibold text-teal-600 hover:underline"
+                    className="text-xs font-semibold text-teal-600 hover:underline flex items-center gap-1"
                   >
                     Forgot password?
                   </button>
@@ -235,28 +303,37 @@ export const LoginPage: React.FC = () => {
                     onChange={e => setRememberMe(e.target.checked)}
                     className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300"
                   />
-                  <span className="text-xs text-slate-600 font-medium">Remember admin session</span>
+                  <span className="text-xs text-slate-600 font-medium">Remember session</span>
                 </label>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 via-teal-600 to-emerald-600 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
+                disabled={isDispatchingOtp}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 via-teal-600 to-emerald-600 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <LogIn className="w-4 h-4" />
-                Continue to 2FA Security Check
+                {isDispatchingOtp ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Sending Real OTP...
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="w-4 h-4" />
+                    Send OTP to Gmail
+                  </>
+                )}
               </button>
             </form>
 
-            {/* Quick Primary Admin Button */}
             <div className="pt-3 border-t border-slate-100 space-y-3">
               <button
                 type="button"
-                onClick={handleAdminQuickLogin}
+                onClick={handleQuickAdminLogin}
                 className="w-full py-3 rounded-2xl bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-900 font-bold text-xs transition-all flex items-center justify-center gap-2"
               >
                 <ShieldCheck className="w-4 h-4 text-teal-600" />
-                Sign In as Admin (heritagelink45@gmail.com)
+                Quick Admin Login (heritagelink45@gmail.com)
               </button>
 
               <div className="text-center">
@@ -270,8 +347,10 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
           </div>
-        ) : (
-          /* STEP 2: 2-FACTOR SECURITY OTP VERIFICATION */
+        )}
+
+        {/* STEP 2: 2FA LOGIN OTP VERIFICATION (1-MIN TIMER) */}
+        {step === 2 && (
           <div className="p-8 space-y-6 animate-fade-in">
             <div className="text-center space-y-1.5">
               <div className="p-3 rounded-2xl bg-teal-50 text-teal-600 w-fit mx-auto">
@@ -279,14 +358,14 @@ export const LoginPage: React.FC = () => {
               </div>
               <h3 className="text-lg font-extrabold text-slate-900">2-Factor Security Verification</h3>
               <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                An authentication OTP code was dispatched to:
+                A dynamic 6-digit OTP code was sent to:
               </p>
               <span className="inline-block px-3 py-1 rounded-full bg-slate-100 font-bold text-slate-900 text-xs">
                 {email}
               </span>
             </div>
 
-            {/* Live 60-Second (1 Min) Timer Badge */}
+            {/* Live 1-Minute Countdown Badge */}
             <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
               <span className="font-bold text-slate-700 flex items-center gap-1.5">
                 <Clock className="w-4 h-4 text-teal-600" />
@@ -294,46 +373,43 @@ export const LoginPage: React.FC = () => {
               </span>
               <span
                 className={`font-mono font-bold px-2 py-0.5 rounded-md ${
-                  timerSeconds > 15
+                  loginTimerSeconds > 15
                     ? 'bg-emerald-100 text-emerald-800'
-                    : timerSeconds > 0
+                    : loginTimerSeconds > 0
                     ? 'bg-amber-100 text-amber-800 animate-pulse'
                     : 'bg-rose-100 text-rose-800'
                 }`}
               >
-                {timerSeconds > 0 ? `00:${String(timerSeconds).padStart(2, '0')}` : 'Expired'}
+                {loginTimerSeconds > 0 ? `00:${String(loginTimerSeconds).padStart(2, '0')}` : 'Expired'}
               </span>
             </div>
 
-            {/* Dynamic Demo OTP Notification Banner */}
-            {generatedOtp && (
-              <div className="p-3.5 rounded-xl bg-teal-50 border border-teal-200 text-xs text-teal-900 space-y-1">
-                <div className="flex items-center justify-between font-bold">
-                  <span className="flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                    Security OTP Code:
-                  </span>
-                  <span className="font-mono text-sm tracking-widest bg-white px-2 py-0.5 rounded border border-teal-300 text-teal-950 font-extrabold">
-                    {generatedOtp}
-                  </span>
-                </div>
-                <p className="text-[11px] text-teal-700">Enter the 6-digit code above or click to auto-verify.</p>
+            {/* OTP Code Dev Inspection Banner */}
+            {generatedLoginOtp && (
+              <div className="p-3 rounded-xl bg-teal-50 border border-teal-200 text-xs text-teal-900 flex items-center justify-between">
+                <span className="font-bold flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                  Security OTP Code:
+                </span>
+                <span className="font-mono font-extrabold bg-white px-2 py-0.5 rounded border border-teal-300 text-teal-950">
+                  {generatedLoginOtp}
+                </span>
               </div>
             )}
 
-            {/* 6-Digit OTP Inputs */}
-            <form onSubmit={handleVerifyOtpSubmit} className="space-y-6">
-              <div className="flex items-center justify-between gap-2" onPaste={handleOtpPaste}>
-                {otpDigits.map((digit, idx) => (
+            {/* 6 Input Boxes */}
+            <form onSubmit={handleVerifyLoginOtp} className="space-y-6">
+              <div className="flex items-center justify-between gap-2">
+                {loginOtpDigits.map((digit, idx) => (
                   <input
                     key={idx}
-                    ref={el => (otpInputRefs.current[idx] = el)}
+                    ref={el => (loginOtpRefs.current[idx] = el)}
                     type="text"
                     inputMode="numeric"
                     maxLength={1}
                     value={digit}
-                    onChange={e => handleOtpChange(idx, e.target.value)}
-                    onKeyDown={e => handleOtpKeyDown(idx, e)}
+                    onChange={e => handleDigitChange(idx, e.target.value, loginOtpDigits, setLoginOtpDigits, loginOtpRefs)}
+                    onKeyDown={e => handleKeyDown(idx, e, loginOtpDigits, loginOtpRefs)}
                     className="w-12 h-14 text-center font-extrabold text-lg text-slate-900 bg-slate-50 border-2 border-slate-300 rounded-xl focus:bg-white focus:border-teal-600 focus:outline-none transition-all shadow-inner"
                   />
                 ))}
@@ -342,21 +418,21 @@ export const LoginPage: React.FC = () => {
               <div className="space-y-2">
                 <button
                   type="submit"
-                  disabled={timerSeconds === 0}
+                  disabled={loginTimerSeconds === 0}
                   className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  Verify & Sign In as Admin
+                  Verify & Sign In
                 </button>
 
                 <div className="flex items-center justify-between pt-2">
                   <button
                     type="button"
-                    onClick={handleResendOtp}
+                    onClick={handleResendLoginOtp}
                     className="text-xs font-bold text-teal-600 hover:underline flex items-center gap-1"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
-                    Resend OTP Code
+                    Resend OTP to Gmail
                   </button>
 
                   <button
@@ -371,29 +447,133 @@ export const LoginPage: React.FC = () => {
             </form>
           </div>
         )}
+
+        {/* STEP 3: FORGOT PASSWORD RESET CODE VERIFICATION (1-MIN TIMER) */}
+        {step === 3 && (
+          <div className="p-8 space-y-6 animate-fade-in">
+            <div className="text-center space-y-1.5">
+              <div className="p-3 rounded-2xl bg-sky-50 text-sky-600 w-fit mx-auto">
+                <Key className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-extrabold text-slate-900">Password Reset Verification</h3>
+              <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                A 6-digit password reset code was dispatched to:
+              </p>
+              <span className="inline-block px-3 py-1 rounded-full bg-slate-100 font-bold text-slate-900 text-xs">
+                {forgotEmail}
+              </span>
+            </div>
+
+            {/* Live 1-Minute Countdown Badge */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+              <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-sky-600" />
+                Reset Code Timer:
+              </span>
+              <span
+                className={`font-mono font-bold px-2 py-0.5 rounded-md ${
+                  resetTimerSeconds > 0 ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'
+                }`}
+              >
+                {resetTimerSeconds > 0 ? `00:${String(resetTimerSeconds).padStart(2, '0')}` : 'Expired'}
+              </span>
+            </div>
+
+            {/* Reset Code Dev Inspection Banner */}
+            {generatedResetOtp && (
+              <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs text-sky-900 flex items-center justify-between">
+                <span className="font-bold flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+                  Reset Code:
+                </span>
+                <span className="font-mono font-extrabold bg-white px-2 py-0.5 rounded border border-sky-300 text-sky-950">
+                  {generatedResetOtp}
+                </span>
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyResetOtp} className="space-y-4">
+              {/* 6 Digit Inputs */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Enter 6-Digit Reset Code
+                </label>
+                <div className="flex items-center justify-between gap-2">
+                  {resetOtpDigits.map((digit, idx) => (
+                    <input
+                      key={idx}
+                      ref={el => (resetOtpRefs.current[idx] = el)}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={e => handleDigitChange(idx, e.target.value, resetOtpDigits, setResetOtpDigits, resetOtpRefs)}
+                      onKeyDown={e => handleKeyDown(idx, e, resetOtpDigits, resetOtpRefs)}
+                      className="w-12 h-14 text-center font-extrabold text-lg text-slate-900 bg-slate-50 border-2 border-slate-300 rounded-xl focus:bg-white focus:border-sky-600 focus:outline-none transition-all shadow-inner"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* New Password Input */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  New Password *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-sky-500 focus:outline-none"
+                  placeholder="Enter new password (min 6 chars)"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={resetTimerSeconds === 0}
+                className="w-full py-3.5 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Reset Password & Update Account
+              </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-800"
+                >
+                  Cancel & Back to Login
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
 
-      {/* Forgot Password Modal */}
+      {/* FORGOT PASSWORD MODAL */}
       <Modal
         isOpen={forgotModalOpen}
         onClose={() => setForgotModalOpen(false)}
-        title="Reset Account Password"
+        title="Forgot Password — Send Reset Code to Gmail"
         subtitle="Heritage Animal Clinic Security Portal"
       >
-        <form onSubmit={handleForgotSubmit} className="space-y-4">
+        <form onSubmit={handleForgotRequestSubmit} className="space-y-4">
           <p className="text-xs text-slate-600 leading-relaxed">
-            Enter your clinic email address below. We will send a secure password reset link to verify your identity.
+            Enter your clinic Gmail address. We will dispatch a dynamic 6-digit password reset code valid for 1 minute.
           </p>
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Email Address
+              Gmail Address *
             </label>
             <input
               type="email"
               required
               value={forgotEmail}
               onChange={e => setForgotEmail(e.target.value)}
-              className="w-full px-4 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
+              className="w-full px-4 py-2.5 text-xs font-bold rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
               placeholder="heritagelink45@gmail.com"
             />
           </div>
@@ -407,9 +587,10 @@ export const LoginPage: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700"
+              className="px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 flex items-center gap-1.5"
             >
-              Send Reset Link
+              <Send className="w-3.5 h-3.5" />
+              Send Reset Code
             </button>
           </div>
         </form>
