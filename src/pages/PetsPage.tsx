@@ -253,7 +253,7 @@ export const PetsPage: React.FC = () => {
       </div>
 
       {/* ================= CONTENT DISPLAY ================= */}
-      {filteredPets.length === 0 ? (
+      {(filteredPets ?? []).length === 0 ? (
         <EmptyState
           title="No Pets Found"
           description="No pet records match your current search or filter criteria."

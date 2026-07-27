@@ -5,7 +5,7 @@ import { CheckCircle2, AlertTriangle, AlertCircle, Info, X } from 'lucide-react'
 export const ToastContainer: React.FC = () => {
   const { toasts, removeToast } = useAppContext();
 
-  if (toasts.length === 0) return null;
+  if ((toasts ?? []).length === 0) return null;
 
   return (
     <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 max-w-md w-full px-4 pointer-events-none">

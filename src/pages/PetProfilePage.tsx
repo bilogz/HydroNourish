@@ -316,13 +316,13 @@ export const PetProfilePage: React.FC = () => {
             <ShieldAlert className="w-5 h-5 text-amber-500" />
             Recent AI Observations for {pet.name}
           </h3>
-          {petAlerts.length === 0 ? (
+          {(petAlerts ?? []).length === 0 ? (
             <div className="clinic-card p-6 text-center text-xs text-slate-400">
-              No active AI health alerts logged for {pet.name}.
+              No active AI health alerts logged for {pet?.name || 'this pet'}.
             </div>
           ) : (
             <div className="space-y-3">
-              {petAlerts.map(alert => (
+              {(petAlerts ?? []).map(alert => (
                 <AlertCard key={alert.id} alert={alert} compact={false} />
               ))}
             </div>

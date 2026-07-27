@@ -243,8 +243,8 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    const enteredCode = resetOtpDigits.join('');
-    if (enteredCode.length < 6) {
+    const enteredCode = (resetOtpDigits ?? []).join('');
+    if ((enteredCode ?? '').length < 6) {
       showToast('warning', 'Incomplete Code', 'Please enter all 6 digits.');
       return;
     }
@@ -254,7 +254,7 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    if (!newPassword || newPassword.length < 6) {
+    if (!newPassword || (newPassword ?? '').length < 6) {
       showToast('warning', 'Weak Password', 'New password must be at least 6 characters.');
       return;
     }

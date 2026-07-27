@@ -29,7 +29,7 @@ export const DataTable: React.FC<DataTableProps> = ({
           <tbody className="divide-y divide-slate-100 bg-white">
             {isEmpty ? (
               <tr>
-                <td colSpan={headers.length} className="px-5 py-8 text-center text-slate-400 text-sm">
+                <td colSpan={(headers ?? []).length} className="px-5 py-8 text-center text-slate-400 text-sm">
                   {emptyText}
                 </td>
               </tr>

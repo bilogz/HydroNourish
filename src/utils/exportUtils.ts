@@ -1,5 +1,5 @@
 export const downloadCSV = (filename: string, rows: Record<string, any>[]) => {
-  if (!rows || !rows.length) return;
+  if (!rows || (rows ?? []).length === 0) return;
 
   const headers = Object.keys(rows[0]);
   const csvContent = [
