@@ -20,9 +20,8 @@ export const App: React.FC = () => {
     <AppProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public & Dashboard Routes */}
-          <Route path="/" element={<Navigate to="/app" replace />} />
-          <Route path="/landing" element={<LandingPage />} />
+          {/* Public Routes */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
 
           {/* Authenticated Dashboard Routes */}
@@ -39,7 +38,7 @@ export const App: React.FC = () => {
           <Route path="/app/settings" element={<SettingsPage />} />
 
           {/* Fallback */}
-          <Route path="*" element={<Navigate to="/app" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AppProvider>
