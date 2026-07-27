@@ -169,12 +169,12 @@ export const PetsPage: React.FC = () => {
   };
 
   // Filtering
-  const filteredPets = pets.filter(pet => {
+  const filteredPets = (pets ?? []).filter(pet => {
     const matchesSearch =
-      pet.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pet.breed.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pet.ownerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pet.id.toLowerCase().includes(searchTerm.toLowerCase());
+      (pet.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (pet.breed ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (pet.ownerName ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (pet.id ?? '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesSpecies = speciesFilter === 'All' || pet.species === speciesFilter;
     const matchesStatus = statusFilter === 'All' || pet.healthStatus === statusFilter;

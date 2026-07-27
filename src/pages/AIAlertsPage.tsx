@@ -81,7 +81,7 @@ export const AIAlertsPage: React.FC = () => {
             activeTab === 'All' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          All Observations ({alerts.length})
+          All Observations ({(alerts ?? []).length})
         </button>
         <button
           onClick={() => setActiveTab('Unresolved')}
@@ -89,7 +89,7 @@ export const AIAlertsPage: React.FC = () => {
             activeTab === 'Unresolved' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          Unresolved Needs Review ({alerts.filter(a => a.reviewStatus !== 'Resolved').length})
+          Unresolved Needs Review ({(alerts ?? []).filter(a => a.reviewStatus !== 'Resolved').length})
         </button>
         <button
           onClick={() => setActiveTab('Critical')}

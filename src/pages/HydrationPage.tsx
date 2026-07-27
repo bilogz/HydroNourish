@@ -29,11 +29,11 @@ export const HydrationPage: React.FC = () => {
   const { devices, hydrationLogs, refillWater } = useAppContext();
 
   const [confirmRefillOpen, setConfirmRefillOpen] = useState(false);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>(devices[0]?.id || 'HN-DEV-0101');
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>((devices ?? [])[0]?.id || 'HN-DEV-0101');
 
-  const selectedDevice = devices.find(d => d.id === selectedDeviceId) || devices[0];
+  const selectedDevice = (devices ?? []).find(d => d.id === selectedDeviceId) ?? (devices ?? [])[0];
 
-  const lowWaterDevices = devices.filter(d => d.waterLevelPct < 30);
+  const lowWaterDevices = (devices ?? []).filter(d => d.waterLevelPct < 30);
 
   const handleOpenRefillModal = (deviceId: string) => {
     setSelectedDeviceId(deviceId);
@@ -104,7 +104,7 @@ export const HydrationPage: React.FC = () => {
               onChange={e => setSelectedDeviceId(e.target.value)}
               className="px-3 py-1.5 text-xs font-bold bg-slate-100 border border-slate-300 rounded-xl focus:border-teal-500 focus:outline-none"
             >
-              {devices.map(d => (
+              {(devices ?? []).map(d => (
                 <option key={d.id} value={d.id}>
                   {d.id} ({d.assignedPetName})
                 </option>
@@ -187,14 +187,14 @@ export const HydrationPage: React.FC = () => {
             Low-Water Container Warnings
           </h2>
 
-          {lowWaterDevices.length === 0 ? (
+          {(lowWaterDevices ?? []).length === 0 ? (
             <div className="clinic-card p-6 text-center text-xs text-emerald-700 bg-emerald-50 border-emerald-200">
               <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
               All dispenser water reservoirs are sufficiently filled above warning thresholds.
             </div>
           ) : (
             <div className="space-y-3">
-              {lowWaterDevices.map(dev => (
+              {(lowWaterDevices ?? []).map(dev => (
                 <div key={dev.id} className="clinic-card p-4 border-l-4 border-l-amber-500 flex items-center justify-between">
                   <div>
                     <span className="text-xs font-bold text-slate-900">{dev.assignedPetName} ({dev.id})</span>

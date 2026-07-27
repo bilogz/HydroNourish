@@ -39,7 +39,7 @@ export const VitalSignsPage: React.FC = () => {
 
   // Form State for new vital reading
   const [formData, setFormData] = useState({
-    petId: pets[0]?.id || '',
+    petId: (pets ?? [])[0]?.id ?? '',
     temperature: 38.5,
     heartRate: 90,
     weight: 10,
@@ -49,12 +49,13 @@ export const VitalSignsPage: React.FC = () => {
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const pet = pets.find(p => p.id === formData.petId) || pets[0];
+    const pet = (pets ?? []).find(p => p.id === formData.petId) ?? (pets ?? [])[0];
+    if (!pet) return;
     showToast('success', 'Biometric Reading Recorded', `Added vitals for ${pet.name} (${formData.temperature}°C, ${formData.heartRate} bpm).`);
     setAddVitalModalOpen(false);
   };
 
-  const filteredVitals = vitals.filter(v => {
+  const filteredVitals = (vitals ?? []).filter(v => {
     const matchesPet = selectedPetId === 'All' || v.petId === selectedPetId;
     const matchesStatus = statusFilter === 'All' || v.status === statusFilter;
     return matchesPet && matchesStatus;
@@ -125,7 +126,7 @@ export const VitalSignsPage: React.FC = () => {
             className="px-3.5 py-2.5 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-teal-500 focus:outline-none"
           >
             <option value="All">All Patient Pets</option>
-            {pets.map(p => (
+            {(pets ?? []).map(p => (
               <option key={p.id} value={p.id}>
                 {p.name} ({p.species})
               </option>
@@ -219,7 +220,7 @@ export const VitalSignsPage: React.FC = () => {
             <select
               value={formData.petId}
               onChange={e => {
-                const pet = pets.find(p => p.id === e.target.value);
+                const pet = (pets ?? []).find(p => p.id === e.target.value);
                 setFormData({
                   ...formData,
                   petId: e.target.value,
@@ -228,7 +229,7 @@ export const VitalSignsPage: React.FC = () => {
               }}
               className="w-full p-2.5 rounded-xl border border-slate-300 font-bold"
             >
-              {pets.map(p => (
+              {(pets ?? []).map(p => (
                 <option key={p.id} value={p.id}>
                   {p.name} ({p.species} - {p.id})
                 </option>

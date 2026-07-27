@@ -23,7 +23,7 @@ export const ReportsPage: React.FC = () => {
   const [selectedPetId, setSelectedPetId] = useState('All');
   const [reportType, setReportType] = useState('Comprehensive Health');
 
-  const filteredPetName = selectedPetId === 'All' ? 'All Patients' : pets.find(p => p.id === selectedPetId)?.name || 'Patient';
+  const filteredPetName = selectedPetId === 'All' ? 'All Patients' : (pets ?? []).find(p => p.id === selectedPetId)?.name || 'Patient';
 
   const handlePrint = () => {
     const content = `
@@ -44,7 +44,7 @@ export const ReportsPage: React.FC = () => {
           </tr>
         </thead>
         <tbody>
-          ${pets
+          ${(pets ?? [])
             .filter(p => selectedPetId === 'All' || p.id === selectedPetId)
             .map(
               p => `
@@ -53,7 +53,7 @@ export const ReportsPage: React.FC = () => {
               <td>100% (Scheduled portions served)</td>
               <td>${p.hydrationTarget} ml/day target</td>
               <td>${p.healthStatus}</td>
-              <td>${alerts.filter(a => a.petId === p.id && a.reviewStatus !== 'Resolved').length} Active</td>
+              <td>${(alerts ?? []).filter(a => a.petId === p.id && a.reviewStatus !== 'Resolved').length} Active</td>
             </tr>
           `
             )
@@ -65,7 +65,7 @@ export const ReportsPage: React.FC = () => {
   };
 
   const handleExportCSV = () => {
-    const csvRows = pets
+    const csvRows = (pets ?? [])
       .filter(p => selectedPetId === 'All' || p.id === selectedPetId)
       .map(p => ({
         PetID: p.id,
@@ -119,7 +119,7 @@ export const ReportsPage: React.FC = () => {
                 className="px-3 py-2 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-teal-500 focus:outline-none"
               >
                 <option value="All">All Patient Pets</option>
-                {pets.map(p => (
+                {(pets ?? []).map(p => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({p.species})
                   </option>
@@ -187,7 +187,7 @@ export const ReportsPage: React.FC = () => {
           <div className="space-y-3 text-xs">
             <div className="flex justify-between">
               <span className="text-slate-500">Total Portions Served:</span>
-              <span className="font-bold text-slate-900">{feedingLogs.length * 7} servings</span>
+              <span className="font-bold text-slate-900">{(feedingLogs ?? []).length * 7} servings</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Scheduled Dispense Accuracy:</span>
@@ -251,7 +251,7 @@ export const ReportsPage: React.FC = () => {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Elevated Biometrics Logged:</span>
-              <span className="font-bold text-slate-900">{vitals.filter(v => v.status !== 'Normal').length} records</span>
+              <span className="font-bold text-slate-900">{(vitals ?? []).filter(v => v.status !== 'Normal').length} records</span>
             </div>
           </div>
         </div>

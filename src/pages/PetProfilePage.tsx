@@ -45,12 +45,12 @@ export const PetProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const { pets, devices, alerts, feedingLogs, hydrationLogs, updatePet, showToast } = useAppContext();
 
-  // Find pet by ID or fallback to first pet
-  const pet = pets.find(p => p.id === id) || pets[0];
-  const assignedDevice = devices.find(d => d.id === pet.assignedDeviceId);
-  const petAlerts = alerts.filter(a => a.petId === pet.id);
-  const petFeedingLogs = feedingLogs.filter(f => f.petId === pet.id);
-  const petHydrationLogs = hydrationLogs.filter(h => h.petId === pet.id);
+  // Find pet by ID or fallback to first pet safely
+  const pet = (pets ?? []).find(p => p.id === id) ?? (pets ?? [])[0];
+  const assignedDevice = pet ? (devices ?? []).find(d => d.id === pet.assignedDeviceId) : undefined;
+  const petAlerts = pet ? (alerts ?? []).filter(a => a.petId === pet.id) : [];
+  const petFeedingLogs = pet ? (feedingLogs ?? []).filter(f => f.petId === pet.id) : [];
+  const petHydrationLogs = pet ? (hydrationLogs ?? []).filter(h => h.petId === pet.id) : [];
 
   // Local Note Edit State
   const [noteText, setNoteText] = useState(pet.notes || '');

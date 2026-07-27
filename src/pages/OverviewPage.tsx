@@ -56,7 +56,7 @@ export const OverviewPage: React.FC = () => {
 
   // Quick Vital Form State
   const [vitalForm, setVitalForm] = useState({
-    petId: pets[0]?.id || '',
+    petId: (pets ?? [])[0]?.id ?? '',
     temperature: 38.5,
     heartRate: 90,
     weight: 10,
@@ -65,7 +65,7 @@ export const OverviewPage: React.FC = () => {
 
   // Quick Dispense Form State
   const [dispenseForm, setDispenseForm] = useState({
-    petId: pets[0]?.id || '',
+    petId: (pets ?? [])[0]?.id ?? '',
     grams: 100,
     foodType: 'High-Protein Kibble'
   });
@@ -79,14 +79,16 @@ export const OverviewPage: React.FC = () => {
 
   const handleQuickVitalSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const pet = pets.find(p => p.id === vitalForm.petId) || pets[0];
+    const pet = (pets ?? []).find(p => p.id === vitalForm.petId) ?? (pets ?? [])[0];
+    if (!pet) return;
     showToast('success', 'Vital Record Logged', `Logged ${vitalForm.temperature}°C & ${vitalForm.heartRate} bpm for ${pet.name}.`);
     setQuickVitalModalOpen(false);
   };
 
   const handleQuickDispenseSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const pet = pets.find(p => p.id === dispenseForm.petId) || pets[0];
+    const pet = (pets ?? []).find(p => p.id === dispenseForm.petId) ?? (pets ?? [])[0];
+    if (!pet) return;
     showToast('success', 'Manual Dispense Sent', `Dispensed ${dispenseForm.grams}g of ${dispenseForm.foodType} for ${pet.name}.`);
     setQuickDispenseModalOpen(false);
   };
@@ -163,7 +165,7 @@ export const OverviewPage: React.FC = () => {
         />
         <StatCard
           title="Connected Devices"
-          value={`${onlineDevicesCount} / ${devices.length}`}
+          value={`${onlineDevicesCount} / ${(devices ?? []).length}`}
           subtitle="ESP32 Smart Nodes"
           icon={Cpu}
           iconBgColor="bg-indigo-50"
@@ -266,7 +268,7 @@ export const OverviewPage: React.FC = () => {
             </Link>
           </div>
           <div className="space-y-3">
-            {alerts.slice(0, 2).map(alert => (
+            {(alerts ?? []).slice(0, 2).map(alert => (
               <AlertCard key={alert.id} alert={alert} compact={false} />
             ))}
           </div>
@@ -283,7 +285,7 @@ export const OverviewPage: React.FC = () => {
             </Link>
           </div>
           <div className="clinic-card overflow-hidden divide-y divide-slate-100">
-            {devices.slice(0, 4).map(dev => (
+            {(devices ?? []).slice(0, 4).map(dev => (
               <div key={dev.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-slate-100 text-slate-600 font-mono text-xs font-bold">
@@ -318,7 +320,7 @@ export const OverviewPage: React.FC = () => {
         </div>
 
         <div className="space-y-3">
-          {recentSystemActivity.map(act => (
+          {(recentSystemActivity ?? []).map(act => (
             <div key={act.id} className="flex items-start justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
               <div className="flex items-center gap-3">
                 <span className="w-2 h-2 rounded-full bg-teal-500" />
@@ -348,7 +350,7 @@ export const OverviewPage: React.FC = () => {
               onChange={e => setVitalForm({ ...vitalForm, petId: e.target.value })}
               className="w-full p-2.5 rounded-xl border border-slate-300 font-bold"
             >
-              {pets.map(p => (
+              {(pets ?? []).map(p => (
                 <option key={p.id} value={p.id}>{p.name} ({p.species} - {p.id})</option>
               ))}
             </select>
@@ -407,7 +409,7 @@ export const OverviewPage: React.FC = () => {
               onChange={e => setDispenseForm({ ...dispenseForm, petId: e.target.value })}
               className="w-full p-2.5 rounded-xl border border-slate-300 font-bold"
             >
-              {pets.map(p => (
+              {(pets ?? []).map(p => (
                 <option key={p.id} value={p.id}>{p.name} ({p.species})</option>
               ))}
             </select>

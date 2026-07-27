@@ -150,7 +150,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
-    return initialUsers[0]; // Joecel Garcia (Super Admin)
+    return (initialUsers ?? [])[0] ?? {
+      id: 'USR-SUPER-01',
+      name: 'Joecel Garcia',
+      email: 'joecelgarcia1@gmail.com',
+      role: 'Super Admin' as const,
+      department: 'Chief Executive & Master System Controller',
+      status: 'Active' as const,
+      lastActive: 'Now (Active)'
+    };
   });
 
   useEffect(() => {
@@ -163,7 +171,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const loginAsUser = (userEmail: string) => {
-    const found = users.find(u => u.email.toLowerCase() === userEmail.toLowerCase()) || {
+    const found = (users ?? []).find(u => u.email.toLowerCase() === userEmail.toLowerCase()) || {
       id: 'USR-SUPER-01',
       name: 'Joecel Garcia',
       email: 'joecelgarcia1@gmail.com',
@@ -184,7 +192,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Pet Handlers
   const addPet = (petData: Omit<Pet, 'id'>) => {
-    const newId = `PET-${String(pets.length + 1).padStart(3, '0')}`;
+    const newId = `PET-${String((pets?.length ?? 0) + 1).padStart(3, '0')}`;
     const newPet: Pet = { ...petData, id: newId };
     setPets(prev => [newPet, ...prev]);
     showToast('success', 'Pet Registered', `${newPet.name} has been added to Heritage Animal Clinic.`);
@@ -196,7 +204,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deletePet = (id: string) => {
-    const petName = pets.find(p => p.id === id)?.name || 'Pet';
+    const petName = (pets ?? []).find(p => p.id === id)?.name || 'Pet';
     setPets(prev => prev.filter(p => p.id !== id));
     showToast('info', 'Pet Removed', `${petName} record deleted.`);
   };
@@ -214,7 +222,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const dispenseNow = (scheduleId: string) => {
-    const sch = schedules.find(s => s.id === scheduleId);
+    const sch = (schedules ?? []).find(s => s.id === scheduleId);
     if (!sch) return;
 
     setSchedules(prev =>
@@ -246,7 +254,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map(d => (d.id === deviceId ? { ...d, waterLevelPct: 100, status: 'Online' } : d))
     );
 
-    const dev = devices.find(d => d.id === deviceId);
+    const dev = (devices ?? []).find(d => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Unit';
 
     // Log refill
@@ -280,7 +288,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Device Handlers
   const addDevice = (devData: Omit<Device, 'id' | 'status' | 'lastTransmission'>) => {
-    const newId = `HN-DEV-0${devices.length + 101}`;
+    const newId = `HN-DEV-0${(devices?.length ?? 0) + 101}`;
     const newDev: Device = {
       ...devData,
       id: newId,
@@ -293,7 +301,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // User Handlers
   const addUser = (userData: Omit<ClinicUser, 'id' | 'lastActive'>) => {
-    const newId = `USR-${String(users.length + 1).padStart(2, '0')}`;
+    const newId = `USR-${String((users?.length ?? 0) + 1).padStart(2, '0')}`;
     const newUser: ClinicUser = {
       ...userData,
       id: newId,
