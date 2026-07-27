@@ -76,18 +76,22 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [pets, setPets] = useState<Pet[]>(() => {
-    const saved = localStorage.getItem('hn_pets');
-    return saved ? JSON.parse(saved) : initialPets;
+    try {
+      const saved = localStorage.getItem('hn_pets');
+      return saved ? JSON.parse(saved) : (initialPets || []);
+    } catch (e) {
+      return initialPets || [];
+    }
   });
 
-  const [schedules, setSchedules] = useState<FeedingSchedule[]>(initialSchedules);
-  const [feedingLogs, setFeedingLogs] = useState<FeedingLog[]>(initialFeedingLogs);
-  const [hydrationLogs, setHydrationLogs] = useState<HydrationLog[]>(initialHydrationLogs);
-  const [vitals, setVitals] = useState<VitalSignRecord[]>(initialVitals);
-  const [alerts, setAlerts] = useState<AIHealthAlert[]>(initialAIAlerts);
-  const [devices, setDevices] = useState<Device[]>(initialDevices);
-  const [users, setUsers] = useState<ClinicUser[]>(initialUsers);
-  const [settings, setSettings] = useState<ClinicSettings>(initialSettings);
+  const [schedules, setSchedules] = useState<FeedingSchedule[]>(initialSchedules || []);
+  const [feedingLogs, setFeedingLogs] = useState<FeedingLog[]>(initialFeedingLogs || []);
+  const [hydrationLogs, setHydrationLogs] = useState<HydrationLog[]>(initialHydrationLogs || []);
+  const [vitals, setVitals] = useState<VitalSignRecord[]>(initialVitals || []);
+  const [alerts, setAlerts] = useState<AIHealthAlert[]>(initialAIAlerts || []);
+  const [devices, setDevices] = useState<Device[]>(initialDevices || []);
+  const [users, setUsers] = useState<ClinicUser[]>(initialUsers || []);
+  const [settings, setSettings] = useState<ClinicSettings>(initialSettings || ({} as any));
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   // UI state
@@ -100,15 +104,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   useEffect(() => {
-    localStorage.setItem('hn_pets', JSON.stringify(pets));
+    try {
+      localStorage.setItem('hn_pets', JSON.stringify(pets));
+    } catch (e) {}
   }, [pets]);
 
   // Sync with real Supabase database on mount
   useEffect(() => {
     async function syncDatabase() {
-      const remotePets = await fetchPetsFromSupabase();
-      if (remotePets && remotePets.length > 0) {
-        setPets(remotePets);
+      try {
+        const remotePets = await fetchPetsFromSupabase();
+        if (remotePets && Array.isArray(remotePets) && remotePets.length > 0) {
+          setPets(remotePets);
+        }
+      } catch (err) {
+        console.warn('Supabase sync fallback to initial data:', err);
       }
     }
     syncDatabase();

@@ -91,9 +91,9 @@ export const OverviewPage: React.FC = () => {
     setQuickDispenseModalOpen(false);
   };
 
-  const totalPets = pets.length;
-  const onlineDevicesCount = devices.filter(d => d.status === 'Online').length;
-  const activeAlertsCount = alerts.filter(a => a.reviewStatus !== 'Resolved').length;
+  const totalPets = (pets || []).length;
+  const onlineDevicesCount = (devices || []).filter(d => d.status === 'Online').length;
+  const activeAlertsCount = (alerts || []).filter(a => a.reviewStatus !== 'Resolved').length;
 
   if (isLoading) {
     return (

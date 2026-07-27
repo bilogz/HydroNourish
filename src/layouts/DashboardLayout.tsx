@@ -64,7 +64,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
 
-  const unreviewedAlertsCount = alerts.filter(a => a.reviewStatus === 'Unreviewed').length;
+  const unreviewedAlertsCount = (alerts || []).filter(a => a && a.reviewStatus === 'Unreviewed').length;
 
   const handleLogout = () => {
     logout();
