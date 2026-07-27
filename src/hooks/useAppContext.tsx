@@ -23,6 +23,7 @@ import {
   initialUsers,
   initialSettings
 } from '../data/mockData';
+import { fetchPetsFromSupabase, insertPetToSupabase } from '../services/supabase';
 
 interface AppContextType {
   pets: Pet[];
@@ -97,6 +98,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('hn_pets', JSON.stringify(pets));
   }, [pets]);
+
+  // Sync with real Supabase database on mount
+  useEffect(() => {
+    async function syncDatabase() {
+      const remotePets = await fetchPetsFromSupabase();
+      if (remotePets && remotePets.length > 0) {
+        setPets(remotePets);
+      }
+    }
+    syncDatabase();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('hn_sidebar_collapsed', String(sidebarCollapsed));
