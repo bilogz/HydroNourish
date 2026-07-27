@@ -56,7 +56,7 @@ export const OverviewPage: React.FC = () => {
 
   // Quick Vital Form State
   const [vitalForm, setVitalForm] = useState({
-    petId: pets[0]?.id || '',
+    petId: '',
     temperature: 38.5,
     heartRate: 90,
     weight: 10,
@@ -65,10 +65,18 @@ export const OverviewPage: React.FC = () => {
 
   // Quick Dispense Form State
   const [dispenseForm, setDispenseForm] = useState({
-    petId: pets[0]?.id || '',
+    petId: '',
     grams: 100,
     foodType: 'High-Protein Kibble'
   });
+
+  // Set default petId once pets load
+  useEffect(() => {
+    if (pets && pets.length > 0) {
+      setVitalForm(f => f.petId ? f : { ...f, petId: pets[0].id });
+      setDispenseForm(f => f.petId ? f : { ...f, petId: pets[0].id });
+    }
+  }, [pets]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
