@@ -34,11 +34,10 @@ export const LoginPage: React.FC = () => {
   // 3 = Forgot Password Reset OTP Verification (1-Min Timer)
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
-  // Login Credentials State
-  const [email, setEmail] = useState('joecelgarcia1@gmail.com');
-  const [password, setPassword] = useState('Admin#123');
+  // Login Credentials State (Starts Empty for Clean Login)
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
 
   // Security Lockout Protection State
   const [failedAttempts, setFailedAttempts] = useState(0);
@@ -53,7 +52,7 @@ export const LoginPage: React.FC = () => {
 
   // Forgot Password State
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('joecelgarcia1@gmail.com');
+  const [forgotEmail, setForgotEmail] = useState('');
   const [generatedResetOtp, setGeneratedResetOtp] = useState<string>('');
   const [resetOtpDigits, setResetOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [resetTimerSeconds, setResetTimerSeconds] = useState<number>(60);
@@ -340,10 +339,11 @@ export const LoginPage: React.FC = () => {
                 <input
                   type="email"
                   required
+                  autoComplete="off"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   className="w-full px-4 py-3 text-xs font-bold rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                  placeholder="joecelgarcia1@gmail.com"
+                  placeholder="staff@heritageanimalclinic.com"
                 />
               </div>
 
@@ -368,6 +368,7 @@ export const LoginPage: React.FC = () => {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
+                    autoComplete="new-password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     className="w-full px-4 py-3 pr-10 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
