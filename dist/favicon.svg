@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="dropGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="50%" stop-color="#0d9488" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+  </defs>
+  <!-- Droplet Background Shape -->
+  <path d="M50 8 C50 8, 15 52, 15 68 A35 35 0 0 0 85 68 C85 52, 50 8, 50 8 Z" fill="url(#dropGrad)"/>
+  <!-- Pet Paw Inset (White) -->
+  <!-- Main Pad -->
+  <ellipse cx="50" cy="72" rx="14" ry="10" fill="#ffffff" />
+  <!-- Toe 1 -->
+  <circle cx="34" cy="56" r="4.5" fill="#ffffff" />
+  <!-- Toe 2 -->
+  <circle cx="44" cy="50" r="5" fill="#ffffff" />
+  <!-- Toe 3 -->
+  <circle cx="56" cy="50" r="5" fill="#ffffff" />
+  <!-- Toe 4 -->
+  <circle cx="66" cy="56" r="4.5" fill="#ffffff" />
+</svg>
