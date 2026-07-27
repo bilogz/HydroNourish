@@ -23,8 +23,10 @@ import {
   LogOut,
   User,
   ShieldCheck,
-  ChevronDown
+  ChevronDown,
+  Sparkles
 } from 'lucide-react';
+import { AIAssistantModal } from '../components/AIAssistantModal';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -49,6 +51,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [aiModalOpen, setAiModalOpen] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -255,6 +258,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               />
             </div>
 
+            {/* AI Assistant Button */}
+            <button
+              onClick={() => setAiModalOpen(true)}
+              className="px-3 py-2 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs"
+              title="Launch AI Clinical Assistant"
+            >
+              <Sparkles className="w-4 h-4 text-teal-600" />
+              <span className="hidden sm:inline">AI Check</span>
+            </button>
+
             {/* Notifications Bell */}
             <div className="relative">
               <button
@@ -357,6 +370,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </main>
       </div>
 
+      <AIAssistantModal isOpen={aiModalOpen} onClose={() => setAiModalOpen(false)} />
       <ToastContainer />
     </div>
   );
