@@ -19,6 +19,11 @@ export const SUPABASE_CONFIG_HELP = {
  * Fetch Pets from Real Supabase Database
  */
 export async function fetchPetsFromSupabase(): Promise<Pet[] | null> {
+  // Skip remote query if key is unconfigured placeholder to avoid 401 network errors
+  if (!supabaseAnonKey || supabaseAnonKey.includes('.placeholder')) {
+    return null;
+  }
+
   try {
     const { data, error } = await supabase.from('pets').select('*');
     if (error || !data) return null;
