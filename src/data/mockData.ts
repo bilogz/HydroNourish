@@ -346,62 +346,14 @@ export const initialUsers: ClinicUser[] = [
   {
     id: 'USR-SUPER-01',
     name: 'Joecel Garcia',
+    fullName: 'Joecel Garcia',
     email: 'joecelgarcia1@gmail.com',
     role: 'Super Admin',
     department: 'Chief Executive & Master System Controller',
     status: 'Active',
     lastActive: 'Now (Active)',
-    avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'USR-00',
-    name: 'Heritage System Admin',
-    email: 'heritagelink45@gmail.com',
-    role: 'Administrator',
-    department: 'Lead Security & IT Systems',
-    status: 'Active',
-    lastActive: 'Now (Active 2FA)',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'USR-01',
-    name: 'Dr. Sarah Jenkins',
-    email: 's.jenkins@heritageanimalclinic.com',
-    role: 'Veterinarian',
-    department: 'Chief Veterinary Medical Officer',
-    status: 'Active',
-    lastActive: 'Now (Active)',
-    avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'USR-02',
-    name: 'Dr. Alan Grant',
-    email: 'a.grant@heritageanimalclinic.com',
-    role: 'Veterinarian',
-    department: 'Small Animal Care',
-    status: 'Active',
-    lastActive: '25 mins ago',
-    avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'USR-03',
-    name: 'Maria Santos',
-    email: 'm.santos@heritageanimalclinic.com',
-    role: 'Clinic Staff',
-    department: 'Lead Vet Technician',
-    status: 'Active',
-    lastActive: '1 hour ago',
-    avatarUrl: 'https://images.unsplash.com/photo-1594824813566-88855ce78907?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'USR-04',
-    name: 'James Reynolds',
-    email: 'admin@heritageanimalclinic.com',
-    role: 'Administrator',
-    department: 'IT & System Ops',
-    status: 'Active',
-    lastActive: '10 mins ago',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'
+    avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+    isProtected: true
   }
 ];
 

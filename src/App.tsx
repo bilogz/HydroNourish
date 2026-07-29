@@ -1,8 +1,30 @@
+/**
+ * HydroNourish — Application Entry & Router
+ * Heritage Animal Clinic Capstone Project
+ *
+ * Provider hierarchy (outermost → innermost):
+ *   ErrorBoundary → AppProvider → AuthProvider → BrowserRouter → Routes
+ *
+ * Route hierarchy:
+ *   / (public — landing page)
+ *   /admin/login (public — OTP login)
+ *   /admin/dashboard (redirect → /app for convenience)
+ *   /app/* (protected — AdminRoute guard)
+ *   /unauthorized (semi-public — for authenticated non-admins)
+ *   * (404)
+ */
+
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './hooks/useAppContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { AdminRoute } from './routes/AdminRoute';
+
+// Public Pages
 import { LandingPage } from './pages/LandingPage';
-import { LoginPage } from './pages/LoginPage';
+import { AdminLoginPage } from './pages/auth/AdminLoginPage';
+
+// Admin Dashboard Pages (all protected)
 import { OverviewPage } from './pages/OverviewPage';
 import { PetsPage } from './pages/PetsPage';
 import { PetProfilePage } from './pages/PetProfilePage';
@@ -15,32 +37,124 @@ import { ReportsPage } from './pages/ReportsPage';
 import { UsersPage } from './pages/UsersPage';
 import { SettingsPage } from './pages/SettingsPage';
 
+// Utility Pages
+import { UnauthorizedPage } from './pages/UnauthorizedPage';
+import { NotFoundPage } from './pages/NotFoundPage';
+
 export const App: React.FC = () => {
   return (
     <AppProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* ─── Public Routes ─────────────────────────────────── */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/admin/login" element={<AdminLoginPage />} />
 
-          {/* Authenticated Dashboard Routes */}
-          <Route path="/app" element={<OverviewPage />} />
-          <Route path="/app/pets" element={<PetsPage />} />
-          <Route path="/app/pets/:id" element={<PetProfilePage />} />
-          <Route path="/app/feeding" element={<FeedingPage />} />
-          <Route path="/app/hydration" element={<HydrationPage />} />
-          <Route path="/app/vitals" element={<VitalSignsPage />} />
-          <Route path="/app/alerts" element={<AIAlertsPage />} />
-          <Route path="/app/devices" element={<DevicesPage />} />
-          <Route path="/app/reports" element={<ReportsPage />} />
-          <Route path="/app/users" element={<UsersPage />} />
-          <Route path="/app/settings" element={<SettingsPage />} />
+            {/* Convenience alias: /admin/dashboard → /app */}
+            <Route path="/admin/dashboard" element={<Navigate to="/app" replace />} />
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+            {/* Legacy /login alias for backwards compat */}
+            <Route path="/login" element={<Navigate to="/admin/login" replace />} />
+
+            {/* ─── Protected Admin Dashboard Routes ──────────────── */}
+            <Route
+              path="/app"
+              element={
+                <AdminRoute>
+                  <OverviewPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/app/pets"
+              element={
+                <AdminRoute>
+                  <PetsPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/app/pets/:id"
+              element={
+                <AdminRoute>
+                  <PetProfilePage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/app/feeding"
+              element={
+                <AdminRoute>
+                  <FeedingPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/app/hydration"
+              element={
+                <AdminRoute>
+                  <HydrationPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/app/vitals"
+              element={
+                <AdminRoute>
+                  <VitalSignsPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/app/alerts"
+              element={
+                <AdminRoute>
+                  <AIAlertsPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/app/devices"
+              element={
+                <AdminRoute>
+                  <DevicesPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/app/reports"
+              element={
+                <AdminRoute>
+                  <ReportsPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/app/users"
+              element={
+                <AdminRoute>
+                  <UsersPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/app/settings"
+              element={
+                <AdminRoute>
+                  <SettingsPage />
+                </AdminRoute>
+              }
+            />
+
+            {/* ─── Utility Routes ─────────────────────────────────── */}
+            <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+            {/* ─── 404 Catch-all ──────────────────────────────────── */}
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
     </AppProvider>
   );
 };

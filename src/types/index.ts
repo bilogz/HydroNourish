@@ -106,13 +106,15 @@ export interface Device {
 export interface ClinicUser {
   id: string;
   name: string;
+  fullName?: string;
   email: string;
-  password?: string;
   role: UserRole;
   department: string;
   status: 'Active' | 'Inactive';
   lastActive: string;
   avatarUrl: string;
+  isProtected?: boolean;
+  password?: string;
 }
 
 export interface ClinicSettings {

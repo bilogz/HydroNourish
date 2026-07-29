@@ -1,8 +1,21 @@
+/**
+ * HydroNourish — Dashboard Layout
+ * Heritage Animal Clinic Capstone Project
+ *
+ * Preserves the existing collapsible sidebar design.
+ * Admin name, email, role, and avatar are sourced from AuthContext.adminProfile
+ * — never hardcoded.
+ *
+ * Logout opens a confirmation dialog, calls Supabase signOut,
+ * then redirects to /admin/login.
+ */
+
 import React, { useState } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { ToastContainer } from '../components/ToastContainer';
 import { useAppContext } from '../hooks/useAppContext';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Home,
   Dog,
@@ -22,16 +35,12 @@ import {
   Bell,
   Search,
   LogOut,
-  User,
   ShieldCheck,
   Sparkles,
   Zap,
-  Globe,
-  Radio,
-  Sliders,
-  CheckCircle2
 } from 'lucide-react';
 import { AIAssistantModal } from '../components/AIAssistantModal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -42,7 +51,7 @@ interface DashboardLayoutProps {
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   children,
   pageTitle = 'Dashboard Overview',
-  breadcrumbs = []
+  breadcrumbs = [],
 }) => {
   const {
     sidebarCollapsed,
@@ -50,28 +59,55 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     mobileSidebarOpen,
     setMobileSidebarOpen,
     alerts,
-    logout
   } = useAppContext();
+
+  const { adminProfile, signOut } = useAuth();
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [aiModalOpen, setAiModalOpen] = useState(false);
-
-  // Accordion state for "Automated Systems" dropdown matching photo
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [automatedOpen, setAutomatedOpen] = useState(true);
 
   const navigate = useNavigate();
   const location = useLocation();
 
-  const unreviewedAlertsCount = (alerts || []).filter(a => a && a.reviewStatus === 'Unreviewed').length;
+  const unreviewedAlertsCount = (alerts || []).filter(
+    (a) => a && a.reviewStatus === 'Unreviewed'
+  ).length;
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
+  // ─── Derived admin display values from AuthContext ────────────────────
+  const adminName = adminProfile?.full_name ?? 'Administrator';
+  const adminEmail = adminProfile?.email ?? '';
+  const adminRole =
+    adminProfile?.role === 'super_admin'
+      ? 'Super Admin'
+      : adminProfile?.role === 'admin'
+      ? 'Admin'
+      : 'Administrator';
+  const adminAvatar = adminProfile?.avatar_url ?? null;
+
+  // Generate initials for avatar fallback
+  const initials = adminName
+    .split(' ')
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  // ─── Logout ───────────────────────────────────────────────────────────
+  const handleLogoutConfirm = async () => {
+    setIsSigningOut(true);
+    await signOut();
+    setIsSigningOut(false);
+    setLogoutDialogOpen(false);
+    // Replace history to prevent back-navigation to dashboard
+    navigate('/admin/login', { replace: true });
   };
 
-  // Grouped Navigation Items (Matching photo design system)
+  // ─── Navigation Items ─────────────────────────────────────────────────
   const adminGroup = [
     { label: 'Dashboard', path: '/app', icon: Home, color: 'text-blue-600' },
     { label: 'Users', path: '/app/users', icon: Users, color: 'text-emerald-600' },
@@ -87,15 +123,36 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   ];
 
   const automatedSubItems = [
-    { label: 'AI Health Alerts', path: '/app/alerts', icon: Bot, color: 'text-indigo-600', badge: unreviewedAlertsCount },
+    {
+      label: 'AI Health Alerts',
+      path: '/app/alerts',
+      icon: Bot,
+      color: 'text-indigo-600',
+      badge: unreviewedAlertsCount,
+    },
     { label: 'Smart Devices', path: '/app/devices', icon: Cpu, color: 'text-teal-600' },
-    { label: 'System Analytics', path: '/app/vitals', icon: Activity, color: 'text-rose-500' },
-    { label: 'Clinic Settings', path: '/app/settings', icon: Settings, color: 'text-amber-500' },
+    {
+      label: 'System Analytics',
+      path: '/app/vitals',
+      icon: Activity,
+      color: 'text-rose-500',
+    },
+    {
+      label: 'Clinic Settings',
+      path: '/app/settings',
+      icon: Settings,
+      color: 'text-amber-500',
+    },
   ];
 
-  const renderNavLink = (item: { label: string; path: string; icon: any; color?: string; badge?: number }, isSubItem = false) => {
+  const renderNavLink = (
+    item: { label: string; path: string; icon: React.ElementType; color?: string; badge?: number },
+    isSubItem = false
+  ) => {
     const Icon = item.icon;
-    const isActive = location.pathname === item.path || (item.path !== '/app' && location.pathname.startsWith(item.path));
+    const isActive =
+      location.pathname === item.path ||
+      (item.path !== '/app' && location.pathname.startsWith(item.path));
 
     return (
       <NavLink
@@ -111,7 +168,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         }}
         title={sidebarCollapsed ? item.label : undefined}
       >
-        <Icon className={`w-4.5 h-4.5 shrink-0 ${item.color || 'text-slate-500'} ${sidebarCollapsed ? 'mx-auto' : ''}`} />
+        <Icon
+          className={`w-4 h-4 shrink-0 ${item.color || 'text-slate-500'} ${sidebarCollapsed ? 'mx-auto' : ''}`}
+        />
         {!sidebarCollapsed && <span className="flex-1 truncate">{item.label}</span>}
         {!sidebarCollapsed && item.badge ? (
           <span className="px-2 py-0.5 text-[10px] font-extrabold bg-rose-500 text-white rounded-full">
@@ -127,13 +186,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50 flex text-slate-800 font-sans">
-      {/* ================= LIGHT SIDEBAR (MATCHING PHOTO) ================= */}
+      {/* ═══════════ DESKTOP SIDEBAR ═══════════ */}
       <aside
         className={`hidden md:flex flex-col fixed top-0 bottom-0 left-0 z-30 bg-white text-slate-700 border-r border-slate-200/80 shadow-xs transition-all duration-300 ${
           sidebarCollapsed ? 'w-20' : 'w-64'
         }`}
       >
-        {/* Sidebar Header Logo */}
+        {/* Logo */}
         <div className="h-20 flex items-center justify-between px-4 border-b border-slate-100">
           <Logo iconOnly={sidebarCollapsed} size="md" />
           <button
@@ -141,13 +200,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
             title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
           >
-            {sidebarCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+            {sidebarCollapsed ? (
+              <ChevronRight className="w-5 h-5" />
+            ) : (
+              <ChevronLeft className="w-5 h-5" />
+            )}
           </button>
         </div>
 
-        {/* Sidebar Nav Body */}
-        <div className="flex-1 py-4 px-3 space-y-5 overflow-y-auto custom-scrollbar">
-          {/* SECTION 1: ADMIN */}
+        {/* Nav Body */}
+        <div className="flex-1 py-4 px-3 space-y-5 overflow-y-auto">
+          {/* ADMIN Section */}
           <div>
             {!sidebarCollapsed && (
               <div className="flex items-center gap-2 px-3 mb-2 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
@@ -155,25 +218,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <span className="flex-1 h-px bg-slate-200/80" />
               </div>
             )}
-            <div className="space-y-1">
-              {adminGroup.map(item => renderNavLink(item))}
-            </div>
+            <div className="space-y-1">{adminGroup.map((item) => renderNavLink(item))}</div>
           </div>
 
-          {/* SECTION 2: HEALTHCARE & PET CARE */}
+          {/* VET CARE Section */}
           <div>
             {!sidebarCollapsed && (
               <div className="flex items-center gap-2 px-3 mb-2 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                <span>VET CARE & PATIENTS</span>
+                <span>VET CARE &amp; PATIENTS</span>
                 <span className="flex-1 h-px bg-slate-200/80" />
               </div>
             )}
-            <div className="space-y-1">
-              {healthGroup.map(item => renderNavLink(item))}
-            </div>
+            <div className="space-y-1">{healthGroup.map((item) => renderNavLink(item))}</div>
           </div>
 
-          {/* SECTION 3: AUTOMATED MONITORING (COLLAPSIBLE DROPDOWN LIKE PHOTO) */}
+          {/* AUTOMATED MONITORING Section */}
           <div>
             {!sidebarCollapsed && (
               <div className="flex items-center gap-2 px-3 mb-2 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
@@ -182,43 +241,60 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </div>
             )}
             <div className="space-y-1">
-              {/* Accordion Toggle Pill Button */}
               <button
                 onClick={() => setAutomatedOpen(!automatedOpen)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-slate-700 hover:bg-slate-100 ${
                   automatedOpen ? 'bg-slate-100/70 border border-slate-200/60' : ''
                 }`}
               >
-                <Zap className="w-4.5 h-4.5 text-teal-600 shrink-0" />
-                {!sidebarCollapsed && <span className="flex-1 text-left">Automated Warnings</span>}
+                <Zap className="w-4 h-4 text-teal-600 shrink-0" />
                 {!sidebarCollapsed && (
-                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${automatedOpen ? 'rotate-180' : ''}`} />
+                  <span className="flex-1 text-left">Automated Warnings</span>
+                )}
+                {!sidebarCollapsed && (
+                  <ChevronDown
+                    className={`w-4 h-4 text-slate-400 transition-transform ${automatedOpen ? 'rotate-180' : ''}`}
+                  />
                 )}
               </button>
 
-              {/* Nested Dropdown Sub-Items */}
               {automatedOpen && !sidebarCollapsed && (
                 <div className="ml-4 pl-3 border-l-2 border-slate-200 space-y-1 pt-1 animate-fade-in">
-                  {automatedSubItems.map(subItem => renderNavLink(subItem, true))}
+                  {automatedSubItems.map((sub) => renderNavLink(sub, true))}
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Clinic Footer */}
-        {!sidebarCollapsed && (
-          <div className="p-3 border-t border-slate-100 m-3 bg-slate-50 rounded-xl">
-            <div className="flex items-center gap-2 text-xs font-bold text-teal-700">
-              <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
-              <span>Heritage Animal Clinic</span>
+        {/* Clinic Footer + Logout */}
+        <div className="border-t border-slate-100 p-3 space-y-2">
+          {!sidebarCollapsed && (
+            <div className="p-3 bg-slate-50 rounded-xl">
+              <div className="flex items-center gap-2 text-xs font-bold text-teal-700">
+                <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
+                <span>Heritage Animal Clinic</span>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                SaaS Portal · Smart ESP32 Nodes
+              </p>
             </div>
-            <p className="text-[10px] text-slate-500 mt-0.5">SaaS Portal • Smart ESP32 Nodes</p>
-          </div>
-        )}
+          )}
+          <button
+            id="sidebar-logout-btn"
+            onClick={() => setLogoutDialogOpen(true)}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-all ${
+              sidebarCollapsed ? 'justify-center' : ''
+            }`}
+            title="Sign Out"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            {!sidebarCollapsed && <span>Sign Out</span>}
+          </button>
+        </div>
       </aside>
 
-      {/* ================= MOBILE DRAWER ================= */}
+      {/* ═══════════ MOBILE DRAWER ═══════════ */}
       {mobileSidebarOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div
@@ -237,63 +313,78 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </div>
 
             <div className="flex-1 py-4 px-3 space-y-4 overflow-y-auto">
+              {/* Admin Group */}
               <div>
-                <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-3 mb-2">ADMIN</div>
+                <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-3 mb-2">
+                  ADMIN
+                </div>
                 <div className="space-y-1">
-                  {adminGroup.map(item => (
+                  {adminGroup.map((item) => (
                     <NavLink
                       key={item.path}
                       to={item.path}
                       onClick={() => setMobileSidebarOpen(false)}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold ${
-                          isActive ? 'bg-teal-50 text-teal-900 border border-teal-200 font-bold' : 'text-slate-600'
+                          isActive
+                            ? 'bg-teal-50 text-teal-900 border border-teal-200 font-bold'
+                            : 'text-slate-600'
                         }`
                       }
                     >
-                      <item.icon className={`w-4.5 h-4.5 ${item.color}`} />
+                      <item.icon className={`w-4 h-4 ${item.color}`} />
                       <span>{item.label}</span>
                     </NavLink>
                   ))}
                 </div>
               </div>
 
+              {/* Health Group */}
               <div>
-                <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-3 mb-2">VET CARE & PATIENTS</div>
+                <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-3 mb-2">
+                  VET CARE &amp; PATIENTS
+                </div>
                 <div className="space-y-1">
-                  {healthGroup.map(item => (
+                  {healthGroup.map((item) => (
                     <NavLink
                       key={item.path}
                       to={item.path}
                       onClick={() => setMobileSidebarOpen(false)}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold ${
-                          isActive ? 'bg-teal-50 text-teal-900 border border-teal-200 font-bold' : 'text-slate-600'
+                          isActive
+                            ? 'bg-teal-50 text-teal-900 border border-teal-200 font-bold'
+                            : 'text-slate-600'
                         }`
                       }
                     >
-                      <item.icon className={`w-4.5 h-4.5 ${item.color}`} />
+                      <item.icon className={`w-4 h-4 ${item.color}`} />
                       <span>{item.label}</span>
                     </NavLink>
                   ))}
                 </div>
               </div>
 
+              {/* Automated Group */}
               <div>
-                <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-3 mb-2">AUTOMATED MONITORING</div>
+                <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-3 mb-2">
+                  AUTOMATED MONITORING
+                </div>
                 <div className="space-y-1">
-                  {automatedSubItems.map(item => (
+                  {automatedSubItems.map((item) => (
                     <NavLink
                       key={item.path + item.label}
                       to={item.path}
                       onClick={() => setMobileSidebarOpen(false)}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold ${
-                          isActive ? 'bg-teal-50 text-teal-900 border border-teal-200 font-bold' : 'text-slate-600'
+                          isActive
+                            ? 'bg-teal-50 text-teal-900 border border-teal-200 font-bold'
+                            : 'text-slate-600'
                         }`
                       }
                     >
-                      <item.icon className={`w-4.5 h-4.5 ${item.color}`} />
+                      <item.icon className={`w-4 h-4 ${item.color}`} />
                       <span className="flex-1">{item.label}</span>
                       {item.badge ? (
                         <span className="px-2 py-0.5 text-[10px] font-extrabold bg-rose-500 text-white rounded-full">
@@ -306,10 +397,33 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-100">
+            {/* Mobile Sidebar Footer */}
+            <div className="p-4 border-t border-slate-100 space-y-2">
+              {/* Admin Info */}
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                {adminAvatar ? (
+                  <img
+                    src={adminAvatar}
+                    alt={adminName}
+                    className="w-8 h-8 rounded-lg object-cover ring-1 ring-slate-200"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-800 font-extrabold text-xs flex items-center justify-center">
+                    {initials}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-900 truncate">{adminName}</p>
+                  <p className="text-[10px] text-teal-700 font-extrabold">{adminRole}</p>
+                </div>
+              </div>
+
               <button
-                onClick={handleLogout}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50"
+                onClick={() => {
+                  setMobileSidebarOpen(false);
+                  setLogoutDialogOpen(true);
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-rose-200 text-rose-600 font-semibold text-xs hover:bg-rose-50 transition-all"
               >
                 <LogOut className="w-4 h-4" />
                 Sign Out
@@ -319,13 +433,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </div>
       )}
 
-      {/* ================= MAIN CONTENT WRAPPER ================= */}
+      {/* ═══════════ MAIN CONTENT ═══════════ */}
       <div
         className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
           sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'
         }`}
       >
-        {/* TOP NAVBAR HEADER */}
+        {/* TOP HEADER */}
         <header className="sticky top-0 z-20 h-20 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
@@ -360,17 +474,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Search */}
             <div className="relative hidden lg:block w-64">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search pets, devices..."
+                placeholder="Search pets, devices…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 text-xs font-medium bg-slate-100 border border-transparent rounded-xl focus:bg-white focus:border-teal-500 focus:outline-none transition-all"
               />
             </div>
 
+            {/* AI Assistant */}
             <button
               onClick={() => setAiModalOpen(true)}
               className="px-3 py-2 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs"
@@ -380,6 +496,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <span className="hidden sm:inline">AI Check</span>
             </button>
 
+            {/* Notifications */}
             <div className="relative">
               <button
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
@@ -401,22 +518,30 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     <span className="text-xs text-slate-500">{unreviewedAlertsCount} pending</span>
                   </div>
                   <div className="max-h-80 overflow-y-auto space-y-2">
-                    {alerts.filter(a => a.reviewStatus === 'Unreviewed').map(alert => (
-                      <Link
-                        key={alert.id}
-                        to="/app/alerts"
-                        onClick={() => setNotificationsOpen(false)}
-                        className="block p-3 rounded-xl bg-slate-50 hover:bg-teal-50/50 border border-slate-100 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-xs text-slate-900">{alert.petName}</span>
-                          <span className="text-[10px] text-slate-400">{alert.timestamp}</span>
-                        </div>
-                        <p className="text-xs text-slate-600 mt-1 line-clamp-2">{alert.aiObservation}</p>
-                      </Link>
-                    ))}
+                    {alerts
+                      .filter((a) => a.reviewStatus === 'Unreviewed')
+                      .map((alert) => (
+                        <Link
+                          key={alert.id}
+                          to="/app/alerts"
+                          onClick={() => setNotificationsOpen(false)}
+                          className="block p-3 rounded-xl bg-slate-50 hover:bg-teal-50/50 border border-slate-100 transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs text-slate-900">
+                              {alert.petName}
+                            </span>
+                            <span className="text-[10px] text-slate-400">{alert.timestamp}</span>
+                          </div>
+                          <p className="text-xs text-slate-600 mt-1 line-clamp-2">
+                            {alert.aiObservation}
+                          </p>
+                        </Link>
+                      ))}
                     {unreviewedAlertsCount === 0 && (
-                      <p className="text-xs text-slate-500 text-center py-4">No unreviewed alerts.</p>
+                      <p className="text-xs text-slate-500 text-center py-4">
+                        No unreviewed alerts.
+                      </p>
                     )}
                   </div>
                   <Link
@@ -430,29 +555,36 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               )}
             </div>
 
+            {/* User Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setUserDropdownOpen(!userDropdownOpen)}
                 className="flex items-center gap-2.5 p-1.5 pr-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all"
               >
-                <img
-                  src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200"
-                  alt="Avatar"
-                  className="w-8 h-8 rounded-lg object-cover ring-1 ring-slate-200"
-                />
+                {adminAvatar ? (
+                  <img
+                    src={adminAvatar}
+                    alt={adminName}
+                    className="w-8 h-8 rounded-lg object-cover ring-1 ring-slate-200"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-800 font-extrabold text-xs flex items-center justify-center">
+                    {initials}
+                  </div>
+                )}
                 <div className="text-left hidden sm:block">
-                  <p className="text-xs font-bold text-slate-900 leading-tight">Joecel Garcia</p>
-                  <p className="text-[10px] text-purple-700 font-extrabold">Super Admin</p>
+                  <p className="text-xs font-bold text-slate-900 leading-tight">{adminName}</p>
+                  <p className="text-[10px] text-teal-700 font-extrabold">{adminRole}</p>
                 </div>
               </button>
 
               {userDropdownOpen && (
                 <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl border border-slate-200 shadow-xl z-50 p-2 space-y-1">
                   <div className="p-2 border-b border-slate-100">
-                    <p className="font-bold text-xs text-slate-900">Joecel Garcia</p>
-                    <p className="text-[11px] text-slate-500">joecelgarcia1@gmail.com</p>
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-extrabold">
-                      Super Admin Role
+                    <p className="font-bold text-xs text-slate-900">{adminName}</p>
+                    <p className="text-[11px] text-slate-500 truncate">{adminEmail}</p>
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-extrabold">
+                      {adminRole}
                     </span>
                   </div>
                   <Link
@@ -464,7 +596,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     Account Settings
                   </Link>
                   <button
-                    onClick={handleLogout}
+                    onClick={() => {
+                      setUserDropdownOpen(false);
+                      setLogoutDialogOpen(true);
+                    }}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-rose-50 text-rose-600 font-semibold text-xs"
                   >
                     <LogOut className="w-4 h-4" />
@@ -476,14 +611,31 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </div>
         </header>
 
-        {/* PAGE CONTENT CONTAINER */}
-        <main key={location.pathname} className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6 animate-fade-in">
+        {/* PAGE CONTENT */}
+        <main
+          key={location.pathname}
+          className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6 animate-fade-in"
+        >
           {children}
         </main>
       </div>
 
+      {/* AI Assistant Modal */}
       <AIAssistantModal isOpen={aiModalOpen} onClose={() => setAiModalOpen(false)} />
+
+      {/* Toast Container */}
       <ToastContainer />
+
+      {/* Logout Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={logoutDialogOpen}
+        onClose={() => setLogoutDialogOpen(false)}
+        onConfirm={handleLogoutConfirm}
+        title="Sign Out"
+        message="Are you sure you want to sign out of the administrator portal?"
+        confirmText={isSigningOut ? 'Signing out…' : 'Sign Out'}
+        variant="danger"
+      />
     </div>
   );
 };

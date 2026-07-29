@@ -1,141 +1,280 @@
-# HydroNourish — Automated Pet Feeding, Hydration, and AI Health Monitoring System
+# HydroNourish — Heritage Animal Clinic
 
-**Client:** Heritage Animal Clinic  
-**Stack:** React 18, Vite, TypeScript, Tailwind CSS, React Router v6, Lucide React, Recharts  
-
----
-
-## 📌 Project Overview
-
-**HydroNourish** is a complete, modern SaaS-style web template and monitoring dashboard developed for **Heritage Animal Clinic**. It connects automated smart feeding dispensers, hydration fountains, and biometric collar sensors into a centralized healthcare management interface.
-
-### Key Capabilities
-- **Automated Pet Feeding:** Portions and schedule rules with manual override dispenses.
-- **Smart Hydration Monitoring:** Ultrasonic container depth level tracking and low-water alerts.
-- **Biometric Vital Signs:** Body temperature (°C), resting heart rate (bpm), activity levels, and weight tracking.
-- **AI-Assisted Observations:** Real-time anomaly detection flagging potential fluid decline or fever.
-- **ESP32 Node Management:** Real-time device online/offline tracking, battery %, and Wi-Fi RSSI signal data.
-- **Clinical Reporting:** Printable summary reports, PDF mock exports, and instant CSV downloads.
+Smart Pet Hydration & Feeding Management System powered by ESP32 IoT devices, real-time AI health monitoring, and a secure Supabase-backed administrator portal.
 
 ---
 
-## 🚀 Getting Started
+## Tech Stack
 
-### Prerequisites
-- [Node.js](https://nodejs.org/) (v18 or higher recommended)
-- `npm` or `yarn`
+- **React 18 + Vite** — frontend framework
+- **TypeScript** — strict typing throughout, no `.js`/`.jsx` files
+- **Tailwind CSS v4** — utility-first styling
+- **React Router v6** — client-side routing
+- **Supabase** — authentication (email OTP) + PostgreSQL database + Row Level Security
+- **Recharts** — dashboard charts
+- **Lucide React** — icons
 
-### 1. Installation
-Clone the repository and install project dependencies:
+---
 
-```bash
-git clone https://github.com/your-username/HydroNourish.git
-cd HydroNourish
-npm install
+## Environment Variables
+
+Create a `.env` file in the project root (never commit it):
+
+```env
+# Required
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
+
+# Optional (AI Clinical Assistant)
+VITE_GEMINI_API_KEY=
+VITE_OPENAI_API_KEY=
 ```
 
-### 2. Run Development Server
-To launch the Vite development server locally:
+> **Never put the Supabase service-role key in this file.** The service-role key bypasses Row Level Security and must only be used server-side.
+
+---
+
+## Supabase Project Setup
+
+### 1. Create a Supabase Project
+
+1. Go to [supabase.com](https://supabase.com) and create a new project.
+2. Choose a region closest to your users (e.g., AP Southeast — Singapore).
+3. Wait for the project to initialize.
+
+### 2. Copy Your API Keys
+
+Navigate to **Project Settings → API**:
+
+- **Project URL** → `VITE_SUPABASE_URL`
+- **anon / public** key → `VITE_SUPABASE_ANON_KEY`
+
+### 3. Enable Email OTP Authentication
+
+1. Go to **Authentication → Providers**.
+2. Ensure **Email** is enabled.
+3. Under **Email**, enable **"Passwordless / OTP sign-in"** (this allows `signInWithOtp`).
+4. Set **OTP Expiry** (recommended: 600 seconds / 10 minutes).
+5. **Disable** "Confirm email" for OTP-only flow (or keep it on if you want email confirmation for new users).
+6. Under **User Signups**, **disable "Enable new user signups"** — provisioning is done manually.
+
+### 4. Configure the OTP Email Template
+
+1. Go to **Authentication → Email Templates → Magic Link**.
+2. Customize the template to match Heritage Animal Clinic branding.
+3. The OTP code is available as `{{ .Token }}` in the template.
+4. Recommended subject: `Your Heritage Animal Clinic Verification Code`
+
+### 5. Configure Redirect URLs
+
+For local development, add:
+```
+http://localhost:5173
+http://localhost:5173/**
+```
+
+For production (Vercel), add:
+```
+https://your-app.vercel.app
+https://your-app.vercel.app/**
+```
+
+Set these in **Authentication → URL Configuration → Redirect URLs**.
+
+---
+
+## Database Migration
+
+### Run the Admin Profiles Migration
+
+1. Go to **Supabase Dashboard → SQL Editor**.
+2. Open and run `supabase/migrations/create_admin_profiles.sql`.
+
+This creates:
+- The `admin_profiles` table linked to `auth.users`
+- Row Level Security policies (select-own, update-last-login only)
+- A trigger preventing frontend `role`/`status` modification
+
+> You only need to run this once per project.
+
+---
+
+## Creating the First Administrator
+
+**There is no public sign-up page.** Administrators must be provisioned manually.
+
+### Step 1: Create the Auth User
+
+In **Supabase Dashboard → Authentication → Users**:
+
+1. Click **"Invite user"**.
+2. Enter the administrator's email address.
+3. Supabase will send an invitation email.
+4. The admin must click the link to confirm their account.
+
+### Step 2: Get the User's UUID
+
+After confirmation, find the user in **Authentication → Users** and copy their UUID.
+
+### Step 3: Insert the Admin Profile
+
+In **SQL Editor**, run:
+
+```sql
+INSERT INTO public.admin_profiles (id, email, full_name, role, status)
+VALUES (
+  'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',  -- replace with real auth.users UUID
+  'admin@example.com',                      -- must match auth user email exactly
+  'Administrator Full Name',
+  'super_admin',                            -- or 'admin'
+  'active'
+);
+```
+
+> **Role and status can only be changed via this SQL Editor or a server-side process.** Frontend users cannot promote themselves.
+
+---
+
+## Running Locally
 
 ```bash
+# Install dependencies
+npm install
+
+# Copy and fill in your environment variables
+cp .env.example .env
+# Edit .env with your Supabase URL and anon key
+
+# Start the development server
 npm run dev
 ```
 
-Open your browser at `http://localhost:3000` or `http://localhost:5173`.
+Open [http://localhost:5173](http://localhost:5173).
 
-### 3. Build for Production
-To generate an optimized production bundle:
+Admin login is at `/admin/login`.
 
-```bash
-npm run build
+---
+
+## Testing Administrator Login
+
+1. Navigate to `/admin/login`.
+2. Enter the provisioned administrator email.
+3. Click **"Send Verification Code"**.
+4. Check your email inbox for the 6-digit OTP from Supabase.
+5. Enter the OTP in the 6-box input.
+6. On success, you will be redirected to `/app` (the dashboard).
+
+### Testing Edge Cases
+
+| Scenario | Expected Behaviour |
+|---|---|
+| Unknown email | Neutral "if authorized" message |
+| Wrong OTP | "Incorrect code" error |
+| Expired OTP | "Code has expired" error |
+| Inactive account | Signed out, error shown |
+| Suspended account | Signed out, error shown |
+| No admin profile | Signed out, unauthorized page |
+| Direct `/app` URL without session | Redirect to `/admin/login` |
+| Refresh with valid session | Stays on dashboard |
+| Logout → browser Back | Cannot access dashboard |
+
+---
+
+## Deploying to Vercel
+
+1. Push to GitHub.
+2. In Vercel, import your repository.
+3. Set the **Framework Preset** to `Vite`.
+4. Add environment variables:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+5. Deploy.
+
+### Required: Add Vercel URL to Supabase Redirect URLs
+
+After deployment, add your Vercel URL to **Authentication → URL Configuration → Redirect URLs** in Supabase:
+
+```
+https://your-app.vercel.app
+https://your-app.vercel.app/**
 ```
 
-The output files will be compiled into the `dist/` directory. You can preview the production build locally using:
-
-```bash
-npm run preview
-```
-
----
-
-## ☁️ Deploying to Vercel
-
-1. Create or log into your account at [Vercel](https://vercel.com).
-2. Click **Add New Project** and import your GitHub repository.
-3. Select **Vite** as the Framework Preset.
-4. Keep the root directory set to `./` and click **Deploy**.
-5. Vercel will automatically build and assign a `.vercel.app` URL to your project.
-
-### Connecting a Custom Domain on Vercel
-1. Go to your project settings in the Vercel dashboard.
-2. Navigate to **Domains** -> **Add Domain**.
-3. Enter your domain (e.g., `hydronourish.heritageanimalclinic.com`).
-4. Update your domain DNS settings at your registrar (such as Namecheap or GoDaddy):
-   - **A Record:** Point `@` to `76.76.21.21`
-   - **CNAME Record:** Point `www` to `cname.vercel-dns.com`
-5. Vercel will automatically provision a free SSL certificate once DNS resolves.
-
----
-
-## 🗄️ Supabase Backend Integration (Future Database Wiring)
-
-This project contains a pre-built Supabase service placeholder located at [`src/services/supabase.ts`](file:///d:/CAPSTONE-COMMISSION/HydroNourish/src/services/supabase.ts).
-
-### How to Connect Supabase:
-1. Create a project at [Supabase.com](https://supabase.com).
-2. Install the Supabase JS Client:
-   ```bash
-   npm install @supabase/supabase-js
-   ```
-3. Create a `.env.local` file in your root folder:
-   ```env
-   VITE_SUPABASE_URL=https://your-project-id.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-anon-key-here
-   ```
-4. Create the following database tables in Supabase:
-   - `pets` (id, name, species, breed, age, weight, owner_name, device_id, health_status)
-   - `feeding_schedules` (id, pet_id, food_type, portion_grams, scheduled_time, status)
-   - `hydration_logs` (id, pet_id, amount_ml, timestamp, reservoir_level)
-   - `vital_signs` (id, pet_id, temperature, heart_rate, weight, status, timestamp)
-   - `ai_alerts` (id, pet_id, alert_type, observed_reading, severity, ai_observation, review_status)
-   - `devices` (id, assigned_pet_id, status, wifi_dbm, food_level, water_level, battery)
-5. Uncomment the `createClient` initialization inside [`src/services/supabase.ts`](file:///d:/CAPSTONE-COMMISSION/HydroNourish/src/services/supabase.ts).
-
----
-
-## 🔌 ESP32 Microcontroller Hardware API Connection
-
-Smart feeder and hydration nodes communicate with HydroNourish over REST or MQTT protocols.
-
-### Sample ESP32 Telemetry JSON Payload:
-When an ESP32 node transmits telemetry, it sends a JSON payload structured as follows:
+The project includes a `vercel.json` for SPA routing:
 
 ```json
-{
-  "device_id": "HN-DEV-0101",
-  "assigned_pet_id": "PET-001",
-  "mac_address": "24:0A:C4:00:01:A1",
-  "food_level_pct": 78,
-  "water_level_pct": 82,
-  "battery_pct": 98,
-  "wifi_rssi_dbm": -54,
-  "telemetry": {
-    "temperature_c": 38.5,
-    "heart_rate_bpm": 85,
-    "weight_kg": 29.5
-  }
-}
+{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
 ```
 
-### Endpoints Configuration
-Specify your live ingestion URL under **Settings > Device API Configuration** inside the dashboard interface or update the default endpoint string in [`src/data/mockData.ts`](file:///d:/CAPSTONE-COMMISSION/HydroNourish/src/data/mockData.ts).
+---
+
+## Security Reminders
+
+- **Never commit `.env`** — it is in `.gitignore`
+- **Never put the service-role key in frontend code** — it bypasses RLS
+- **Admin provisioning** is done via the Supabase dashboard only
+- **Role and status changes** must go through the SQL editor or a server-side function
+- **OTP codes** are generated and validated by Supabase — never client-side
+- **Session persistence** is managed by the Supabase client — never stored manually in localStorage
+- **Row Level Security** is the true security boundary — frontend route guards are for UX only
 
 ---
 
-## ⚖️ Clinical Disclaimer
+## Troubleshooting
 
-> **Notice:** HydroNourish provides monitoring and AI-assisted observations to support veterinary staff at Heritage Animal Clinic. It does not replace professional veterinary diagnosis, examination, or medical treatment.
+### OTP Email Not Received
+
+1. Check the spam/junk folder.
+2. Verify the email provider is not blocking Supabase's sending domain.
+3. In Supabase Dashboard → **Authentication → Logs**, check for send errors.
+4. Supabase free tier has an email send rate limit — wait 60 seconds between attempts.
+5. For production, configure a **custom SMTP provider** in **Project Settings → Auth → SMTP Settings**.
+
+### "Authentication service is not configured"
+
+Your `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY` is missing or incorrect. Check your `.env` file.
+
+### "This account is not authorized to access the administrator portal."
+
+Either:
+- No `admin_profiles` row exists for this user → run the INSERT statement in the SQL Editor.
+- The `status` is `inactive` or `suspended` → update via SQL Editor.
+- The `role` is not `admin` or `super_admin` → update via SQL Editor.
+
+### Session Expires Too Quickly
+
+In **Supabase Dashboard → Project Settings → Auth → JWT expiry**, the default is 3600 seconds (1 hour). The Supabase client auto-refreshes tokens. If sessions expire, check that `autoRefreshToken: true` is set in the Supabase client config (`src/lib/supabase.ts`).
 
 ---
 
-© 2026 HydroNourish — Heritage Animal Clinic. All rights reserved.
+## Project Structure (Auth-Related Files)
+
+```
+src/
+├── lib/
+│   └── supabase.ts              # Supabase client (env vars only)
+├── types/
+│   ├── auth.ts                  # AdminProfile, AuthContextValue, AuthResult
+│   └── database.ts              # Supabase Database type definitions
+├── contexts/
+│   └── AuthContext.tsx          # Real Supabase Auth context
+├── services/
+│   └── adminAuthService.ts      # requestOtp, verifyOtp, fetchAdminProfile
+├── utils/
+│   └── authErrors.ts            # User-friendly error messages
+├── components/auth/
+│   ├── AdminEmailForm.tsx        # Step 1: email input
+│   ├── AdminOtpForm.tsx          # Step 2: OTP verification
+│   └── AuthLoadingScreen.tsx    # Full-page session loading screen
+├── routes/
+│   ├── ProtectedRoute.tsx       # Session check guard
+│   └── AdminRoute.tsx           # Admin role + status guard
+└── pages/
+    ├── auth/
+    │   └── AdminLoginPage.tsx   # Two-step login page
+    ├── UnauthorizedPage.tsx     # For authenticated non-admins
+    └── NotFoundPage.tsx         # 404 page
+
+supabase/
+└── migrations/
+    └── create_admin_profiles.sql  # Table + RLS + trigger
+```
