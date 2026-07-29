@@ -13,11 +13,6 @@ export type { AdminProfile, AuthResult };
  * Requests an OTP code for admin authentication via Supabase Auth.
  */
 export async function requestAdminOtp(email: string): Promise<AuthResult> {
-  const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
-  if (!rawKey || !rawKey.startsWith('eyJ') || rawKey.includes('.placeholder')) {
-    return { success: true, error: null };
-  }
-
   try {
     const { error } = await supabase.auth.signInWithOtp({
       email,
