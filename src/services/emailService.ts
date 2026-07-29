@@ -22,10 +22,12 @@ export interface EmailDispatchResult {
 }
 
 /**
- * Checks if the key is a valid Supabase JWT starting with "eyJ".
+ * Checks if the key is a valid Supabase Anon key (JWT "eyJ..." or Publishable "sb_publishable_...").
  */
-function isJwtKey(key: string): boolean {
-  return typeof key === 'string' && key.trim().startsWith('eyJ') && !key.includes('.placeholder');
+function isValidAnonKey(key: string): boolean {
+  if (!key || key.includes('.placeholder')) return false;
+  const trimmed = key.trim();
+  return trimmed.startsWith('eyJ') || trimmed.startsWith('sb_publishable_');
 }
 
 /**
@@ -35,7 +37,7 @@ function isJwtKey(key: string): boolean {
 export async function sendLoginOtp(recipientEmail: string): Promise<EmailDispatchResult> {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
-  const validKey = isJwtKey(rawKey);
+  const validKey = isValidAnonKey(rawKey);
 
   let supabaseStatus = 'OK';
   let hasError = false;
@@ -43,16 +45,16 @@ export async function sendLoginOtp(recipientEmail: string): Promise<EmailDispatc
 
   if (!validKey) {
     console.warn(
-      '[HydroNourish Auth] Skipping Supabase request: VITE_SUPABASE_ANON_KEY in .env is not a JWT starting with "eyJ".'
+      '[HydroNourish Auth] Skipping Supabase request: VITE_SUPABASE_ANON_KEY in .env is missing or invalid.'
     );
     return {
       success: true,
-      message: 'VITE_SUPABASE_ANON_KEY in .env must start with "eyJ".',
+      message: 'VITE_SUPABASE_ANON_KEY in .env is missing.',
       code,
       sender: SYSTEM_OTP_SENDER_EMAIL,
       hasError: true,
-      errorMessage: 'VITE_SUPABASE_ANON_KEY in .env must be a valid Supabase JWT starting with "eyJ".',
-      supabaseStatus: 'HTTP 401: Invalid Key Format (Requires JWT starting with "eyJ")',
+      errorMessage: 'VITE_SUPABASE_ANON_KEY in .env is missing or placeholder.',
+      supabaseStatus: 'Unconfigured API Key',
     };
   }
 
@@ -91,7 +93,7 @@ export async function sendForgotPasswordOtp(recipientEmail: string): Promise<Ema
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
 
-  if (!isJwtKey(rawKey)) {
+  if (!isValidAnonKey(rawKey)) {
     return {
       success: true,
       message: 'Password reset code generated.',
