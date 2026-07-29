@@ -12,6 +12,7 @@ import { Mail, Lock, Eye, EyeOff, Send, ArrowLeft, ShieldCheck, RefreshCw } from
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../hooks/useAppContext';
 import { sendLoginOtp, SYSTEM_OTP_SENDER_EMAIL } from '../../services/emailService';
+import { checkOtpRateLimit } from '../../utils/rateLimiter';
 
 interface AdminEmailFormProps {
   onSuccess: (email: string, generatedCode?: string) => void;
@@ -46,6 +47,18 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
 
     if (!password) {
       setError('Please enter your password.');
+      return;
+    }
+
+    // Anti-Spam Rate Limit Check
+    const rateLimit = checkOtpRateLimit(trimmedEmail);
+    if (!rateLimit.allowed) {
+      setError(`Multiple request spam protection: Please wait ${rateLimit.waitSeconds} seconds before requesting a new 2FA code.`);
+      showToast(
+        'warning',
+        'TOO MANY REQUESTS DETECTED',
+        `Spam protection active. Please wait ${rateLimit.waitSeconds} seconds before requesting another code.`
+      );
       return;
     }
 
@@ -86,10 +99,10 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
     showToast(
       'success',
       '2FA CODE DISPATCHED',
-      `Sent 6-digit verification code [${emailResult.code}] from ${SYSTEM_OTP_SENDER_EMAIL} to ${trimmedEmail}.`
+      `Sent 6-digit verification code to ${trimmedEmail}. Please check your email inbox.`
     );
 
-    // Advance to OTP step with generated code
+    // Advance to OTP step
     onSuccess(trimmedEmail, emailResult.code);
   };
 

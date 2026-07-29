@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../hooks/useAppContext';
 import { sendLoginOtp, SYSTEM_OTP_SENDER_EMAIL } from '../../services/emailService';
+import { checkOtpRateLimit } from '../../utils/rateLimiter';
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -184,6 +185,18 @@ export const AdminOtpForm: React.FC<AdminOtpFormProps> = ({
   const handleResend = async () => {
     if (isCooldownActive) return;
 
+    // Anti-Spam Rate Limit Check
+    const rateLimit = checkOtpRateLimit(email);
+    if (!rateLimit.allowed) {
+      setError(`Spam protection active: Please wait ${rateLimit.waitSeconds} seconds before requesting another code.`);
+      showToast(
+        'warning',
+        'TOO MANY REQUESTS DETECTED',
+        `Spam protection active. Please wait ${rateLimit.waitSeconds} seconds before requesting another code.`
+      );
+      return;
+    }
+
     setIsResending(true);
     setError(null);
     setDigits(Array(OTP_LENGTH).fill(''));
@@ -201,7 +214,7 @@ export const AdminOtpForm: React.FC<AdminOtpFormProps> = ({
     showToast(
       'info',
       'NEW OTP CODE DISPATCHED',
-      `Sent new 6-digit code [${result.code}] from ${SYSTEM_OTP_SENDER_EMAIL} to ${email}.`
+      `Sent new 6-digit verification code to ${email}. Please check your email inbox.`
     );
 
     setTimeout(() => inputRefs.current[0]?.focus(), 50);
