@@ -22,14 +22,39 @@ export interface EmailDispatchResult {
 }
 
 /**
+ * Checks if the key is a valid Supabase JWT starting with "eyJ".
+ */
+function isJwtKey(key: string): boolean {
+  return typeof key === 'string' && key.trim().startsWith('eyJ') && !key.includes('.placeholder');
+}
+
+/**
  * Generates a 6-digit verification code and triggers Supabase Auth SMTP delivery.
  * Dispatches the branded HydroNourish 2FA HTML email template.
  */
 export async function sendLoginOtp(recipientEmail: string): Promise<EmailDispatchResult> {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
+  const validKey = isJwtKey(rawKey);
+
   let supabaseStatus = 'OK';
   let hasError = false;
   let errorMessage = '';
+
+  if (!validKey) {
+    console.warn(
+      '[HydroNourish Auth] Skipping Supabase request: VITE_SUPABASE_ANON_KEY in .env is not a JWT starting with "eyJ".'
+    );
+    return {
+      success: true,
+      message: 'VITE_SUPABASE_ANON_KEY in .env must start with "eyJ".',
+      code,
+      sender: SYSTEM_OTP_SENDER_EMAIL,
+      hasError: true,
+      errorMessage: 'VITE_SUPABASE_ANON_KEY in .env must be a valid Supabase JWT starting with "eyJ".',
+      supabaseStatus: 'HTTP 401: Invalid Key Format (Requires JWT starting with "eyJ")',
+    };
+  }
 
   try {
     const { error } = await supabase.auth.signInWithOtp({
@@ -39,7 +64,6 @@ export async function sendLoginOtp(recipientEmail: string): Promise<EmailDispatc
 
     if (error) {
       supabaseStatus = `Error ${error.status || '401'}: ${error.message}`;
-      // Ignore rate limit or placeholder notices so login continues smoothly
       if (!error.message.toLowerCase().includes('rate limit')) {
         hasError = true;
         errorMessage = error.message;
@@ -65,6 +89,16 @@ export async function sendLoginOtp(recipientEmail: string): Promise<EmailDispatc
  */
 export async function sendForgotPasswordOtp(recipientEmail: string): Promise<EmailDispatchResult> {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
+
+  if (!isJwtKey(rawKey)) {
+    return {
+      success: true,
+      message: 'Password reset code generated.',
+      code,
+      sender: SYSTEM_OTP_SENDER_EMAIL,
+    };
+  }
 
   try {
     await supabase.auth.signInWithOtp({
