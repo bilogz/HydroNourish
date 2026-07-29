@@ -13,6 +13,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../hooks/useAppContext';
 import { sendLoginOtp, SYSTEM_OTP_SENDER_EMAIL } from '../../services/emailService';
 import { checkOtpRateLimit } from '../../utils/rateLimiter';
+import { EmailDiagnosticModal, DiagnosticData } from './EmailDiagnosticModal';
 
 interface AdminEmailFormProps {
   onSuccess: (email: string, generatedCode?: string) => void;
@@ -27,6 +28,9 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [diagnosticData, setDiagnosticData] = useState<DiagnosticData | null>(null);
+  const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -84,7 +88,7 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
 
     setIsLoading(true);
 
-    // Dispatch real email OTP via heritagelink45@gmail.com
+    // Dispatch real email OTP via heritagelink45@gmail.com & Supabase Auth
     const emailResult = await sendLoginOtp(trimmedEmail);
 
     // Trigger Supabase OTP safely in background
@@ -96,11 +100,22 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
 
     setIsLoading(false);
 
-    showToast(
-      'success',
-      '2FA CODE DISPATCHED',
-      `Sent 6-digit verification code to ${trimmedEmail}. Please check your email inbox.`
-    );
+    if (emailResult.hasError) {
+      setDiagnosticData({
+        recipientEmail: trimmedEmail,
+        supabaseStatus: emailResult.supabaseStatus,
+        formSubmitStatus: emailResult.formSubmitStatus,
+        errorMessage: emailResult.errorMessage,
+        generatedCode: emailResult.code,
+      });
+      setIsDiagnosticOpen(true);
+    } else {
+      showToast(
+        'success',
+        '2FA CODE DISPATCHED',
+        `Sent 6-digit verification code to ${trimmedEmail}. Please check your email inbox.`
+      );
+    }
 
     // Advance to OTP step
     onSuccess(trimmedEmail, emailResult.code);
@@ -226,6 +241,18 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
           Back to Home
         </Link>
       </div>
+
+      {diagnosticData && (
+        <EmailDiagnosticModal
+          isOpen={isDiagnosticOpen}
+          onClose={() => setIsDiagnosticOpen(false)}
+          data={diagnosticData}
+          onProceedWithCode={(code) => {
+            setIsDiagnosticOpen(false);
+            onSuccess(email.trim().toLowerCase(), code);
+          }}
+        />
+      )}
     </div>
   );
 };
