@@ -14,7 +14,7 @@ export type { AdminProfile, AuthResult };
  */
 export async function requestAdminOtp(email: string): Promise<AuthResult> {
   const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
-  if (!rawKey || rawKey.includes('.placeholder')) {
+  if (!rawKey || !rawKey.startsWith('eyJ') || rawKey.includes('.placeholder')) {
     return { success: true, error: null };
   }
 
