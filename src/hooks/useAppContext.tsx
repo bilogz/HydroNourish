@@ -35,7 +35,13 @@ import {
   initialUsers,
   initialSettings,
 } from '../data/mockData';
-import { fetchPetsFromSupabase, fetchUsersFromSupabase } from '../services/supabase';
+import { fetchPetsFromSupabase } from '../services/supabase';
+import {
+  fetchClinicUsers,
+  insertClinicUser,
+  updateClinicUser,
+  toggleClinicUserStatus,
+} from '../services/clinicUserService';
 
 interface AppContextType {
   pets: Pet[];
@@ -159,7 +165,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       try {
-        const remoteUsers = await fetchUsersFromSupabase();
+        const remoteUsers = await fetchClinicUsers();
         if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
           setUsers(remoteUsers);
         }
@@ -296,7 +302,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // ─── User Handlers ────────────────────────────────────────────────────
 
-  const addUser = (userData: Omit<ClinicUser, 'id' | 'lastActive'>) => {
+  const addUser = async (userData: Omit<ClinicUser, 'id' | 'lastActive'>) => {
     const newId = `USR-${String((users?.length ?? 0) + 1).padStart(2, '0')}`;
     const displayName = userData.fullName || userData.name;
     const newUser: ClinicUser = {
@@ -306,35 +312,70 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: newId,
       lastActive: 'Just registered'
     };
+
+    // Optimistic UI update
     setUsers((prev) => [newUser, ...prev]);
-    showToast('success', 'Staff Member Added', `${displayName} registered as ${userData.role}.`);
+
+    // Persist to Supabase clinic_users table
+    const result = await insertClinicUser(newUser);
+    if (result.success) {
+      showToast('success', 'Staff Member Added', `${displayName} registered as ${userData.role} and saved to database.`);
+    } else {
+      showToast('warning', 'Saved Locally', `${displayName} added locally. Database sync: ${result.error || 'unavailable'}`);
+    }
   };
 
-  const updateUser = (id: string, updated: Partial<ClinicUser>) => {
+  const updateUser = async (id: string, updated: Partial<ClinicUser>) => {
+    const displayName = updated.fullName || updated.name;
+    // Optimistic UI update
     setUsers((prev) =>
       prev.map((u) => {
         if (u.id === id) {
-          const displayName = updated.fullName || updated.name || u.fullName || u.name;
+          const name = displayName || u.fullName || u.name;
           return {
             ...u,
             ...updated,
-            name: displayName,
-            fullName: displayName
+            name: name,
+            fullName: name
           };
         }
         return u;
       })
     );
-    showToast('success', 'Account Updated', 'User account details updated successfully.');
+
+    // Persist to Supabase clinic_users table
+    const result = await updateClinicUser(id, updated);
+    if (result.success) {
+      showToast('success', 'Account Updated', 'User account details updated and saved to database.');
+    } else {
+      showToast('warning', 'Saved Locally', `Changes saved locally. Database sync: ${result.error || 'unavailable'}`);
+    }
   };
 
-  const toggleUserStatus = (userId: string) => {
+  const toggleUserStatus = async (userId: string) => {
+    const currentUser = users.find((u) => u.id === userId);
+    if (!currentUser) return;
+
+    const newStatus = currentUser.status === 'Active' ? 'Inactive' as const : 'Active' as const;
+
+    // Optimistic UI update
     setUsers((prev) =>
       prev.map((u) =>
-        u.id === userId ? { ...u, status: u.status === 'Active' ? 'Inactive' : 'Active' } : u
+        u.id === userId ? { ...u, status: newStatus } : u
       )
     );
-    showToast('info', 'User Status Updated', 'Account state changed.');
+
+    // Persist to Supabase clinic_users table
+    const result = await toggleClinicUserStatus(userId, currentUser.status);
+    if (!result.success) {
+      // Revert on failure
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId ? { ...u, status: currentUser.status } : u
+        )
+      );
+      showToast('error', 'Status Update Failed', result.error || 'Could not update user status in database.');
+    }
   };
 
   // ─── Settings Handler ─────────────────────────────────────────────────

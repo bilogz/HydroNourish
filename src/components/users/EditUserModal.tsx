@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../Modal';
 import { ClinicUser, UserRole } from '../../types';
 import { Crown, CheckCircle2, Eye, EyeOff, Lock, UserCheck } from 'lucide-react';
+import { CLINIC_DEPARTMENTS } from '../../services/clinicUserService';
 
 const PRESET_AVATARS = [
   { label: 'Male Doctor', url: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=200' },
@@ -170,15 +171,19 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
           </div>
           <div>
             <label className="block font-extrabold text-slate-700 uppercase tracking-wider text-[10px] mb-1">
-              Department
+              Department *
             </label>
-            <input
-              type="text"
+            <select
               value={formData.department}
               onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-              className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none font-medium text-xs"
-              placeholder="e.g. Lead Vet Technician"
-            />
+              className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none font-medium text-xs bg-white"
+            >
+              {CLINIC_DEPARTMENTS.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
