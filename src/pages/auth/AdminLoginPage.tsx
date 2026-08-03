@@ -34,6 +34,12 @@ export const AdminLoginPage: React.FC = () => {
     return <AuthLoadingScreen />;
   }
 
+  // Prevent logged-in pet owners from accessing Admin Login
+  const isOwnerLoggedIn = !!localStorage.getItem('hn_owner_email');
+  if (isOwnerLoggedIn) {
+    return <Navigate to="/owner" replace />;
+  }
+
   if (isAdmin) {
     return <Navigate to={from} replace />;
   }

@@ -77,7 +77,7 @@ export const VitalSignsPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           title="Average Body Temp"
-          value="38.6°C"
+          value={`${(vitals && vitals.length > 0) ? (vitals.reduce((acc, v) => acc + v.temperature, 0) / vitals.length).toFixed(1) : '38.5'}°C`}
           subtitle="Clinic Ward Average"
           icon={Thermometer}
           iconBgColor="bg-teal-50"
@@ -87,7 +87,7 @@ export const VitalSignsPage: React.FC = () => {
         />
         <StatCard
           title="Average Heart Rate"
-          value="98 bpm"
+          value={`${(vitals && vitals.length > 0) ? Math.round(vitals.reduce((acc, v) => acc + v.heartRate, 0) / vitals.length) : 85} bpm`}
           subtitle="Resting State"
           icon={Heart}
           iconBgColor="bg-rose-50"

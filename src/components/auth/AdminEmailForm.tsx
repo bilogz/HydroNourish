@@ -13,6 +13,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../hooks/useAppContext';
 import { sendLoginOtp, SYSTEM_OTP_SENDER_EMAIL } from '../../services/emailService';
 import { checkOtpRateLimit } from '../../utils/rateLimiter';
+import {
+  useAdminLoginLockout,
+  recordFailedAdminLogin,
+  resetAdminLoginLockout,
+} from '../../utils/loginLimiter';
 import { EmailDiagnosticModal, DiagnosticData } from './EmailDiagnosticModal';
 
 interface AdminEmailFormProps {
@@ -32,6 +37,9 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
   const [diagnosticData, setDiagnosticData] = useState<DiagnosticData | null>(null);
   const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
 
+  // Subscribe to real-time 5-minute lockout state for this email
+  const lockout = useAdminLoginLockout(email);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -46,6 +54,17 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailPattern.test(trimmedEmail)) {
       setError('Please enter a valid email address.');
+      return;
+    }
+
+    // Check if this email is currently locked out (5 failed attempts -> 5 mins lock)
+    if (lockout.isLocked) {
+      setError(`Account temporarily locked due to 5 failed password attempts. Try again in ${lockout.formattedTime}.`);
+      showToast(
+        'error',
+        'ADMIN ACCOUNT LOCKED',
+        `Account locked for 5 minutes. Try again in ${lockout.formattedTime}.`
+      );
       return;
     }
 
@@ -66,7 +85,8 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
       return;
     }
 
-    // Check against provisioned user accounts in state
+    // Check password & track failed attempts
+    let isPasswordValid = true;
     const matchedUser = (users || []).find((u) => u.email.toLowerCase() === trimmedEmail);
 
     if (matchedUser) {
@@ -75,16 +95,32 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
         return;
       }
       if (matchedUser.password && password !== matchedUser.password) {
-        setError('Invalid password for this user account.');
-        return;
+        isPasswordValid = false;
       }
     } else if ((trimmedEmail === 'joecelgarcia1@gmail.com' || trimmedEmail === 'marcgermineganan03@gmail.com') && password !== 'Admin#123') {
-      setError('Invalid password for Super Admin account.');
-      return;
+      isPasswordValid = false;
     } else if (trimmedEmail === 'heritagelink45@gmail.com' && password !== 'admin-pass-2026') {
-      setError('Invalid password for Administrator account.');
+      isPasswordValid = false;
+    }
+
+    if (!isPasswordValid) {
+      const lockResult = recordFailedAdminLogin(trimmedEmail);
+      if (lockResult.isLocked) {
+        setError(`Too many failed password attempts (5/5). Account locked for 5 minutes. Please try again in ${lockout.formattedTime || '5m 00s'}.`);
+        showToast(
+          'error',
+          'ACCOUNT LOCKED FOR 5 MINUTES',
+          'Entered incorrect password 5 times. Account has been locked for 5 minutes.'
+        );
+      } else {
+        const remainingAttempts = 5 - lockResult.failedCount;
+        setError(`Invalid password for Admin account. (${lockResult.failedCount}/5 failed attempts — ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} left before 5-min lockout).`);
+      }
       return;
     }
+
+    // Successful password match — reset failed attempts lockout counter
+    resetAdminLoginLockout(trimmedEmail);
 
     setIsLoading(true);
 
@@ -136,8 +172,28 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        {/* Lockout Notice Banner */}
+        {lockout.isLocked && (
+          <div
+            role="alert"
+            className="p-4 rounded-2xl bg-rose-500/10 border border-rose-200 text-rose-900 text-xs font-semibold space-y-1.5 animate-pulse"
+          >
+            <div className="flex items-center gap-2 text-rose-700 font-extrabold text-sm uppercase">
+              <Lock className="w-4 h-4 text-rose-600" />
+              Admin Account Temporarily Locked
+            </div>
+            <p className="leading-relaxed text-slate-700 font-medium">
+              You have exceeded 5 failed password attempts. For security reasons, authentication is paused for 5 minutes.
+            </p>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-extrabold shadow-sm mt-1">
+              <span>Time Remaining:</span>
+              <span className="font-mono text-sm tracking-wider">{lockout.formattedTime}</span>
+            </div>
+          </div>
+        )}
+
         {/* Error message */}
-        {error && (
+        {error && !lockout.isLocked && (
           <div
             role="alert"
             className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold"
@@ -168,7 +224,7 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
               setEmail(e.target.value);
               setError(null);
             }}
-            disabled={isLoading}
+            disabled={isLoading || lockout.isLocked}
             className="w-full px-4 py-3 text-sm font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 disabled:bg-slate-50 transition-all"
             placeholder="admin@heritageanimalclinic.com"
           />
@@ -196,14 +252,15 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
                 setPassword(e.target.value);
                 setError(null);
               }}
-              disabled={isLoading}
+              disabled={isLoading || lockout.isLocked}
               className="w-full px-4 py-3 pr-10 text-sm font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 disabled:bg-slate-50 transition-all"
               placeholder="Enter password"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              disabled={lockout.isLocked}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 disabled:opacity-50"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -214,10 +271,15 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
         <button
           id="send-otp-btn"
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || lockout.isLocked}
           className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
         >
-          {isLoading ? (
+          {lockout.isLocked ? (
+            <>
+              <Lock className="w-4 h-4" />
+              Locked ({lockout.formattedTime})
+            </>
+          ) : isLoading ? (
             <>
               <RefreshCw className="w-4 h-4 animate-spin" />
               Dispatching 2FA Code…

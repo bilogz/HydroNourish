@@ -174,6 +174,7 @@ export interface PetOwner {
   avatarUrl?: string;
   address?: string;
   notes?: string;
+  password?: string;
 }
 
 // ─── Pet Monitoring Session ───────────────────────────────────────────────
@@ -204,6 +205,11 @@ export interface PetSession {
   vitalSignRecordCount: number;
   alertCount: number;
   notes: string;
+  actualReleaseDate?: string;
+  admissionNotes?: string;
+  releaseNotes?: string;
+  admissionAdmin?: string;
+  releaseAdmin?: string;
   // Snapshot of pet data at admission time
   petSnapshot: {
     weight: number;

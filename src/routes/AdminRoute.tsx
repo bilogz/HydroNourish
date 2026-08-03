@@ -33,6 +33,12 @@ export const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
     return <AuthLoadingScreen />;
   }
 
+  // Check if user is logged in as a pet owner
+  const isOwnerLoggedIn = !!localStorage.getItem('hn_owner_email');
+  if (isOwnerLoggedIn && !isAdmin) {
+    return <Navigate to="/owner" replace />;
+  }
+
   // No session → go to login (preserve intended destination)
   if (!isAuthenticated) {
     return <Navigate to="/admin/login" state={{ from: location }} replace />;

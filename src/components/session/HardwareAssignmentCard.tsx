@@ -69,7 +69,7 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
     return () => clearInterval(timer);
   }, [activeSession]);
 
-  const isOnline = hardware.status === 'Online';
+  const isConnected = Boolean(hardware && hardware.id !== 'No Device Connected' && hardware.status === 'Online');
 
   // ─── Empty state: no active session ──────────────────────────────────
 
@@ -85,10 +85,12 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
               </div>
               <div>
                 <h3 className="text-sm font-extrabold text-white tracking-tight">Current Hardware Assignment</h3>
-                <p className="text-[11px] text-slate-300">{hardware.deviceName} • {hardware.id}</p>
+                <p className="text-[11px] text-slate-300">
+                  {isConnected ? `${hardware.deviceName} • ${hardware.id}` : 'No Device Connected'}
+                </p>
               </div>
             </div>
-            <StatusBadge status={hardware.hardwareStatus.charAt(0).toUpperCase() + hardware.hardwareStatus.slice(1)} size="sm" />
+            <StatusBadge status={isConnected ? (hardware.hardwareStatus.charAt(0).toUpperCase() + hardware.hardwareStatus.slice(1)) : 'Vacant'} size="sm" />
           </div>
         </div>
 
@@ -97,12 +99,16 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
           <div className="w-16 h-16 rounded-2xl bg-teal-50 text-teal-500 flex items-center justify-center mx-auto mb-4">
             <Cpu className="w-8 h-8" />
           </div>
-          <h4 className="text-base font-bold text-slate-900 mb-1">The HydroNourish hardware is currently available.</h4>
+          <h4 className="text-base font-bold text-slate-900 mb-1">
+            {isConnected ? 'The HydroNourish hardware is currently available.' : 'No Hardware Device Connected'}
+          </h4>
           <p className="text-xs text-slate-500 mb-5 max-w-md mx-auto">
-            No pet is currently assigned to the monitoring device. Assign a pet and owner to begin a monitoring session.
+            {isConnected
+              ? 'No pet is currently assigned to the monitoring device. Assign a pet and owner to begin a monitoring session.'
+              : 'Pair or connect an ESP32 hardware cage node to begin monitoring patient food and water telemetry.'}
           </p>
 
-          {canAssignPet() ? (
+          {canAssignPet() && isConnected ? (
             <button
               onClick={onAssignClick}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all"
@@ -113,7 +119,7 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
           ) : (
             <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold">
               <AlertTriangle className="w-4 h-4" />
-              Hardware is {hardware.hardwareStatus}. Assignment unavailable.
+              {isConnected ? `Hardware is ${hardware.hardwareStatus}. Assignment unavailable.` : 'Hardware Offline. Pair a device node first.'}
             </div>
           )}
 
@@ -121,17 +127,21 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
           <div className="mt-6 pt-4 border-t border-slate-100 grid grid-cols-3 gap-4 text-xs max-w-sm mx-auto">
             <div className="text-center">
               <span className="text-slate-500 block">Connection</span>
-              <span className={`font-bold ${isOnline ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {isOnline ? 'Online' : 'Offline'}
+              <span className={`font-bold ${isConnected ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {isConnected ? 'Online' : 'Offline'}
               </span>
             </div>
             <div className="text-center">
               <span className="text-slate-500 block">Food Level</span>
-              <span className="font-bold text-slate-800">{hardware.foodLevelPct}%</span>
+              <span className="font-bold text-slate-800">
+                {isConnected ? `${hardware.foodLevelPct}%` : 'N/A'}
+              </span>
             </div>
             <div className="text-center">
               <span className="text-slate-500 block">Water Level</span>
-              <span className="font-bold text-slate-800">{hardware.waterLevelPct}%</span>
+              <span className="font-bold text-slate-800">
+                {isConnected ? `${hardware.waterLevelPct}%` : 'N/A'}
+              </span>
             </div>
           </div>
         </div>

@@ -146,7 +146,9 @@ CREATE TABLE IF NOT EXISTS public.pet_owners (
     current_session_id TEXT,
     date_created TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_login TIMESTAMP WITH TIME ZONE,
-    notes TEXT
+    notes TEXT,
+    password TEXT,
+    address TEXT
 );
 
 -- 10. PET SESSIONS TABLE
@@ -215,8 +217,26 @@ BEGIN
 END $$;
 
 -- ====================================================================
+-- SCHEMA UPDATES FOR EXISTING TABLES (IDEMPOTENT COLUMN ADDITIONS)
+-- ====================================================================
+
+ALTER TABLE public.clinic_users ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE public.clinic_users ADD COLUMN IF NOT EXISTS is_protected BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.clinic_users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE public.clinic_users ADD COLUMN IF NOT EXISTS last_active TEXT DEFAULT 'Just now';
+ALTER TABLE public.clinic_users ADD COLUMN IF NOT EXISTS department TEXT;
+
+ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS current_session_id TEXT;
+ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS date_created TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS last_login TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS password TEXT;
+ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS address TEXT;
+
+-- ====================================================================
 -- SEED INITIAL DATA
 -- ====================================================================
+
 
 INSERT INTO public.clinic_users (id, name, full_name, email, role, department, status, last_active, is_protected)
 VALUES 

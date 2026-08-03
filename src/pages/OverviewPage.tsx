@@ -52,8 +52,8 @@ import {
 } from '../data/mockData';
 
 export const OverviewPage: React.FC = () => {
-  const { pets, alerts, showToast } = useAppContext();
-  const { activeSession, hardware, getCompletedSessionCount, activityLogs, notifications } = useSession();
+  const { pets, devices, alerts, showToast } = useAppContext();
+  const { activeSession, hardware, getCompletedSessionCount, activityLogs } = useSession();
   const navigate = useNavigate();
 
   // Skeleton loading simulation state
@@ -110,7 +110,8 @@ export const OverviewPage: React.FC = () => {
   const activeAlertsCount = (alerts || []).filter(a => a.reviewStatus !== 'Resolved').length;
   const completedSessionCount = getCompletedSessionCount();
   const activeSessionCount = activeSession ? 1 : 0;
-  const hwStatusLabel = hardware.hardwareStatus.charAt(0).toUpperCase() + hardware.hardwareStatus.slice(1);
+  const hwStatusLabel = (hardware && hardware.hardwareStatus) ? (hardware.hardwareStatus.charAt(0).toUpperCase() + hardware.hardwareStatus.slice(1)) : 'Available';
+  const hasDeviceConnected = Boolean((devices ?? []).length > 0 && (devices ?? [])[0]?.status === 'Online' && hardware && hardware.status === 'Online' && hardware.id !== 'No Device Connected');
 
   // Recent activity from session context
   const recentLogs = activityLogs.slice(0, 6);
@@ -153,13 +154,13 @@ export const OverviewPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
         <StatCard
           title="Hardware Status"
-          value={hwStatusLabel}
+          value={hasDeviceConnected ? hwStatusLabel : 'Offline'}
           subtitle="Smart Cage Node Array"
           icon={Cpu}
-          iconBgColor={hardware.hardwareStatus === 'available' ? 'bg-emerald-50' : hardware.hardwareStatus === 'occupied' ? 'bg-indigo-50' : 'bg-amber-50'}
-          iconTextColor={hardware.hardwareStatus === 'available' ? 'text-emerald-600' : hardware.hardwareStatus === 'occupied' ? 'text-indigo-600' : 'text-amber-600'}
-          badgeText={hardware.status}
-          badgeType={hardware.status === 'Online' ? 'success' : 'alert'}
+          iconBgColor={hasDeviceConnected ? (hardware.hardwareStatus === 'available' ? 'bg-emerald-50' : hardware.hardwareStatus === 'occupied' ? 'bg-indigo-50' : 'bg-amber-50') : 'bg-slate-100'}
+          iconTextColor={hasDeviceConnected ? (hardware.hardwareStatus === 'available' ? 'text-emerald-600' : hardware.hardwareStatus === 'occupied' ? 'text-indigo-600' : 'text-amber-600') : 'text-slate-400'}
+          badgeText={hasDeviceConnected ? hardware.status : 'Offline'}
+          badgeType={hasDeviceConnected ? (hardware.status === 'Online' ? 'success' : 'alert') : 'alert'}
         />
         <StatCard
           title="Current Pet"
@@ -216,33 +217,33 @@ export const OverviewPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           title="Food Container"
-          value={`${hardware.foodLevelPct}%`}
-          subtitle="Current food level"
+          value={hasDeviceConnected ? `${hardware.foodLevelPct}%` : 'N/A'}
+          subtitle={hasDeviceConnected ? 'Current food level' : 'No device connected'}
           icon={Utensils}
           iconBgColor="bg-orange-50"
           iconTextColor="text-orange-600"
-          badgeText={hardware.foodLevelPct > 30 ? 'OK' : 'Low'}
-          badgeType={hardware.foodLevelPct > 30 ? 'success' : 'alert'}
+          badgeText={hasDeviceConnected ? (hardware.foodLevelPct > 30 ? 'OK' : 'Low') : 'Offline'}
+          badgeType={hasDeviceConnected ? (hardware.foodLevelPct > 30 ? 'success' : 'alert') : 'neutral'}
         />
         <StatCard
           title="Water Container"
-          value={`${hardware.waterLevelPct}%`}
-          subtitle="Current water level"
+          value={hasDeviceConnected ? `${hardware.waterLevelPct}%` : 'N/A'}
+          subtitle={hasDeviceConnected ? 'Current water level' : 'No device connected'}
           icon={Droplets}
           iconBgColor="bg-sky-50"
           iconTextColor="text-sky-600"
-          badgeText={hardware.waterLevelPct > 30 ? 'OK' : 'Low'}
-          badgeType={hardware.waterLevelPct > 30 ? 'success' : 'alert'}
+          badgeText={hasDeviceConnected ? (hardware.waterLevelPct > 30 ? 'OK' : 'Low') : 'Offline'}
+          badgeType={hasDeviceConnected ? (hardware.waterLevelPct > 30 ? 'success' : 'alert') : 'neutral'}
         />
         <StatCard
           title="Device Last Seen"
-          value={hardware.lastTransmission}
-          subtitle={`Wi-Fi: ${hardware.wifiSignalDbm} dBm`}
+          value={hasDeviceConnected ? hardware.lastTransmission : 'Never'}
+          subtitle={hasDeviceConnected ? `Wi-Fi: ${hardware.wifiSignalDbm} dBm` : 'No node active'}
           icon={Zap}
           iconBgColor="bg-violet-50"
           iconTextColor="text-violet-600"
-          badgeText={hardware.status}
-          badgeType={hardware.status === 'Online' ? 'success' : 'alert'}
+          badgeText={hasDeviceConnected ? hardware.status : 'Offline'}
+          badgeType={hasDeviceConnected ? 'success' : 'alert'}
         />
         <StatCard
           title="Active Health Alerts"

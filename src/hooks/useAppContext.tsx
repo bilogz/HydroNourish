@@ -113,26 +113,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('hn_pets');
       if (saved) {
         const parsed = JSON.parse(saved) as Pet[];
-        const filtered = parsed
-          .filter(p => p.id === 'PET-001' || !['PET-002', 'PET-003', 'PET-004', 'PET-005', 'PET-006'].includes(p.id))
-          .map(p => ({
-            ...p,
-            assignedDeviceId: (!p.assignedDeviceId || p.assignedDeviceId.startsWith('HN-DEV')) ? 'Cage 1' : p.assignedDeviceId
-          }));
-        return filtered.length > 0 ? filtered : (initialPets || []);
+        return parsed.filter(p => !['PET-001', 'PET-002', 'PET-003', 'PET-004', 'PET-005', 'PET-006'].includes(p.id));
       }
-      return initialPets || [];
+      return [];
     } catch {
-      return initialPets || [];
+      return [];
     }
   });
 
-  const [schedules, setSchedules] = useState<FeedingSchedule[]>(initialSchedules || []);
-  const [feedingLogs, setFeedingLogs] = useState<FeedingLog[]>(initialFeedingLogs || []);
-  const [hydrationLogs, setHydrationLogs] = useState<HydrationLog[]>(initialHydrationLogs || []);
-  const [vitals, setVitals] = useState<VitalSignRecord[]>(initialVitals || []);
-  const [alerts, setAlerts] = useState<AIHealthAlert[]>(initialAIAlerts || []);
-  const [devices, setDevices] = useState<Device[]>(initialDevices || []);
+  const [schedules, setSchedules] = useState<FeedingSchedule[]>(() => {
+    try {
+      const saved = localStorage.getItem('hn_schedules');
+      if (saved) {
+        const parsed = JSON.parse(saved) as FeedingSchedule[];
+        return parsed.filter(s => !s.id.startsWith('SCH-10'));
+      }
+      return [];
+    } catch { return []; }
+  });
+  const [feedingLogs, setFeedingLogs] = useState<FeedingLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('hn_feeding_logs');
+      if (saved) {
+        const parsed = JSON.parse(saved) as FeedingLog[];
+        return parsed.filter(f => !f.id.startsWith('FL-30'));
+      }
+      return [];
+    } catch { return []; }
+  });
+  const [hydrationLogs, setHydrationLogs] = useState<HydrationLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('hn_hydration_logs');
+      if (saved) {
+        const parsed = JSON.parse(saved) as HydrationLog[];
+        return parsed.filter(h => !h.id.startsWith('HL-40'));
+      }
+      return [];
+    } catch { return []; }
+  });
+  const [vitals, setVitals] = useState<VitalSignRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('hn_vitals');
+      if (saved) {
+        const parsed = JSON.parse(saved) as VitalSignRecord[];
+        return parsed.filter(v => !v.id.startsWith('VIT-50'));
+      }
+      return [];
+    } catch { return []; }
+  });
+  const [alerts, setAlerts] = useState<AIHealthAlert[]>(() => {
+    try {
+      const saved = localStorage.getItem('hn_alerts');
+      if (saved) {
+        const parsed = JSON.parse(saved) as AIHealthAlert[];
+        return parsed.filter(a => !a.id.startsWith('ALT-70'));
+      }
+      return [];
+    } catch { return []; }
+  });
+  const [devices, setDevices] = useState<Device[]>([]);
   const [users, setUsers] = useState<ClinicUser[]>(initialUsers || []);
   const [settings, setSettings] = useState<ClinicSettings>(initialSettings || ({} as ClinicSettings));
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -175,7 +214,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (remoteHydrationLogs && remoteHydrationLogs.length > 0) setHydrationLogs(remoteHydrationLogs);
         if (remoteVitals && remoteVitals.length > 0) setVitals(remoteVitals);
         if (remoteAlerts && remoteAlerts.length > 0) setAlerts(remoteAlerts);
-        if (remoteDevices && remoteDevices.length > 0) setDevices(remoteDevices);
+        if (remoteDevices && remoteDevices.length > 0 && remoteDevices[0].status === 'Online') {
+          setDevices(remoteDevices);
+        } else {
+          setDevices([]);
+        }
         if (remoteUsers && remoteUsers.length > 0) setUsers(remoteUsers);
         if (remoteSettings) setSettings(remoteSettings);
       } catch (err) {
@@ -209,7 +252,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data) setAlerts(data);
       } else if (tableName === 'devices') {
         const data = await fetchDevicesFromSupabase();
-        if (data) setDevices(data);
+        if (data && data.length > 0 && data[0].status === 'Online') setDevices(data);
+        else setDevices([]);
       } else if (tableName === 'clinic_users') {
         const data = await fetchUsersFromSupabase();
         if (data) setUsers(data);
@@ -227,7 +271,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ─── Live Dynamic Telemetry Simulation Engine ────────────────────────
   useEffect(() => {
     const telemetryInterval = setInterval(async () => {
-      if (devices.length === 0 || pets.length === 0) return;
+      if (devices.length === 0 || devices[0].status !== 'Online' || !devices[0].assignedPetId) return;
 
       const activeDev = devices[0];
       const activePet = pets.find((p) => p.id === activeDev.assignedPetId) || pets[0];

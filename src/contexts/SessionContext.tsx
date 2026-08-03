@@ -102,22 +102,41 @@ interface SessionContextType {
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
+const defaultEmptyHardware: Device = {
+  id: 'No Device Connected',
+  deviceName: 'No Hardware Device Connected',
+  assignedPetId: '',
+  assignedPetName: '',
+  status: 'Offline',
+  hardwareStatus: 'vacant',
+  wifiSignalDbm: 0,
+  foodLevelPct: 0,
+  waterLevelPct: 0,
+  batteryPct: 0,
+  isPluggedIn: false,
+  lastTransmission: 'Never',
+  firmwareVersion: 'N/A',
+  macAddress: '00:00:00:00:00:00',
+};
+
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [sessions, setSessions] = useState<PetSession[]>(() =>
-    loadFromStorage('hn_sessions', initialSessions)
-  );
-  const [owners, setOwners] = useState<PetOwner[]>(() => {
-    const saved = loadFromStorage<PetOwner[]>('hn_owners', initialOwners);
-    const filtered = saved.filter(o => o.id === 'OWN-001' || !['OWN-002', 'OWN-003', 'OWN-004', 'OWN-005', 'OWN-006'].includes(o.id));
-    return filtered.length > 0 ? filtered : initialOwners;
+  const [sessions, setSessions] = useState<PetSession[]>(() => {
+    const saved = loadFromStorage<PetSession[]>('hn_sessions', []);
+    return saved.filter(s => !s.id.startsWith('SES-DEMO'));
   });
-  const [hardware, setHardware] = useState<Device>(initialDevices[0]);
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() =>
-    loadFromStorage('hn_activity_logs', initialActivityLogs)
-  );
-  const [notifications, setNotifications] = useState<SystemNotification[]>(() =>
-    loadFromStorage('hn_notifications', initialNotifications)
-  );
+  const [owners, setOwners] = useState<PetOwner[]>(() => {
+    const saved = loadFromStorage<PetOwner[]>('hn_owners', []);
+    return saved.filter(o => !['OWN-001', 'OWN-002', 'OWN-003', 'OWN-004'].includes(o.id));
+  });
+  const [hardware, setHardware] = useState<Device>(defaultEmptyHardware);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() => {
+    const saved = loadFromStorage<ActivityLog[]>('hn_activity_logs', []);
+    return saved.filter(a => !a.id.startsWith('LOG-00'));
+  });
+  const [notifications, setNotifications] = useState<SystemNotification[]>(() => {
+    const saved = loadFromStorage<SystemNotification[]>('hn_notifications', []);
+    return saved.filter(n => !n.id.startsWith('NOTIF-00'));
+  });
 
   const activeSession = sessions.find(s => s.status === 'active') ?? null;
 
@@ -133,7 +152,11 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         if (remoteOwners && remoteOwners.length > 0) setOwners(remoteOwners);
         if (remoteSessions && remoteSessions.length > 0) setSessions(remoteSessions);
-        if (remoteDevices && remoteDevices.length > 0) setHardware(remoteDevices[0]);
+        if (remoteDevices && remoteDevices.length > 0 && remoteDevices[0].status === 'Online') {
+          setHardware(remoteDevices[0]);
+        } else {
+          setHardware(defaultEmptyHardware);
+        }
       } catch (err) {
         if (import.meta.env.DEV) console.warn('[HydroNourish] SessionContext sync notice.');
       }
@@ -225,8 +248,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // ─── Session Lifecycle ────────────────────────────────────────────────
   const canAssignPet = useCallback((): boolean => {
-    return !activeSession && (hardware.hardwareStatus === 'available');
-  }, [activeSession, hardware.hardwareStatus]);
+    return !activeSession && hardware.status === 'Online' && (hardware.hardwareStatus === 'available' || hardware.hardwareStatus === 'vacant');
+  }, [activeSession, hardware.status, hardware.hardwareStatus]);
 
   const assignPetAndOwner = useCallback((
     pet: Pet,

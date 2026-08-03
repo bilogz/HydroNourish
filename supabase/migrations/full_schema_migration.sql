@@ -195,6 +195,23 @@ CREATE TABLE IF NOT EXISTS public.clinic_settings (
 );
 
 -- ====================================================================
+-- SCHEMA UPDATES FOR EXISTING TABLES (IDEMPOTENT COLUMN ADDITIONS)
+-- ====================================================================
+
+ALTER TABLE public.clinic_users ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE public.clinic_users ADD COLUMN IF NOT EXISTS is_protected BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.clinic_users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE public.clinic_users ADD COLUMN IF NOT EXISTS last_active TEXT DEFAULT 'Just now';
+ALTER TABLE public.clinic_users ADD COLUMN IF NOT EXISTS department TEXT;
+
+ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS current_session_id TEXT;
+ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS date_created TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS last_login TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS password TEXT;
+ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS address TEXT;
+
+-- ====================================================================
 -- RLS POLICIES FOR ALL TABLES
 -- ====================================================================
 
@@ -213,3 +230,4 @@ BEGIN
         EXECUTE format('CREATE POLICY %I ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl || '_allow_all', tbl);
     END LOOP;
 END $$;
+

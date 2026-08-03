@@ -65,13 +65,13 @@ export const LandingPage: React.FC = () => {
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
-                <button
-                  onClick={() => navigate('/app')}
-                  className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 via-teal-600 to-emerald-600 text-white font-bold text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2.5"
+                <Link
+                  to="/owner/login"
+                  className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 via-teal-600 to-emerald-600 text-white font-bold text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2.5 text-center"
                 >
-                  View Dashboard
+                  Pet Owner Portal
                   <ArrowRight className="w-5 h-5" />
-                </button>
+                </Link>
                 <a
                   href="#features"
                   className="w-full sm:w-auto px-7 py-3.5 rounded-2xl border border-slate-300 font-bold text-slate-700 hover:bg-slate-100 transition-colors text-base text-center"

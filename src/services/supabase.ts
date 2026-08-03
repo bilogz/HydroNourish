@@ -413,7 +413,9 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
     const { data, error } = await supabase.from('devices').select('*').order('created_at', { ascending: false });
     if (error || !data) return null;
 
-    return data.map((item) => ({
+    const userDevices = data.filter(item => !['HN-DEV-0101', 'HN-DEV-0102', 'HN-DEV-0103', 'HN-DEV-0104', 'HN-DEV-0105', 'Cage 1', 'Cage 2', 'Cage 3'].includes(item.id));
+
+    return userDevices.map((item) => ({
       id: item.id,
       deviceName: item.device_name ?? 'HydroNourish Smart Cage Unit',
       assignedPetId: item.assigned_pet_id || '',
@@ -425,9 +427,9 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
       waterLevelPct: Number(item.water_level_pct),
       batteryPct: Number(item.battery_pct),
       isPluggedIn: Boolean(item.is_plugged_in),
-      lastTransmission: item.last_transmission || 'Just now',
+      lastTransmission: item.last_transmission || 'Never',
       firmwareVersion: item.firmware_version || 'v2.4.1-ESP32',
-      macAddress: item.mac_address || '24:0A:C4:00:01:A1',
+      macAddress: item.mac_address || '00:00:00:00:00:00',
     }));
   } catch {
     return null;
@@ -489,8 +491,8 @@ export async function fetchUsersFromSupabase(): Promise<ClinicUser[] | null> {
 
     return data.map((item) => ({
       id: item.id,
-      name: item.name || item.full_name,
-      fullName: item.full_name || item.name,
+      name: item.name || item.full_name || '',
+      fullName: item.full_name || item.name || '',
       email: item.email,
       role: item.role as UserRole,
       department: item.department,
@@ -523,8 +525,10 @@ export async function fetchOwnersFromSupabase(): Promise<PetOwner[] | null> {
       petIds: Array.isArray(item.pet_ids) ? item.pet_ids : [],
       currentSessionId: item.current_session_id || null,
       dateCreated: item.date_created,
-      lastLogin: item.last_login || undefined,
+      lastLogin: item.last_login || null,
       notes: item.notes || '',
+      password: item.password || undefined,
+      address: item.address || undefined,
     }));
   } catch {
     return null;
@@ -545,6 +549,8 @@ export async function insertOwnerToSupabase(owner: PetOwner): Promise<boolean> {
       date_created: owner.dateCreated,
       last_login: owner.lastLogin || null,
       notes: owner.notes || null,
+      password: owner.password || null,
+      address: owner.address || null,
     });
     return !error;
   } catch {
@@ -564,6 +570,8 @@ export async function updateOwnerInSupabase(id: string, updated: Partial<PetOwne
     if (updated.currentSessionId !== undefined) payload.current_session_id = updated.currentSessionId;
     if (updated.lastLogin !== undefined) payload.last_login = updated.lastLogin;
     if (updated.notes !== undefined) payload.notes = updated.notes;
+    if (updated.password !== undefined) payload.password = updated.password;
+    if (updated.address !== undefined) payload.address = updated.address;
 
     const { error } = await supabase.from('pet_owners').update(payload).eq('id', id);
     return !error;
@@ -594,19 +602,40 @@ export async function fetchSessionsFromSupabase(): Promise<PetSession[] | null> 
       id: item.id,
       petId: item.pet_id,
       petName: item.pet_name,
+      petSpecies: item.pet_species || 'Dog',
+      petBreed: item.pet_breed || 'Unknown',
+      petAvatarUrl: item.pet_avatar_url || '',
       ownerId: item.owner_id || '',
       ownerName: item.owner_name,
+      ownerEmail: item.owner_email || '',
       deviceId: item.device_id,
+      status: item.status as PetSession['status'],
       admissionDate: item.admission_date,
       expectedReleaseDate: item.expected_release_date,
+      startTime: item.admission_date,
+      releaseTime: item.actual_release_date || null,
+      releaseCondition: item.release_condition || null,
+      finalNotes: item.release_notes || null,
+      cancelledReason: null,
+      completedBy: item.release_admin || null,
+      emergencyContact: item.emergency_contact || '',
+      feedingRecordCount: 0,
+      hydrationRecordCount: 0,
+      vitalSignRecordCount: 0,
+      alertCount: 0,
+      notes: item.admission_notes || '',
       actualReleaseDate: item.actual_release_date || undefined,
-      status: item.status as PetSession['status'],
       admissionNotes: item.admission_notes || undefined,
       releaseNotes: item.release_notes || undefined,
-      emergencyContact: item.emergency_contact || undefined,
       admissionAdmin: item.admission_admin,
       releaseAdmin: item.release_admin || undefined,
-      releaseCondition: item.release_condition || undefined,
+      petSnapshot: {
+        weight: 0,
+        age: 0,
+        feedingPlan: { portionGrams: 100, timesPerDay: 2, foodType: 'Kibble' },
+        hydrationTarget: 800,
+        healthStatus: 'Healthy',
+      },
     }));
   } catch {
     return null;
@@ -620,17 +649,21 @@ export async function insertSessionToSupabase(session: PetSession): Promise<bool
       id: session.id,
       pet_id: session.petId,
       pet_name: session.petName,
+      pet_species: session.petSpecies || 'Dog',
+      pet_breed: session.petBreed || 'Unknown',
+      pet_avatar_url: session.petAvatarUrl || '',
       owner_id: session.ownerId || null,
       owner_name: session.ownerName,
+      owner_email: session.ownerEmail || null,
       device_id: session.deviceId,
       admission_date: session.admissionDate,
       expected_release_date: session.expectedReleaseDate,
       actual_release_date: session.actualReleaseDate || null,
       status: session.status,
-      admission_notes: session.admissionNotes || null,
+      admission_notes: session.admissionNotes || session.notes || null,
       release_notes: session.releaseNotes || null,
       emergency_contact: session.emergencyContact || null,
-      admission_admin: session.admissionAdmin,
+      admission_admin: session.admissionAdmin || 'Admin',
       release_admin: session.releaseAdmin || null,
       release_condition: session.releaseCondition || null,
     });

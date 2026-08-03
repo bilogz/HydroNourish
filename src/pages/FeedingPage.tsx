@@ -20,6 +20,14 @@ import {
 export const FeedingPage: React.FC = () => {
   const { pets, devices, schedules, feedingLogs, addSchedule, dispenseNow } = useAppContext();
 
+  const isDeviceConnected = Boolean(
+    devices &&
+    devices.length > 0 &&
+    devices[0].status === 'Online' &&
+    devices[0].id !== 'No Device Connected' &&
+    devices[0].id !== 'Unassigned'
+  );
+
   // Modals state
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [confirmDispenseModalOpen, setConfirmDispenseModalOpen] = useState(false);
@@ -31,7 +39,7 @@ export const FeedingPage: React.FC = () => {
     foodType: 'High-Protein Kibble',
     portionGrams: 100,
     scheduledTime: '08:00 AM',
-    deviceId: devices[0]?.id || 'Cage 1'
+    deviceId: isDeviceConnected ? devices[0].id : 'Cage 1'
   });
 
   const handleOpenDispenseConfirm = (schedule: FeedingSchedule) => {
@@ -69,40 +77,42 @@ export const FeedingPage: React.FC = () => {
             <strong>Manual Dispense Control:</strong> Triggering manual dispense commands sends a calibrated servo trigger signal to the assigned ESP32 unit.
           </span>
         </div>
-        <span className="font-bold text-teal-700 hidden sm:inline">6 Feeder Nodes Synced</span>
+        <span className="font-bold text-teal-700 hidden sm:inline">
+          {isDeviceConnected ? '1 Feeder Node Synced' : 'No Feeder Node Synced'}
+        </span>
       </div>
 
       {/* ================= SUMMARY STAT CARDS ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <StatCard
           title="Total Meals Served Today"
-          value={(feedingLogs || []).length}
-          subtitle="All Heritage Ward Patients"
+          value={isDeviceConnected ? (feedingLogs || []).length : 0}
+          subtitle={isDeviceConnected ? "All Heritage Ward Patients" : "No device connected"}
           icon={Utensils}
-          iconBgColor="bg-teal-50"
-          iconTextColor="text-teal-600"
-          badgeText="Success"
-          badgeType="success"
+          iconBgColor={isDeviceConnected ? "bg-teal-50" : "bg-slate-100"}
+          iconTextColor={isDeviceConnected ? "text-teal-600" : "text-slate-400"}
+          badgeText={isDeviceConnected ? "Success" : "Offline"}
+          badgeType={isDeviceConnected ? "success" : "neutral"}
         />
         <StatCard
           title="Pending Schedules"
-          value={(schedules || []).filter(s => s.dispenseStatus === 'Pending').length}
-          subtitle="Remaining Today"
+          value={isDeviceConnected ? (schedules || []).filter(s => s.dispenseStatus === 'Pending').length : 0}
+          subtitle={isDeviceConnected ? "Remaining Today" : "No device connected"}
           icon={Clock}
-          iconBgColor="bg-amber-50"
-          iconTextColor="text-amber-600"
-          badgeText="Queued"
-          badgeType="warning"
+          iconBgColor={isDeviceConnected ? "bg-amber-50" : "bg-slate-100"}
+          iconTextColor={isDeviceConnected ? "text-amber-600" : "text-slate-400"}
+          badgeText={isDeviceConnected ? "Queued" : "Offline"}
+          badgeType={isDeviceConnected ? "warning" : "neutral"}
         />
         <StatCard
           title="Feeder Hopper Container Level"
-          value="72% Avg"
-          subtitle="Container Capacity"
+          value={isDeviceConnected && devices[0] ? `${devices[0].foodLevelPct}% Avg` : 'N/A'}
+          subtitle={isDeviceConnected ? "Container Capacity" : "No device connected"}
           icon={Cpu}
-          iconBgColor="bg-emerald-50"
-          iconTextColor="text-emerald-600"
-          badgeText="Sufficient"
-          badgeType="success"
+          iconBgColor={isDeviceConnected ? "bg-emerald-50" : "bg-slate-100"}
+          iconTextColor={isDeviceConnected ? "text-emerald-600" : "text-slate-400"}
+          badgeText={isDeviceConnected ? (devices[0]?.foodLevelPct > 30 ? "Sufficient" : "Low") : "Offline"}
+          badgeType={isDeviceConnected ? (devices[0]?.foodLevelPct > 30 ? "success" : "alert") : "neutral"}
         />
       </div>
 

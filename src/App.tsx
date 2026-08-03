@@ -41,6 +41,8 @@ import { SettingsPage } from './pages/SettingsPage';
 import { SessionHistoryPage } from './pages/SessionHistoryPage';
 
 // Owner Pages
+import { OwnerLoginPage } from './pages/auth/OwnerLoginPage';
+import { OwnerRegisterPage } from './pages/auth/OwnerRegisterPage';
 import { OwnerDashboardPage } from './pages/OwnerDashboardPage';
 
 // Utility Pages
@@ -64,7 +66,9 @@ export const App: React.FC = () => {
               {/* Legacy /login alias for backwards compat */}
               <Route path="/login" element={<Navigate to="/admin/login" replace />} />
 
-              {/* ─── Owner Monitoring Portal ──────────────────────── */}
+              {/* ─── Owner Monitoring Portal Routes ───────────────── */}
+              <Route path="/owner/login" element={<OwnerLoginPage />} />
+              <Route path="/owner/register" element={<OwnerRegisterPage />} />
               <Route path="/owner" element={<OwnerDashboardPage />} />
 
               {/* ─── Protected Admin Dashboard Routes ──────────────── */}

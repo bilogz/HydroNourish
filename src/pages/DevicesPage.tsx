@@ -101,7 +101,7 @@ export const DevicesPage: React.FC = () => {
         />
         <StatCard
           title="Average Wi-Fi Signal"
-          value="-58 dBm"
+          value={`${Math.round((devices || []).reduce((acc, d) => acc + (d.wifiSignalDbm || -55), 0) / Math.max((devices || []).length, 1))} dBm`}
           subtitle="Heritage Clinic Access Point"
           icon={Wifi}
           iconBgColor="bg-sky-50"
@@ -125,84 +125,105 @@ export const DevicesPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {devices.map(device => (
-            <div key={device.id} className="clinic-card p-5 space-y-4 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600 font-mono text-xs font-bold">
-                      {device.id}
-                    </div>
-                    <StatusBadge status={device.status} size="sm" />
-                  </div>
-                  <span className="text-[11px] font-mono text-slate-400">{device.firmwareVersion}</span>
-                </div>
-
-                <div className="mt-3 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-medium">Assigned Patient:</span>
-                    <span className="font-bold text-slate-900">{device.assignedPetName}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-medium">Wi-Fi Signal:</span>
-                    <span className="font-semibold text-slate-700 flex items-center gap-1">
-                      <Wifi className="w-3.5 h-3.5 text-slate-400" />
-                      {device.wifiSignalDbm} dBm
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-medium">Power Source:</span>
-                    <span className="font-semibold text-slate-700 flex items-center gap-1">
-                      <Zap className="w-3.5 h-3.5 text-amber-500" />
-                      {device.isPluggedIn ? 'AC Mains Plugged' : `${device.batteryPct}% Battery`}
-                    </span>
-                  </div>
-
-                  {/* Level Bars */}
-                  <div className="pt-2 space-y-2">
-                    <div>
-                      <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
-                        <span className="flex items-center gap-1"><Utensils className="w-3 h-3 text-emerald-600" /> Food Hopper Level</span>
-                        <span>{device.foodLevelPct}%</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div style={{ width: `${device.foodLevelPct}%` }} className="h-full bg-emerald-500 rounded-full" />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
-                        <span className="flex items-center gap-1"><Droplets className="w-3 h-3 text-sky-600" /> Water Reservoir Level</span>
-                        <span>{device.waterLevelPct}%</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div style={{ width: `${device.waterLevelPct}%` }} className="h-full bg-sky-500 rounded-full" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
+          {(!devices || devices.length === 0) ? (
+            <div className="col-span-full clinic-card p-10 flex flex-col items-center justify-center text-center space-y-4 bg-slate-50/60 border-2 border-dashed border-slate-300">
+              <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shadow-xs">
+                <Cpu className="w-8 h-8" />
               </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs gap-2">
-                <button
-                  onClick={() => handleOpenCalibrate(device)}
-                  className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
-                  title="Calibrate Load Cells"
-                >
-                  <Sliders className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => handleOpenDetails(device)}
-                  className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold transition-colors flex items-center justify-center gap-1"
-                >
-                  <Info className="w-3.5 h-3.5" />
-                  Device Details
-                </button>
+              <div className="space-y-1">
+                <h3 className="text-base font-extrabold text-slate-900">No Device Connected</h3>
+                <p className="text-xs text-slate-500 max-w-sm">
+                  No ESP32 smart feeder or hydrator nodes are currently registered. Pair a new device node to begin live telemetry tracking.
+                </p>
               </div>
+              <button
+                onClick={() => setConnectModalOpen(true)}
+                className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Pair New Smart Device Node
+              </button>
             </div>
-          ))}
+          ) : (
+            devices.map(device => (
+              <div key={device.id} className="clinic-card p-5 space-y-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600 font-mono text-xs font-bold">
+                        {device.id}
+                      </div>
+                      <StatusBadge status={device.status} size="sm" />
+                    </div>
+                    <span className="text-[11px] font-mono text-slate-400">{device.firmwareVersion}</span>
+                  </div>
+
+                  <div className="mt-3 space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-medium">Assigned Patient:</span>
+                      <span className="font-bold text-slate-900">{device.assignedPetName || 'Unassigned'}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-medium">Wi-Fi Signal:</span>
+                      <span className="font-semibold text-slate-700 flex items-center gap-1">
+                        <Wifi className="w-3.5 h-3.5 text-slate-400" />
+                        {device.wifiSignalDbm} dBm
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-medium">Power Source:</span>
+                      <span className="font-semibold text-slate-700 flex items-center gap-1">
+                        <Zap className="w-3.5 h-3.5 text-amber-500" />
+                        {device.isPluggedIn ? 'AC Mains Plugged' : `${device.batteryPct}% Battery`}
+                      </span>
+                    </div>
+
+                    {/* Level Bars */}
+                    <div className="pt-2 space-y-2">
+                      <div>
+                        <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
+                          <span className="flex items-center gap-1"><Utensils className="w-3 h-3 text-emerald-600" /> Food Hopper Level</span>
+                          <span>{device.foodLevelPct}%</span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div style={{ width: `${device.foodLevelPct}%` }} className="h-full bg-emerald-500 rounded-full" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
+                          <span className="flex items-center gap-1"><Droplets className="w-3 h-3 text-sky-600" /> Water Reservoir Level</span>
+                          <span>{device.waterLevelPct}%</span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div style={{ width: `${device.waterLevelPct}%` }} className="h-full bg-sky-500 rounded-full" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs gap-2">
+                  <button
+                    onClick={() => handleOpenCalibrate(device)}
+                    className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
+                    title="Calibrate Load Cells"
+                  >
+                    <Sliders className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleOpenDetails(device)}
+                    className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold transition-colors flex items-center justify-center gap-1"
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                    Device Details
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
