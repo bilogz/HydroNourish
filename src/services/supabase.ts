@@ -714,21 +714,40 @@ export async function updateSettingsInSupabase(updated: Partial<ClinicSettings>)
 
 // ─── 12. REAL-TIME MULTI-TABLE SUBSCRIPTION ───────────────────────────────
 
-export function subscribeToSupabaseRealtime(onTableChange: (tableName: string, payload: any) => void) {
+export function subscribeToSupabaseRealtime(
+  onTableChange: (tableName: string, payload: any) => void,
+  subscriberId: string = 'channel'
+) {
   if (!isSupabaseConfigured()) return () => {};
 
-  const channel = supabase
-    .channel('hydronourish_realtime')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public' },
-      (payload) => {
-        onTableChange(payload.table, payload);
-      }
-    )
-    .subscribe();
+  const uniqueChannelName = `hn_rt_${subscriberId}_${Math.random().toString(36).substring(2, 7)}`;
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
+  try {
+    const channel = supabase
+      .channel(uniqueChannelName)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public' },
+        (payload) => {
+          if (payload && payload.table) {
+            onTableChange(payload.table, payload);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        supabase.removeChannel(channel);
+      } catch {
+        // Safe cleanup
+      }
+    };
+  } catch (err) {
+    if (import.meta.env.DEV) {
+      console.warn('[HydroNourish] Realtime channel setup notice:', err);
+    }
+    return () => {};
+  }
 }
+

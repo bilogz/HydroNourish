@@ -155,9 +155,11 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const data = await fetchDevicesFromSupabase();
         if (data && data.length > 0) setHardware(data[0]);
       }
-    });
+    }, 'session_context');
 
-    return () => unsubscribe();
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
   }, []);
 
   // ─── Storage Persistence ─────────────────────────────────────────────

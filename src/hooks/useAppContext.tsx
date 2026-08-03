@@ -217,10 +217,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const data = await fetchSettingsFromSupabase();
         if (data) setSettings(data);
       }
-    });
+    }, 'app_context');
 
     return () => {
-      unsubscribe();
+      if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, []);
 
