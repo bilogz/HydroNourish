@@ -34,7 +34,7 @@ export async function fetchPetsFromSupabase(): Promise<Pet[] | null> {
       ownerName: item.owner_name,
       ownerPhone: item.owner_phone,
       clinicRef: item.clinic_ref,
-      assignedDeviceId: item.assigned_device_id ?? 'HN-DEV-0101',
+      assignedDeviceId: item.assigned_device_id ?? 'Cage 1',
       healthStatus: (item.health_status ?? 'Healthy') as Pet['healthStatus'],
       avatarUrl:
         item.avatar_url ??

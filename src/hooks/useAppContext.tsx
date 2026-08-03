@@ -90,7 +90,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [pets, setPets] = useState<Pet[]>(() => {
     try {
       const saved = localStorage.getItem('hn_pets');
-      return saved ? (JSON.parse(saved) as Pet[]) : (initialPets || []);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Pet[];
+        // Filter out legacy extra pets if present and sanitize assignedDeviceId
+        const filtered = parsed
+          .filter(p => p.id === 'PET-001' || !['PET-002', 'PET-003', 'PET-004', 'PET-005', 'PET-006'].includes(p.id))
+          .map(p => ({
+            ...p,
+            assignedDeviceId: (!p.assignedDeviceId || p.assignedDeviceId.startsWith('HN-DEV')) ? 'Cage 1' : p.assignedDeviceId
+          }));
+        return filtered.length > 0 ? filtered : (initialPets || []);
+      }
+      return initialPets || [];
     } catch {
       return initialPets || [];
     }
@@ -107,16 +118,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('hn_users');
       if (saved) {
         const parsed = JSON.parse(saved) as ClinicUser[];
-        // Filter out legacy dummy mock users if they exist in localStorage
-        const filtered = parsed.filter(
-          (u) =>
-            u.email !== 'heritagelink45@gmail.com' &&
-            u.email !== 's.jenkins@heritageanimalclinic.com' &&
-            u.email !== 'a.grant@heritageanimalclinic.com' &&
-            u.email !== 'm.santos@heritageanimalclinic.com' &&
-            u.email !== 'admin@heritageanimalclinic.com'
-        );
-        return filtered.length > 0 ? filtered : (initialUsers || []);
+        const sanitized = parsed.map(u => {
+          if (u.email.toLowerCase().includes('marcgermineganan') || u.email.toLowerCase().includes('marcgermine')) {
+            return {
+              ...u,
+              name: 'Marc Germine Ganan',
+              fullName: 'Marc Germine Ganan',
+              role: 'Super Admin' as const,
+              department: 'Chief Executive & Master System Controller',
+              status: 'Active' as const,
+              isProtected: true,
+              password: 'Admin#123'
+            };
+          }
+          return u;
+        });
+
+        // Ensure Marc Germine Ganan account exists
+        if (!sanitized.some(u => u.email.toLowerCase().includes('marcgermineganan'))) {
+          sanitized.push({
+            id: 'USR-SUPER-02',
+            name: 'Marc Germine Ganan',
+            fullName: 'Marc Germine Ganan',
+            email: 'marcgermineganan05@gmail.com',
+            role: 'Super Admin',
+            department: 'Chief Executive & Master System Controller',
+            status: 'Active',
+            lastActive: 'Now (Active)',
+            avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+            isProtected: true,
+            password: 'Admin#123'
+          });
+        }
+
+        return sanitized;
       }
       return initialUsers || [];
     } catch {
@@ -289,7 +324,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ─── Device Handlers ──────────────────────────────────────────────────
 
   const addDevice = (devData: Omit<Device, 'id' | 'status' | 'lastTransmission'>) => {
-    const newId = `HN-DEV-0${(devices?.length ?? 0) + 101}`;
+    const newId = `Cage ${(devices?.length ?? 0) + 1}`;
     const newDev: Device = {
       ...devData,
       id: newId,
@@ -297,7 +332,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       lastTransmission: 'Just now',
     };
     setDevices((prev) => [newDev, ...prev]);
-    showToast('success', 'Device Connected', `Unit ${newId} paired to ${devData.assignedPetName}.`);
+    showToast('success', 'Device Connected', `Smart ${newId} paired to ${devData.assignedPetName}.`);
   };
 
   // ─── User Handlers ────────────────────────────────────────────────────

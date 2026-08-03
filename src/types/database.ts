@@ -15,6 +15,7 @@ export interface Database {
           email: string;
           full_name: string;
           role: 'admin' | 'super_admin';
+          department?: string | null;
           status: 'active' | 'inactive' | 'suspended';
           avatar_url: string | null;
           last_login_at: string | null;
@@ -26,6 +27,7 @@ export interface Database {
           email: string;
           full_name: string;
           role?: 'admin' | 'super_admin';
+          department?: string | null;
           status?: 'active' | 'inactive' | 'suspended';
           avatar_url?: string | null;
           last_login_at?: string | null;
@@ -37,11 +39,45 @@ export interface Database {
           email?: string;
           full_name?: string;
           role?: 'admin' | 'super_admin';
+          department?: string | null;
           status?: 'active' | 'inactive' | 'suspended';
           avatar_url?: string | null;
           last_login_at?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      clinic_users: {
+        Row: {
+          id: string;
+          name: string;
+          email: string;
+          role: string;
+          department: string | null;
+          status: string;
+          last_active: string | null;
+          avatar_url: string | null;
+        };
+        Insert: {
+          id: string;
+          name: string;
+          email: string;
+          role: string;
+          department?: string | null;
+          status?: string;
+          last_active?: string | null;
+          avatar_url?: string | null;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          email?: string;
+          role?: string;
+          department?: string | null;
+          status?: string;
+          last_active?: string | null;
+          avatar_url?: string | null;
         };
         Relationships: [];
       };

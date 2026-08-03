@@ -47,7 +47,7 @@ export const PetsPage: React.FC = () => {
     ownerName: '',
     ownerPhone: '',
     clinicRef: 'REF-2026-999',
-    assignedDeviceId: 'HN-DEV-0101',
+    assignedDeviceId: 'Cage 1',
     healthStatus: 'Healthy' as HealthStatus,
     avatarUrl: 'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&q=80&w=300',
     portionGrams: 100,
@@ -69,7 +69,7 @@ export const PetsPage: React.FC = () => {
       ownerName: '',
       ownerPhone: '',
       clinicRef: `REF-2026-${Math.floor(100 + Math.random() * 800)}`,
-      assignedDeviceId: devices[0]?.id || 'HN-DEV-0101',
+      assignedDeviceId: devices[0]?.id || 'Cage 1',
       healthStatus: 'Healthy',
       avatarUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=300',
       portionGrams: 120,
@@ -306,7 +306,7 @@ export const PetsPage: React.FC = () => {
                     <span className="text-[10px] text-slate-400 font-bold uppercase">Assigned Unit</span>
                     <p className="font-bold text-teal-600 mt-0.5 flex items-center gap-1">
                       <Cpu className="w-3.5 h-3.5" />
-                      {pet.assignedDeviceId}
+                      {!pet.assignedDeviceId || pet.assignedDeviceId.startsWith('HN-DEV') ? 'Cage 1' : pet.assignedDeviceId}
                     </p>
                   </div>
                 </div>
@@ -392,7 +392,7 @@ export const PetsPage: React.FC = () => {
                       <span className="block text-[10px] text-slate-400">{pet.clinicRef}</span>
                     </td>
                     <td className="px-4 py-3 font-mono font-bold text-teal-600">
-                      {pet.assignedDeviceId}
+                      {!pet.assignedDeviceId || pet.assignedDeviceId.startsWith('HN-DEV') ? 'Cage 1' : pet.assignedDeviceId}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={pet.healthStatus} size="sm" />

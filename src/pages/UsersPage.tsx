@@ -6,18 +6,21 @@ import { ClinicUser } from '../types';
 import { UserHeaderBanner } from '../components/users/UserHeaderBanner';
 import { UserStatCards } from '../components/users/UserStatCards';
 import { UserDirectoryTable } from '../components/users/UserDirectoryTable';
+import { PetOwnerDirectoryTable } from '../components/users/PetOwnerDirectoryTable';
 import { CreateUserModal } from '../components/users/CreateUserModal';
-import { Lock, Crown } from 'lucide-react';
+import { Lock, Crown, Users, HeartHandshake } from 'lucide-react';
 
 export const UsersPage: React.FC = () => {
   const { users, addUser, updateUser, toggleUserStatus, showToast } = useAppContext();
   const { adminProfile } = useAuth();
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'staff' | 'owners'>('staff');
 
   // Access Control check
-  const isSuperAdmin = adminProfile?.role === 'super_admin' || adminProfile?.email === 'joecelgarcia1@gmail.com';
-  const currentUserEmail = adminProfile?.email || 'joecelgarcia1@gmail.com';
-
+  const isSuperAdmin = adminProfile?.role === 'super_admin' || adminProfile?.email === 'joecelgarcia1@gmail.com' || adminProfile?.email === 'marcgermineganan03@gmail.com';
+  const currentUserEmail = adminProfile?.email || 'marcgermineganan03@gmail.com';
+  const currentUserObj = (users ?? []).find(u => u.email === currentUserEmail);
+ 
   const handleAddUser = (userData: Omit<ClinicUser, 'id' | 'lastActive'>) => {
     addUser(userData);
   };
@@ -59,22 +62,56 @@ export const UsersPage: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Top Super Admin Portal Banner */}
+          {/* Top Logged-in User Profile Status Banner */}
           <UserHeaderBanner
             userEmail={currentUserEmail}
+            adminProfile={adminProfile}
+            currentUserObj={currentUserObj}
             onCreateClick={() => setAddModalOpen(true)}
           />
 
-          {/* 3 Column Summary Metrics */}
-          <UserStatCards users={users} />
+          {/* Tab Navigation */}
+          <div className="flex border-b border-slate-200 gap-4 text-sm font-extrabold">
+            <button
+              onClick={() => setActiveTab('staff')}
+              className={`pb-3 px-1 flex items-center gap-2 transition-all border-b-2 ${
+                activeTab === 'staff'
+                  ? 'border-teal-600 text-teal-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Clinic Staff & Accounts
+            </button>
+            <button
+              onClick={() => setActiveTab('owners')}
+              className={`pb-3 px-1 flex items-center gap-2 transition-all border-b-2 ${
+                activeTab === 'owners'
+                  ? 'border-teal-600 text-teal-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <HeartHandshake className="w-4 h-4" />
+              Pet Owners & Temporary Access
+            </button>
+          </div>
 
-          {/* User Directory Table with Edit Capability */}
-          <UserDirectoryTable
-            users={users}
-            onToggleStatus={handleToggleStatus}
-            onUpdateUser={handleUpdateUser}
-            adminEmail={currentUserEmail}
-          />
+          {activeTab === 'staff' ? (
+            <>
+              {/* 3 Column Summary Metrics */}
+              <UserStatCards users={users} />
+
+              {/* User Directory Table with Edit Capability */}
+              <UserDirectoryTable
+                users={users}
+                onToggleStatus={handleToggleStatus}
+                onUpdateUser={handleUpdateUser}
+                adminEmail={currentUserEmail}
+              />
+            </>
+          ) : (
+            <PetOwnerDirectoryTable />
+          )}
 
           {/* Account Provisioning Modal with Password Field */}
           <CreateUserModal

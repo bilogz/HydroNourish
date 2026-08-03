@@ -6,7 +6,12 @@ import { StatusBadge } from '../components/StatusBadge';
 import { AlertCard } from '../components/AlertCard';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { Modal } from '../components/Modal';
+import { HardwareAssignmentCard } from '../components/session/HardwareAssignmentCard';
+import { AssignPetOwnerModal } from '../components/session/AssignPetOwnerModal';
+import { CompleteSessionModal } from '../components/session/CompleteSessionModal';
+import { CancelSessionModal } from '../components/session/CancelSessionModal';
 import { useAppContext } from '../hooks/useAppContext';
+import { useSession } from '../contexts/SessionContext';
 import {
   Dog,
   Utensils,
@@ -20,9 +25,11 @@ import {
   Heart,
   Thermometer,
   Zap,
-  RefreshCw
+  RefreshCw,
+  ClipboardList,
+  CheckCircle,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   BarChart,
   Bar,
@@ -45,10 +52,17 @@ import {
 } from '../data/mockData';
 
 export const OverviewPage: React.FC = () => {
-  const { pets, devices, alerts, showToast } = useAppContext();
+  const { pets, alerts, showToast } = useAppContext();
+  const { activeSession, hardware, getCompletedSessionCount, activityLogs, notifications } = useSession();
+  const navigate = useNavigate();
 
   // Skeleton loading simulation state
   const [isLoading, setIsLoading] = useState(true);
+
+  // Modal states
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [completeModalOpen, setCompleteModalOpen] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
 
   // Quick Action Modals
   const [quickVitalModalOpen, setQuickVitalModalOpen] = useState(false);
@@ -93,9 +107,13 @@ export const OverviewPage: React.FC = () => {
     setQuickDispenseModalOpen(false);
   };
 
-  const totalPets = (pets || []).length;
-  const onlineDevicesCount = (devices || []).filter(d => d.status === 'Online').length;
   const activeAlertsCount = (alerts || []).filter(a => a.reviewStatus !== 'Resolved').length;
+  const completedSessionCount = getCompletedSessionCount();
+  const activeSessionCount = activeSession ? 1 : 0;
+  const hwStatusLabel = hardware.hardwareStatus.charAt(0).toUpperCase() + hardware.hardwareStatus.slice(1);
+
+  // Recent activity from session context
+  const recentLogs = activityLogs.slice(0, 6);
 
   if (isLoading) {
     return (
@@ -111,7 +129,7 @@ export const OverviewPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-teal-950 text-white shadow-lg">
         <div>
           <h2 className="text-base font-extrabold tracking-tight">Heritage Animal Clinic Command Center</h2>
-          <p className="text-xs text-slate-300">Live monitoring nodes • ESP32 Smart Dispensers</p>
+          <p className="text-xs text-slate-300">Single-device monitoring • HydroNourish Station Alpha</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
@@ -131,47 +149,47 @@ export const OverviewPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ================= SUMMARY STAT CARDS ================= */}
+      {/* ================= SINGLE-DEVICE STAT CARDS ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
         <StatCard
-          title="Registered Pets"
-          value={totalPets}
-          subtitle="Heritage Clinic Wards"
+          title="Hardware Status"
+          value={hwStatusLabel}
+          subtitle="Smart Cage Node Array"
+          icon={Cpu}
+          iconBgColor={hardware.hardwareStatus === 'available' ? 'bg-emerald-50' : hardware.hardwareStatus === 'occupied' ? 'bg-indigo-50' : 'bg-amber-50'}
+          iconTextColor={hardware.hardwareStatus === 'available' ? 'text-emerald-600' : hardware.hardwareStatus === 'occupied' ? 'text-indigo-600' : 'text-amber-600'}
+          badgeText={hardware.status}
+          badgeType={hardware.status === 'Online' ? 'success' : 'alert'}
+        />
+        <StatCard
+          title="Current Pet"
+          value={activeSession?.petName || 'None'}
+          subtitle={activeSession ? `${activeSession.petSpecies} • ${activeSession.petBreed}` : 'No pet assigned'}
           icon={Dog}
           iconBgColor="bg-teal-50"
           iconTextColor="text-teal-600"
-          badgeText="Active"
-          badgeType="success"
+          badgeText={activeSession ? 'Monitoring' : 'Available'}
+          badgeType={activeSession ? 'info' : 'success'}
         />
         <StatCard
-          title="Pets Fed Today"
-          value="22 / 24"
-          subtitle="92% Compliance"
-          icon={Utensils}
-          iconBgColor="bg-emerald-50"
-          iconTextColor="text-emerald-600"
-          badgeText="On Schedule"
-          badgeType="success"
-        />
-        <StatCard
-          title="Avg Water Intake"
-          value="380 ml/day"
-          subtitle="Per Patient Target"
-          icon={Droplets}
-          iconBgColor="bg-sky-50"
-          iconTextColor="text-sky-600"
-          badgeText="Normal Range"
-          badgeType="info"
-        />
-        <StatCard
-          title="Connected Devices"
-          value={`${onlineDevicesCount} / ${(devices ?? []).length}`}
-          subtitle="ESP32 Smart Nodes"
-          icon={Cpu}
+          title="Active Sessions"
+          value={activeSessionCount}
+          subtitle={activeSessionCount === 1 ? 'Session in progress' : 'Hardware available'}
+          icon={Activity}
           iconBgColor="bg-indigo-50"
           iconTextColor="text-indigo-600"
-          badgeText="Online"
-          badgeType="success"
+          badgeText={activeSessionCount === 1 ? 'Active' : 'None'}
+          badgeType={activeSessionCount === 1 ? 'warning' : 'info'}
+        />
+        <StatCard
+          title="Completed Sessions"
+          value={completedSessionCount}
+          subtitle="Total archived sessions"
+          icon={CheckCircle}
+          iconBgColor="bg-teal-50"
+          iconTextColor="text-teal-600"
+          badgeText="Archived"
+          badgeType="info"
         />
         <StatCard
           title="Active Health Alerts"
@@ -182,6 +200,59 @@ export const OverviewPage: React.FC = () => {
           iconTextColor="text-rose-600"
           badgeText="Review Required"
           badgeType="alert"
+        />
+      </div>
+
+      {/* ================= HARDWARE ASSIGNMENT CARD ================= */}
+      <HardwareAssignmentCard
+        onAssignClick={() => setAssignModalOpen(true)}
+        onViewSession={() => navigate('/app/sessions')}
+        onViewPet={(petId) => navigate(`/app/pets/${petId}`)}
+        onCompleteSession={() => setCompleteModalOpen(true)}
+        onCancelSession={() => setCancelModalOpen(true)}
+      />
+
+      {/* ================= DEVICE LEVELS QUICK VIEW ================= */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <StatCard
+          title="Food Container"
+          value={`${hardware.foodLevelPct}%`}
+          subtitle="Current food level"
+          icon={Utensils}
+          iconBgColor="bg-orange-50"
+          iconTextColor="text-orange-600"
+          badgeText={hardware.foodLevelPct > 30 ? 'OK' : 'Low'}
+          badgeType={hardware.foodLevelPct > 30 ? 'success' : 'alert'}
+        />
+        <StatCard
+          title="Water Container"
+          value={`${hardware.waterLevelPct}%`}
+          subtitle="Current water level"
+          icon={Droplets}
+          iconBgColor="bg-sky-50"
+          iconTextColor="text-sky-600"
+          badgeText={hardware.waterLevelPct > 30 ? 'OK' : 'Low'}
+          badgeType={hardware.waterLevelPct > 30 ? 'success' : 'alert'}
+        />
+        <StatCard
+          title="Device Last Seen"
+          value={hardware.lastTransmission}
+          subtitle={`Wi-Fi: ${hardware.wifiSignalDbm} dBm`}
+          icon={Zap}
+          iconBgColor="bg-violet-50"
+          iconTextColor="text-violet-600"
+          badgeText={hardware.status}
+          badgeType={hardware.status === 'Online' ? 'success' : 'alert'}
+        />
+        <StatCard
+          title="Active Health Alerts"
+          value={activeAlertsCount}
+          subtitle="Unresolved observations"
+          icon={ShieldAlert}
+          iconBgColor="bg-rose-50"
+          iconTextColor="text-rose-600"
+          badgeText={activeAlertsCount > 0 ? 'Action Needed' : 'All Clear'}
+          badgeType={activeAlertsCount > 0 ? 'alert' : 'success'}
         />
       </div>
 
@@ -278,33 +349,37 @@ export const OverviewPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Cpu className="w-5 h-5 text-indigo-500" />
-              Connected Smart Nodes
+              HydroNourish Device
             </h3>
             <Link to="/app/devices" className="text-xs font-semibold text-teal-600 hover:underline flex items-center gap-1">
-              Manage Devices <ChevronRight className="w-3.5 h-3.5" />
+              Manage Device <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
-          <div className="clinic-card overflow-hidden divide-y divide-slate-100">
-            {(devices ?? []).slice(0, 4).map(dev => (
-              <div key={dev.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-slate-100 text-slate-600 font-mono text-xs font-bold">
-                    {dev.id}
-                  </div>
-                  <div>
-                    <span className="text-sm font-bold text-slate-900">{dev.assignedPetName}</span>
-                    <p className="text-[11px] text-slate-500">Wi-Fi: {dev.wifiSignalDbm} dBm • Battery: {dev.batteryPct}%</p>
-                  </div>
+          <div className="clinic-card overflow-hidden">
+            <div className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-slate-100 text-slate-600 font-mono text-xs font-bold">
+                  {hardware.id}
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-right text-xs">
-                    <span className="block font-semibold text-slate-700">Water: {dev.waterLevelPct}%</span>
-                    <span className="text-[11px] text-slate-400">Food: {dev.foodLevelPct}%</span>
-                  </div>
-                  <StatusBadge status={dev.status} size="sm" />
+                <div>
+                  <span className="text-sm font-bold text-slate-900">{hardware.deviceName}</span>
+                  <p className="text-[11px] text-slate-500">Wi-Fi: {hardware.wifiSignalDbm} dBm • Battery: {hardware.batteryPct}%</p>
                 </div>
               </div>
-            ))}
+              <div className="flex items-center gap-3">
+                <div className="text-right text-xs">
+                  <span className="block font-semibold text-slate-700">Water: {hardware.waterLevelPct}%</span>
+                  <span className="text-[11px] text-slate-400">Food: {hardware.foodLevelPct}%</span>
+                </div>
+                <StatusBadge status={hardware.status} size="sm" />
+              </div>
+            </div>
+            {activeSession && (
+              <div className="px-4 py-3 border-t border-slate-100 bg-indigo-50/50 text-xs flex items-center gap-2">
+                <Dog className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="text-indigo-700">Currently assigned to <strong>{activeSession.petName}</strong> ({activeSession.ownerName})</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -314,24 +389,45 @@ export const OverviewPage: React.FC = () => {
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
             <Activity className="w-5 h-5 text-teal-600" />
-            Recent Clinic Telemetry Activity Log
+            Recent Clinic Activity Log
           </h3>
-          <span className="text-xs text-slate-500">Real-time event queue</span>
+          <span className="text-xs text-slate-500">Session & system events</span>
         </div>
 
         <div className="space-y-3">
-          {(recentSystemActivity ?? []).map(act => (
-            <div key={act.id} className="flex items-start justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+          {recentLogs.length > 0 ? recentLogs.map(log => (
+            <div key={log.id} className="flex items-start justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
               <div className="flex items-center gap-3">
-                <span className="w-2 h-2 rounded-full bg-teal-500" />
-                <span className="font-semibold text-slate-800">{act.text}</span>
+                <span className={`w-2 h-2 rounded-full ${log.result === 'success' ? 'bg-teal-500' : log.result === 'warning' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                <div>
+                  <span className="font-semibold text-slate-800">
+                    {log.action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                  </span>
+                  {log.petName && <span className="text-slate-500"> • {log.petName}</span>}
+                  {log.ownerName && <span className="text-slate-400"> ({log.ownerName})</span>}
+                  {log.details && <span className="text-slate-400 ml-1">— {log.details}</span>}
+                </div>
               </div>
-              <span className="text-slate-400 flex items-center gap-1 font-medium">
+              <span className="text-slate-400 flex items-center gap-1 font-medium shrink-0">
                 <Clock className="w-3.5 h-3.5" />
-                {act.timestamp}
+                {new Date(log.timestamp).toLocaleString()}
               </span>
             </div>
-          ))}
+          )) : (
+            // Fallback to static activity
+            recentSystemActivity.map(act => (
+              <div key={act.id} className="flex items-start justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                <div className="flex items-center gap-3">
+                  <span className="w-2 h-2 rounded-full bg-teal-500" />
+                  <span className="font-semibold text-slate-800">{act.text}</span>
+                </div>
+                <span className="text-slate-400 flex items-center gap-1 font-medium">
+                  <Clock className="w-3.5 h-3.5" />
+                  {act.timestamp}
+                </span>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -453,6 +549,23 @@ export const OverviewPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* SESSION MODALS */}
+      <AssignPetOwnerModal
+        isOpen={assignModalOpen}
+        onClose={() => setAssignModalOpen(false)}
+        onSuccess={() => setAssignModalOpen(false)}
+      />
+      <CompleteSessionModal
+        isOpen={completeModalOpen}
+        onClose={() => setCompleteModalOpen(false)}
+        onSuccess={() => setCompleteModalOpen(false)}
+      />
+      <CancelSessionModal
+        isOpen={cancelModalOpen}
+        onClose={() => setCancelModalOpen(false)}
+        onSuccess={() => setCancelModalOpen(false)}
+      />
     </DashboardLayout>
   );
 };

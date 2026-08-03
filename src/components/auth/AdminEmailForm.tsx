@@ -78,7 +78,7 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
         setError('Invalid password for this user account.');
         return;
       }
-    } else if (trimmedEmail === 'joecelgarcia1@gmail.com' && password !== 'Admin#123') {
+    } else if ((trimmedEmail === 'joecelgarcia1@gmail.com' || trimmedEmail === 'marcgermineganan03@gmail.com') && password !== 'Admin#123') {
       setError('Invalid password for Super Admin account.');
       return;
     } else if (trimmedEmail === 'heritagelink45@gmail.com' && password !== 'admin-pass-2026') {

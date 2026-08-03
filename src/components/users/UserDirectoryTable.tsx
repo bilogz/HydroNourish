@@ -150,7 +150,8 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                   const isPrimarySuperAdmin =
                     user.isProtected ||
                     user.role === 'Super Admin' ||
-                    user.email === 'joecelgarcia1@gmail.com';
+                    user.email.toLowerCase().includes('joecelgarcia') ||
+                    user.email.toLowerCase().includes('marcgermineganan');
 
                   const displayName = user.fullName || user.name;
 

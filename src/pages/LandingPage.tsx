@@ -116,7 +116,7 @@ export const LandingPage: React.FC = () => {
                       />
                       <div>
                         <span className="text-sm font-extrabold text-slate-900">Max (Golden Retriever)</span>
-                        <p className="text-[11px] text-slate-500">Device: HN-DEV-0101</p>
+                        <p className="text-[11px] text-slate-500">Device: Cage 1</p>
                       </div>
                     </div>
                     <span className="text-xs font-bold text-emerald-600">38.5°C</span>

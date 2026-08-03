@@ -8,6 +8,7 @@
 
 import { supabase } from '../lib/supabase';
 import type { ClinicUser } from '../types';
+import type { Database } from '../types/database';
 
 /**
  * Department options available in Heritage Animal Clinic's HydroNourish system.
@@ -99,7 +100,7 @@ export async function updateClinicUser(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Map ClinicUser fields → clinic_users column names
-    const dbUpdates: Record<string, unknown> = {};
+    const dbUpdates: Database['public']['Tables']['clinic_users']['Update'] = {};
     if (updates.name !== undefined || updates.fullName !== undefined) {
       dbUpdates.name = updates.fullName || updates.name;
     }

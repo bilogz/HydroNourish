@@ -7,7 +7,11 @@ import {
   AIHealthAlert,
   Device,
   ClinicUser,
-  ClinicSettings
+  ClinicSettings,
+  PetOwner,
+  PetSession,
+  ActivityLog,
+  SystemNotification
 } from '../types';
 
 export const initialPets: Pet[] = [
@@ -18,106 +22,19 @@ export const initialPets: Pet[] = [
     breed: 'Golden Retriever',
     age: 4,
     weight: 29.5,
+    sex: 'Male',
     ownerName: 'Eleanor Vance',
     ownerPhone: '(555) 234-5678',
+    ownerId: 'OWN-001',
     clinicRef: 'REF-2026-081',
-    assignedDeviceId: 'HN-DEV-0101',
+    assignedDeviceId: 'Cage 1',
     healthStatus: 'Healthy',
     avatarUrl: 'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&q=80&w=300',
     feedingPlan: { portionGrams: 250, timesPerDay: 2, foodType: 'High-Protein Adult Kibble' },
     hydrationTarget: 1400,
     latestVitals: { temperature: 38.5, heartRate: 85, activityLevel: 'Normal', lastMeasured: '10 mins ago' },
+    emergencyContact: '(555) 234-9999',
     notes: 'Max is responding well to regular hydration monitoring. Maintain current protein diet.'
-  },
-  {
-    id: 'PET-002',
-    name: 'Bella',
-    species: 'Cat',
-    breed: 'Siamese',
-    age: 3,
-    weight: 4.2,
-    ownerName: 'Marcus Wright',
-    ownerPhone: '(555) 345-6789',
-    clinicRef: 'REF-2026-094',
-    assignedDeviceId: 'HN-DEV-0102',
-    healthStatus: 'Attention Needed',
-    avatarUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=300',
-    feedingPlan: { portionGrams: 60, timesPerDay: 3, foodType: 'Urinary Care Wet + Dry Mix' },
-    hydrationTarget: 250,
-    latestVitals: { temperature: 39.2, heartRate: 142, activityLevel: 'Low', lastMeasured: '25 mins ago' },
-    notes: 'Mild decline in daily water intake over 48h. Recommended monitoring hydration gauge closely.'
-  },
-  {
-    id: 'PET-003',
-    name: 'Milo',
-    species: 'Dog',
-    breed: 'Beagle',
-    age: 5,
-    weight: 12.8,
-    ownerName: 'Sarah Jenkins',
-    ownerPhone: '(555) 456-7890',
-    clinicRef: 'REF-2026-112',
-    assignedDeviceId: 'HN-DEV-0103',
-    healthStatus: 'Healthy',
-    avatarUrl: 'https://images.unsplash.com/photo-1537151608828-ea2b11777ee8?auto=format&fit=crop&q=80&w=300',
-    feedingPlan: { portionGrams: 140, timesPerDay: 2, foodType: 'Active Dog Recipe' },
-    hydrationTarget: 650,
-    latestVitals: { temperature: 38.4, heartRate: 92, activityLevel: 'High', lastMeasured: '5 mins ago' },
-    notes: 'Healthy weight progression following post-op checkup.'
-  },
-  {
-    id: 'PET-004',
-    name: 'Luna',
-    species: 'Cat',
-    breed: 'Maine Coon',
-    age: 2,
-    weight: 6.8,
-    ownerName: 'David Miller',
-    ownerPhone: '(555) 567-8901',
-    clinicRef: 'REF-2026-145',
-    assignedDeviceId: 'HN-DEV-0104',
-    healthStatus: 'Critical',
-    avatarUrl: 'https://images.unsplash.com/photo-1573865526739-10659fec78a5?auto=format&fit=crop&q=80&w=300',
-    feedingPlan: { portionGrams: 85, timesPerDay: 2, foodType: 'Grain-Free Salmon Formula' },
-    hydrationTarget: 380,
-    latestVitals: { temperature: 39.8, heartRate: 180, activityLevel: 'Low', lastMeasured: '12 mins ago' },
-    notes: 'Alert triggered for elevated temperature and tachycardia. Scheduled for urgent physical review.'
-  },
-  {
-    id: 'PET-005',
-    name: 'Oliver',
-    species: 'Dog',
-    breed: 'French Bulldog',
-    age: 6,
-    weight: 13.1,
-    ownerName: 'Clara Oswald',
-    ownerPhone: '(555) 678-9012',
-    clinicRef: 'REF-2026-189',
-    assignedDeviceId: 'HN-DEV-0105',
-    healthStatus: 'Healthy',
-    avatarUrl: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&q=80&w=300',
-    feedingPlan: { portionGrams: 130, timesPerDay: 2, foodType: 'Weight Management Formula' },
-    hydrationTarget: 620,
-    latestVitals: { temperature: 38.6, heartRate: 88, activityLevel: 'Normal', lastMeasured: '18 mins ago' },
-    notes: 'Breathing pattern & vitals stable.'
-  },
-  {
-    id: 'PET-006',
-    name: 'Daisy',
-    species: 'Dog',
-    breed: 'Poodle',
-    age: 1,
-    weight: 8.4,
-    ownerName: 'Robert Langdon',
-    ownerPhone: '(555) 789-0123',
-    clinicRef: 'REF-2026-204',
-    assignedDeviceId: 'HN-DEV-0106',
-    healthStatus: 'Attention Needed',
-    avatarUrl: 'https://images.unsplash.com/photo-1591769225440-811ad7d6eab2?auto=format&fit=crop&q=80&w=300',
-    feedingPlan: { portionGrams: 110, timesPerDay: 3, foodType: 'Puppy Growth Formula' },
-    hydrationTarget: 480,
-    latestVitals: { temperature: 38.8, heartRate: 110, activityLevel: 'High', lastMeasured: '40 mins ago' },
-    notes: 'Water container level low on unit HN-DEV-0106.'
   }
 ];
 
@@ -130,7 +47,7 @@ export const initialSchedules: FeedingSchedule[] = [
     portionGrams: 125,
     scheduledTime: '08:00 AM',
     dispenseStatus: 'Dispensed',
-    deviceId: 'HN-DEV-0101',
+    deviceId: 'Cage 1',
     lastDispensedAt: '2026-07-27 08:00 AM'
   },
   {
@@ -141,126 +58,49 @@ export const initialSchedules: FeedingSchedule[] = [
     portionGrams: 125,
     scheduledTime: '06:00 PM',
     dispenseStatus: 'Pending',
-    deviceId: 'HN-DEV-0101'
-  },
-  {
-    id: 'SCH-103',
-    petId: 'PET-002',
-    petName: 'Bella',
-    foodType: 'Urinary Care Wet + Dry Mix',
-    portionGrams: 20,
-    scheduledTime: '07:30 AM',
-    dispenseStatus: 'Dispensed',
-    deviceId: 'HN-DEV-0102',
-    lastDispensedAt: '2026-07-27 07:30 AM'
-  },
-  {
-    id: 'SCH-104',
-    petId: 'PET-002',
-    petName: 'Bella',
-    foodType: 'Urinary Care Wet + Dry Mix',
-    portionGrams: 20,
-    scheduledTime: '01:00 PM',
-    dispenseStatus: 'Dispensed',
-    deviceId: 'HN-DEV-0102',
-    lastDispensedAt: '2026-07-27 01:00 PM'
-  },
-  {
-    id: 'SCH-105',
-    petId: 'PET-003',
-    petName: 'Milo',
-    foodType: 'Active Dog Recipe',
-    portionGrams: 70,
-    scheduledTime: '08:30 AM',
-    dispenseStatus: 'Dispensed',
-    deviceId: 'HN-DEV-0103',
-    lastDispensedAt: '2026-07-27 08:30 AM'
-  },
-  {
-    id: 'SCH-106',
-    petId: 'PET-004',
-    petName: 'Luna',
-    foodType: 'Grain-Free Salmon Formula',
-    portionGrams: 42,
-    scheduledTime: '09:00 AM',
-    dispenseStatus: 'Dispensed',
-    deviceId: 'HN-DEV-0104',
-    lastDispensedAt: '2026-07-27 09:00 AM'
+    deviceId: 'Cage 1'
   }
 ];
 
 export const initialFeedingLogs: FeedingLog[] = [
-  { id: 'FL-301', petId: 'PET-001', petName: 'Max', portionGrams: 125, dispensedAt: '2026-07-27 08:00 AM', status: 'Success', deviceId: 'HN-DEV-0101' },
-  { id: 'FL-302', petId: 'PET-002', petName: 'Bella', portionGrams: 20, dispensedAt: '2026-07-27 07:30 AM', status: 'Success', deviceId: 'HN-DEV-0102' },
-  { id: 'FL-303', petId: 'PET-002', petName: 'Bella', portionGrams: 20, dispensedAt: '2026-07-27 01:00 PM', status: 'Success', deviceId: 'HN-DEV-0102' },
-  { id: 'FL-304', petId: 'PET-003', petName: 'Milo', portionGrams: 70, dispensedAt: '2026-07-27 08:30 AM', status: 'Success', deviceId: 'HN-DEV-0103' },
-  { id: 'FL-305', petId: 'PET-004', petName: 'Luna', portionGrams: 42, dispensedAt: '2026-07-27 09:00 AM', status: 'Manual Override', deviceId: 'HN-DEV-0104' },
-  { id: 'FL-306', petId: 'PET-005', petName: 'Oliver', portionGrams: 65, dispensedAt: '2026-07-27 08:15 AM', status: 'Success', deviceId: 'HN-DEV-0105' },
+  { id: 'FL-301', petId: 'PET-001', petName: 'Max', portionGrams: 125, dispensedAt: '2026-07-27 08:00 AM', status: 'Success', deviceId: 'Cage 1', sessionId: 'SES-DEMO-001' },
+  { id: 'FL-302', petId: 'PET-001', petName: 'Max', portionGrams: 125, dispensedAt: '2026-07-26 06:00 PM', status: 'Success', deviceId: 'Cage 1', sessionId: 'SES-DEMO-001' }
 ];
 
 export const initialHydrationLogs: HydrationLog[] = [
-  { id: 'HL-401', petId: 'PET-001', petName: 'Max', amountMl: 320, timestamp: '2026-07-27 09:30 AM', reservoirLevelPct: 82 },
-  { id: 'HL-402', petId: 'PET-001', petName: 'Max', amountMl: 280, timestamp: '2026-07-27 01:45 PM', reservoirLevelPct: 74 },
-  { id: 'HL-403', petId: 'PET-002', petName: 'Bella', amountMl: 45, timestamp: '2026-07-27 08:10 AM', reservoirLevelPct: 65 },
-  { id: 'HL-404', petId: 'PET-003', petName: 'Milo', amountMl: 190, timestamp: '2026-07-27 10:15 AM', reservoirLevelPct: 90 },
-  { id: 'HL-405', petId: 'PET-004', petName: 'Luna', amountMl: 30, timestamp: '2026-07-27 11:00 AM', reservoirLevelPct: 40 },
-  { id: 'HL-406', petId: 'PET-006', petName: 'Daisy', amountMl: 120, timestamp: '2026-07-27 12:20 PM', reservoirLevelPct: 18 },
+  { id: 'HL-401', petId: 'PET-001', petName: 'Max', amountMl: 320, timestamp: '2026-07-27 09:30 AM', reservoirLevelPct: 82, sessionId: 'SES-DEMO-001' },
+  { id: 'HL-402', petId: 'PET-001', petName: 'Max', amountMl: 280, timestamp: '2026-07-27 01:45 PM', reservoirLevelPct: 74, sessionId: 'SES-DEMO-001' }
 ];
 
 export const initialVitals: VitalSignRecord[] = [
-  { id: 'VIT-501', petId: 'PET-001', petName: 'Max', temperature: 38.5, heartRate: 85, weight: 29.5, activityMins: 45, status: 'Normal', timestamp: '2026-07-27 08:00 AM' },
-  { id: 'VIT-502', petId: 'PET-002', petName: 'Bella', temperature: 39.2, heartRate: 142, weight: 4.2, activityMins: 15, status: 'Warning', timestamp: '2026-07-27 08:30 AM' },
-  { id: 'VIT-503', petId: 'PET-003', petName: 'Milo', temperature: 38.4, heartRate: 92, weight: 12.8, activityMins: 60, status: 'Normal', timestamp: '2026-07-27 09:00 AM' },
-  { id: 'VIT-504', petId: 'PET-004', petName: 'Luna', temperature: 39.8, heartRate: 180, weight: 6.8, activityMins: 8, status: 'Critical', timestamp: '2026-07-27 09:15 AM' },
-  { id: 'VIT-505', petId: 'PET-005', petName: 'Oliver', temperature: 38.6, heartRate: 88, weight: 13.1, activityMins: 35, status: 'Normal', timestamp: '2026-07-27 09:45 AM' },
-  { id: 'VIT-506', petId: 'PET-006', petName: 'Daisy', temperature: 38.8, heartRate: 110, weight: 8.4, activityMins: 50, status: 'Warning', timestamp: '2026-07-27 10:00 AM' },
+  { id: 'VIT-501', petId: 'PET-001', petName: 'Max', temperature: 38.5, heartRate: 85, weight: 29.5, activityMins: 45, status: 'Normal', timestamp: '2026-07-27 08:00 AM', sessionId: 'SES-DEMO-001' }
 ];
 
 export const initialAIAlerts: AIHealthAlert[] = [
   {
     id: 'ALT-701',
-    petId: 'PET-004',
-    petName: 'Luna',
-    alertType: 'High Body Temperature & Tachycardia',
-    observedReading: '39.8°C temp / 180 bpm heart rate',
-    severity: 'Critical',
-    aiObservation: 'Observed biometric readings indicate acute pyrexia and elevated heart rate during resting state.',
-    recommendedAction: 'Requires immediate physical examination by Heritage Animal Clinic veterinarian to rule out acute infection.',
+    petId: 'PET-001',
+    petName: 'Max',
+    alertType: 'Hydration Target Achieved',
+    observedReading: '1,400 ml consumed daily target met',
+    severity: 'Info',
+    aiObservation: 'Optimal hydration levels maintained consistently for 48 hours.',
+    recommendedAction: 'Maintain current automated feeding and water dispenser schedule.',
     timestamp: '2026-07-27 09:15 AM',
-    reviewStatus: 'Unreviewed'
-  },
-  {
-    id: 'ALT-702',
-    petId: 'PET-002',
-    petName: 'Bella',
-    alertType: 'Reduced Hydration Consumption',
-    observedReading: 'Water intake -45% compared to 7-day baseline',
-    severity: 'Warning',
-    aiObservation: 'Possible abnormal reading suggesting reduced fluid intake or discomfort when accessing dispenser.',
-    recommendedAction: 'Verify dispenser water purity, inspect oral cavity, and perform hydration skin turgor check.',
-    timestamp: '2026-07-27 08:30 AM',
-    reviewStatus: 'In Review'
-  },
-  {
-    id: 'ALT-703',
-    petId: 'PET-006',
-    petName: 'Daisy',
-    alertType: 'Low Reservoir Level Warning',
-    observedReading: 'Water container level at 18%',
-    severity: 'Warning',
-    aiObservation: 'Dispenser reservoir nearing exhaustion. Water flow rate may degrade.',
-    recommendedAction: 'Refill unit HN-DEV-0106 container with clean fresh water.',
-    timestamp: '2026-07-27 10:00 AM',
-    reviewStatus: 'Unreviewed'
+    reviewStatus: 'Resolved'
   }
 ];
 
+// ─── SINGLE SMART DEVICE NODE ────────────────────────────────────────────────
+
 export const initialDevices: Device[] = [
   {
-    id: 'HN-DEV-0101',
+    id: 'Cage 1',
+    deviceName: 'HydroNourish Smart Cage Unit',
     assignedPetId: 'PET-001',
     assignedPetName: 'Max',
     status: 'Online',
+    hardwareStatus: 'occupied',
     wifiSignalDbm: -54,
     foodLevelPct: 78,
     waterLevelPct: 82,
@@ -269,76 +109,6 @@ export const initialDevices: Device[] = [
     lastTransmission: 'Just now',
     firmwareVersion: 'v2.4.1-ESP32',
     macAddress: '24:0A:C4:00:01:A1'
-  },
-  {
-    id: 'HN-DEV-0102',
-    assignedPetId: 'PET-002',
-    assignedPetName: 'Bella',
-    status: 'Online',
-    wifiSignalDbm: -62,
-    foodLevelPct: 45,
-    waterLevelPct: 65,
-    batteryPct: 88,
-    isPluggedIn: true,
-    lastTransmission: '2 mins ago',
-    firmwareVersion: 'v2.4.1-ESP32',
-    macAddress: '24:0A:C4:00:02:B2'
-  },
-  {
-    id: 'HN-DEV-0103',
-    assignedPetId: 'PET-003',
-    assignedPetName: 'Milo',
-    status: 'Online',
-    wifiSignalDbm: -48,
-    foodLevelPct: 92,
-    waterLevelPct: 90,
-    batteryPct: 100,
-    isPluggedIn: true,
-    lastTransmission: '1 min ago',
-    firmwareVersion: 'v2.4.1-ESP32',
-    macAddress: '24:0A:C4:00:03:C3'
-  },
-  {
-    id: 'HN-DEV-0104',
-    assignedPetId: 'PET-004',
-    assignedPetName: 'Luna',
-    status: 'Warning',
-    wifiSignalDbm: -78,
-    foodLevelPct: 30,
-    waterLevelPct: 40,
-    batteryPct: 42,
-    isPluggedIn: false,
-    lastTransmission: '5 mins ago',
-    firmwareVersion: 'v2.4.0-ESP32',
-    macAddress: '24:0A:C4:00:04:D4'
-  },
-  {
-    id: 'HN-DEV-0105',
-    assignedPetId: 'PET-005',
-    assignedPetName: 'Oliver',
-    status: 'Online',
-    wifiSignalDbm: -58,
-    foodLevelPct: 60,
-    waterLevelPct: 75,
-    batteryPct: 95,
-    isPluggedIn: true,
-    lastTransmission: '3 mins ago',
-    firmwareVersion: 'v2.4.1-ESP32',
-    macAddress: '24:0A:C4:00:05:E5'
-  },
-  {
-    id: 'HN-DEV-0106',
-    assignedPetId: 'PET-006',
-    assignedPetName: 'Daisy',
-    status: 'Warning',
-    wifiSignalDbm: -68,
-    foodLevelPct: 55,
-    waterLevelPct: 18,
-    batteryPct: 70,
-    isPluggedIn: true,
-    lastTransmission: '4 mins ago',
-    firmwareVersion: 'v2.4.1-ESP32',
-    macAddress: '24:0A:C4:00:06:F6'
   }
 ];
 
@@ -353,7 +123,34 @@ export const initialUsers: ClinicUser[] = [
     status: 'Active',
     lastActive: 'Now (Active)',
     avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-    isProtected: true
+    isProtected: true,
+    password: 'Admin#123'
+  },
+  {
+    id: 'USR-SUPER-02',
+    name: 'Marc Germine Ganan',
+    fullName: 'Marc Germine Ganan',
+    email: 'marcgermineganan05@gmail.com',
+    role: 'Super Admin',
+    department: 'Chief Executive & Master System Controller',
+    status: 'Active',
+    lastActive: 'Now (Active)',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+    isProtected: true,
+    password: 'Admin#123'
+  },
+  {
+    id: 'USR-SUPER-03',
+    name: 'Marc Germine Ganan',
+    fullName: 'Marc Germine Ganan',
+    email: 'marcgermineganan03@gmail.com',
+    role: 'Super Admin',
+    department: 'Chief Executive & Master System Controller',
+    status: 'Active',
+    lastActive: 'Now (Active)',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+    isProtected: true,
+    password: 'Admin#123'
   }
 ];
 
@@ -377,6 +174,150 @@ export const initialSettings: ClinicSettings = {
   apiSecretKey: 'hn_live_sk_89327498173491874',
   webhookUrl: 'https://api.heritageanimalclinic.org/webhooks/esp32-telemetry'
 };
+
+// ─── PET OWNERS ───────────────────────────────────────────────────────────
+
+export const initialOwners: PetOwner[] = [
+  {
+    id: 'OWN-001',
+    name: 'Eleanor Vance',
+    email: 'eleanor.vance@email.com',
+    phone: '(555) 234-5678',
+    accessStatus: 'inactive',
+    petIds: ['PET-001'],
+    currentSessionId: null,
+    dateCreated: '2026-06-15T09:00:00Z',
+    lastLogin: '2026-07-25T14:30:00Z',
+    notes: 'Preferred communication via email.'
+  }
+];
+
+// ─── DEMO COMPLETED SESSIONS ──────────────────────────────────────────────
+
+export const initialSessions: PetSession[] = [
+  {
+    id: 'SES-DEMO-001',
+    petId: 'PET-001',
+    petName: 'Max',
+    petSpecies: 'Dog',
+    petBreed: 'Golden Retriever',
+    petAvatarUrl: 'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&q=80&w=300',
+    ownerId: 'OWN-001',
+    ownerName: 'Eleanor Vance',
+    ownerEmail: 'eleanor.vance@email.com',
+    deviceId: 'Cage 1',
+    status: 'completed',
+    admissionDate: '2026-07-20T08:00:00Z',
+    expectedReleaseDate: '2026-07-23T17:00:00Z',
+    startTime: '2026-07-20T08:15:00Z',
+    releaseTime: '2026-07-23T16:30:00Z',
+    releaseCondition: 'Healthy — cleared for discharge',
+    finalNotes: 'Max completed hydration monitoring with excellent compliance. All vitals within normal range throughout the stay.',
+    cancelledReason: null,
+    completedBy: 'Joecel Garcia',
+    emergencyContact: '(555) 234-9999',
+    feedingRecordCount: 6,
+    hydrationRecordCount: 8,
+    vitalSignRecordCount: 4,
+    alertCount: 0,
+    notes: 'Post-surgical hydration monitoring for 3 days.',
+    petSnapshot: {
+      weight: 29.5,
+      age: 4,
+      feedingPlan: { portionGrams: 250, timesPerDay: 2, foodType: 'High-Protein Adult Kibble' },
+      hydrationTarget: 1400,
+      healthStatus: 'Healthy'
+    }
+  },
+  {
+    id: 'SES-DEMO-002',
+    petId: 'PET-002',
+    petName: 'Bella',
+    petSpecies: 'Cat',
+    petBreed: 'Siamese',
+    petAvatarUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=300',
+    ownerId: 'OWN-002',
+    ownerName: 'Marcus Wright',
+    ownerEmail: 'marcus.wright@email.com',
+    deviceId: 'Cage 1',
+    status: 'completed',
+    admissionDate: '2026-07-24T09:00:00Z',
+    expectedReleaseDate: '2026-07-26T17:00:00Z',
+    startTime: '2026-07-24T09:20:00Z',
+    releaseTime: '2026-07-26T15:00:00Z',
+    releaseCondition: 'Attention Needed — follow-up required in 7 days',
+    finalNotes: 'Bella showed reduced water intake. Owner advised to monitor hydration at home and return for follow-up.',
+    cancelledReason: null,
+    completedBy: 'Joecel Garcia',
+    emergencyContact: '(555) 345-0000',
+    feedingRecordCount: 4,
+    hydrationRecordCount: 3,
+    vitalSignRecordCount: 3,
+    alertCount: 1,
+    notes: 'Urinary health monitoring — reduced water intake concern.',
+    petSnapshot: {
+      weight: 4.2,
+      age: 3,
+      feedingPlan: { portionGrams: 60, timesPerDay: 3, foodType: 'Urinary Care Wet + Dry Mix' },
+      hydrationTarget: 250,
+      healthStatus: 'Attention Needed'
+    }
+  },
+  {
+    id: 'SES-DEMO-003',
+    petId: 'PET-003',
+    petName: 'Milo',
+    petSpecies: 'Dog',
+    petBreed: 'Beagle',
+    petAvatarUrl: 'https://images.unsplash.com/photo-1537151608828-ea2b11777ee8?auto=format&fit=crop&q=80&w=300',
+    ownerId: 'OWN-003',
+    ownerName: 'Sarah Jenkins',
+    ownerEmail: 'sarah.jenkins@email.com',
+    deviceId: 'Cage 1',
+    status: 'cancelled',
+    admissionDate: '2026-07-27T10:00:00Z',
+    expectedReleaseDate: '2026-07-29T17:00:00Z',
+    startTime: '2026-07-27T10:10:00Z',
+    releaseTime: '2026-07-27T11:00:00Z',
+    releaseCondition: null,
+    finalNotes: null,
+    cancelledReason: 'Session created with incorrect pet assignment. Owner requested cancellation.',
+    completedBy: null,
+    emergencyContact: '(555) 456-0000',
+    feedingRecordCount: 1,
+    hydrationRecordCount: 1,
+    vitalSignRecordCount: 1,
+    alertCount: 0,
+    notes: 'Post-op weight monitoring.',
+    petSnapshot: {
+      weight: 12.8,
+      age: 5,
+      feedingPlan: { portionGrams: 140, timesPerDay: 2, foodType: 'Active Dog Recipe' },
+      hydrationTarget: 650,
+      healthStatus: 'Healthy'
+    }
+  }
+];
+
+// ─── ACTIVITY LOGS ────────────────────────────────────────────────────────
+
+export const initialActivityLogs: ActivityLog[] = [
+  { id: 'LOG-001', adminName: 'Joecel Garcia', action: 'started_session', ownerName: 'Eleanor Vance', petName: 'Max', sessionId: 'SES-DEMO-001', timestamp: '2026-07-20T08:15:00Z', result: 'success', details: 'Assigned to Cage 1' },
+  { id: 'LOG-002', adminName: 'Joecel Garcia', action: 'completed_session', ownerName: 'Eleanor Vance', petName: 'Max', sessionId: 'SES-DEMO-001', timestamp: '2026-07-23T16:30:00Z', result: 'success', details: 'Cleared for discharge' },
+  { id: 'LOG-003', adminName: 'Joecel Garcia', action: 'deactivated_owner', ownerName: 'Eleanor Vance', petName: null, sessionId: null, timestamp: '2026-07-23T16:31:00Z', result: 'success' },
+  { id: 'LOG-004', adminName: 'Joecel Garcia', action: 'started_session', ownerName: 'Marcus Wright', petName: 'Bella', sessionId: 'SES-DEMO-002', timestamp: '2026-07-24T09:20:00Z', result: 'success', details: 'Assigned to Cage 1' },
+  { id: 'LOG-005', adminName: 'Joecel Garcia', action: 'completed_session', ownerName: 'Marcus Wright', petName: 'Bella', sessionId: 'SES-DEMO-002', timestamp: '2026-07-26T15:00:00Z', result: 'success' },
+  { id: 'LOG-006', adminName: 'Joecel Garcia', action: 'started_session', ownerName: 'Sarah Jenkins', petName: 'Milo', sessionId: 'SES-DEMO-003', timestamp: '2026-07-27T10:10:00Z', result: 'success' },
+  { id: 'LOG-007', adminName: 'Joecel Garcia', action: 'cancelled_session', ownerName: 'Sarah Jenkins', petName: 'Milo', sessionId: 'SES-DEMO-003', timestamp: '2026-07-27T11:00:00Z', result: 'success', details: 'Incorrect pet assignment' },
+];
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────
+
+export const initialNotifications: SystemNotification[] = [
+  { id: 'NOTIF-001', type: 'hardware_available', title: 'Hardware Available', message: 'HydroNourish Station Alpha is available for assignment.', timestamp: '2026-07-27T11:01:00Z', read: false, severity: 'info' },
+  { id: 'NOTIF-002', type: 'session_completed', title: 'Session Completed', message: 'Bella\'s monitoring session was completed successfully. Records archived.', timestamp: '2026-07-26T15:00:00Z', read: true, sessionId: 'SES-DEMO-002', petName: 'Bella', severity: 'success' },
+  { id: 'NOTIF-003', type: 'water_level_low', title: 'Water Level Low', message: 'Water container level at 18%. Refill recommended.', timestamp: '2026-07-27T10:00:00Z', read: false, petName: 'Daisy', severity: 'warning' },
+];
 
 // Recharts Weekly & Daily Aggregates
 export const weeklyFeedingData = [
@@ -407,9 +348,9 @@ export const vitalSignsTrendData = [
 ];
 
 export const recentSystemActivity = [
-  { id: 'ACT-1', text: 'Unit HN-DEV-0101 dispensed 125g for Max', timestamp: '10 mins ago', type: 'feeding' },
-  { id: 'ACT-2', text: 'AI Alert generated for Luna (Critical Temp: 39.8°C)', timestamp: '12 mins ago', type: 'alert' },
-  { id: 'ACT-3', text: 'Bella consumed 45ml water from HN-DEV-0102', timestamp: '25 mins ago', type: 'hydration' },
-  { id: 'ACT-4', text: 'Dr. Sarah Jenkins reviewed Milo vital signs log', timestamp: '1 hour ago', type: 'user' },
-  { id: 'ACT-5', text: 'Device HN-DEV-0106 transmitted battery telemetric packet', timestamp: '2 hours ago', type: 'device' }
+  { id: 'ACT-1', text: 'Unit Cage 1 dispensed 125g for Max', timestamp: '10 mins ago', type: 'feeding' },
+  { id: 'ACT-2', text: 'AI Alert generated for Max (Hydration Target Met)', timestamp: '12 mins ago', type: 'alert' },
+  { id: 'ACT-3', text: 'Max consumed 320ml water from Cage 1', timestamp: '25 mins ago', type: 'hydration' },
+  { id: 'ACT-4', text: 'Dr. Sarah Jenkins reviewed Max feeding plan log', timestamp: '1 hour ago', type: 'user' },
+  { id: 'ACT-5', text: 'HydroNourish Cage 1 Unit transmitted telemetric packet', timestamp: '2 hours ago', type: 'device' }
 ];

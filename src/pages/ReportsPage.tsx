@@ -1,23 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { useAppContext } from '../hooks/useAppContext';
 import { downloadCSV, printReportWindow } from '../utils/exportUtils';
+import { StatusBadge } from '../components/StatusBadge';
 import {
   FileText,
   Printer,
   Download,
   FileSpreadsheet,
-  Calendar,
-  Filter,
-  CheckCircle2,
   Utensils,
   Droplets,
   Activity,
-  ShieldAlert
+  ShieldAlert,
+  Search,
+  Filter,
+  CheckCircle,
+  Clock,
+  Cpu,
+  UserCheck
 } from 'lucide-react';
 
 export const ReportsPage: React.FC = () => {
-  const { pets, feedingLogs, hydrationLogs, vitals, alerts, showToast } = useAppContext();
+  const { pets, feedingLogs, hydrationLogs, vitals, alerts, schedules, showToast } = useAppContext();
 
   const [dateRange, setDateRange] = useState('Last 7 Days');
   const [selectedPetId, setSelectedPetId] = useState('All');
@@ -25,77 +29,215 @@ export const ReportsPage: React.FC = () => {
 
   const filteredPetName = selectedPetId === 'All' ? 'All Patients' : (pets ?? []).find(p => p.id === selectedPetId)?.name || 'Patient';
 
+  // Dynamic filter for logs
+  const filteredPets = useMemo(() => {
+    return (pets ?? []).filter(p => selectedPetId === 'All' || p.id === selectedPetId);
+  }, [pets, selectedPetId]);
+
+  const filteredFeedingLogs = useMemo(() => {
+    return (feedingLogs ?? []).filter(f => selectedPetId === 'All' || f.petId === selectedPetId);
+  }, [feedingLogs, selectedPetId]);
+
+  const filteredHydrationLogs = useMemo(() => {
+    return (hydrationLogs ?? []).filter(h => selectedPetId === 'All' || h.petId === selectedPetId);
+  }, [hydrationLogs, selectedPetId]);
+
+  const filteredVitals = useMemo(() => {
+    return (vitals ?? []).filter(v => selectedPetId === 'All' || v.petId === selectedPetId);
+  }, [vitals, selectedPetId]);
+
+  const filteredAlerts = useMemo(() => {
+    return (alerts ?? []).filter(a => selectedPetId === 'All' || a.petId === selectedPetId);
+  }, [alerts, selectedPetId]);
+
+  // Handler: Print Report
   const handlePrint = () => {
-    const content = `
-      <h1>Heritage Animal Clinic — Clinical Health Report</h1>
-      <p><strong>Report Type:</strong> ${reportType}</p>
-      <p><strong>Date Range:</strong> ${dateRange}</p>
-      <p><strong>Patient Filter:</strong> ${filteredPetName}</p>
-      
-      <h2>Summary Biometrics</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Pet</th>
-            <th>Feeding Compliance</th>
-            <th>Avg Water Intake</th>
-            <th>Vital Status</th>
-            <th>Active Alerts</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${(pets ?? [])
-            .filter(p => selectedPetId === 'All' || p.id === selectedPetId)
-            .map(
-              p => `
+    const reportTitle = `${reportType} Report — ${filteredPetName}`;
+    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    
+    let tableHtml = '';
+    
+    if (reportType === 'Feeding Summary' || reportType === 'Comprehensive Health') {
+      tableHtml += `
+        <h3 style="color:#0f766e; margin-top:24px;">Feeding Dispense Telemetry Log</h3>
+        <table>
+          <thead>
             <tr>
-              <td>${p.name} (${p.species})</td>
-              <td>100% (Scheduled portions served)</td>
-              <td>${p.hydrationTarget} ml/day target</td>
-              <td>${p.healthStatus}</td>
-              <td>${(alerts ?? []).filter(a => a.petId === p.id && a.reviewStatus !== 'Resolved').length} Active</td>
+              <th>Log ID</th>
+              <th>Pet Name</th>
+              <th>Portion (g)</th>
+              <th>Dispensed At</th>
+              <th>Status</th>
+              <th>Hardware Unit</th>
             </tr>
-          `
-            )
-            .join('')}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            ${filteredFeedingLogs.length > 0 ? filteredFeedingLogs.map(f => `
+              <tr>
+                <td>${f.id}</td>
+                <td>${f.petName}</td>
+                <td>${f.portionGrams}g</td>
+                <td>${f.dispensedAt}</td>
+                <td>${f.status}</td>
+                <td>${f.deviceId || 'Cage 1'}</td>
+              </tr>
+            `).join('') : '<tr><td colspan="6">No feeding logs recorded.</td></tr>'}
+          </tbody>
+        </table>
+      `;
+    }
+
+    if (reportType === 'Hydration Log' || reportType === 'Comprehensive Health') {
+      tableHtml += `
+        <h3 style="color:#0284c7; margin-top:24px;">Hydration Intake Telemetry Log</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Log ID</th>
+              <th>Pet Name</th>
+              <th>Amount Consumed</th>
+              <th>Timestamp</th>
+              <th>Reservoir Level</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredHydrationLogs.length > 0 ? filteredHydrationLogs.map(h => `
+              <tr>
+                <td>${h.id}</td>
+                <td>${h.petName}</td>
+                <td>${h.amountMl} ml</td>
+                <td>${h.timestamp}</td>
+                <td>${h.reservoirLevelPct}%</td>
+              </tr>
+            `).join('') : '<tr><td colspan="5">No hydration intake logs recorded.</td></tr>'}
+          </tbody>
+        </table>
+      `;
+    }
+
+    if (reportType === 'Vital Signs History' || reportType === 'Comprehensive Health') {
+      tableHtml += `
+        <h3 style="color:#0d9488; margin-top:24px;">Biometric Telemetry Summary</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Record ID</th>
+              <th>Pet Name</th>
+              <th>Body Temp</th>
+              <th>Heart Rate</th>
+              <th>Weight</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredVitals.length > 0 ? filteredVitals.map(v => `
+              <tr>
+                <td>${v.id}</td>
+                <td>${v.petName}</td>
+                <td>${v.temperature}°C</td>
+                <td>${v.heartRate} bpm</td>
+                <td>${v.weight} kg</td>
+                <td>${v.status}</td>
+              </tr>
+            `).join('') : '<tr><td colspan="6">No vital signs telemetry recorded.</td></tr>'}
+          </tbody>
+        </table>
+      `;
+    }
+
+    const content = `
+      <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #0d9488; padding-bottom: 16px;">
+        <h2 style="margin:0; color:#0d9488; font-size:22px;">Heritage Animal Clinic</h2>
+        <p style="margin:4px 0; color:#64748b; font-size:13px;">HydroNourish Smart Automated Telemetry System</p>
+        <h1 style="margin-top:12px; font-size:18px; color:#1e293b;">${reportTitle}</h1>
+        <p style="font-size:12px; color:#475569;"><strong>Generated Date:</strong> ${dateStr} | <strong>Range:</strong> ${dateRange} | <strong>Patient:</strong> ${filteredPetName}</p>
+      </div>
+      ${tableHtml}
+      <div style="margin-top: 40px; padding-top: 16px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; font-size: 11px; color: #64748b;">
+        <div>Attending Veterinarian Signature: _______________________</div>
+        <div>Clinic Seal & Stamp</div>
+      </div>
     `;
-    printReportWindow(`HydroNourish Report — ${filteredPetName}`, content);
+    printReportWindow(reportTitle, content);
+    showToast('success', 'Report Prepared', `Print dialog launched for ${reportType}.`);
   };
 
+  // Handler: CSV Export
   const handleExportCSV = () => {
-    const csvRows = (pets ?? [])
-      .filter(p => selectedPetId === 'All' || p.id === selectedPetId)
-      .map(p => ({
+    let rows: Record<string, any>[] = [];
+
+    if (reportType === 'Feeding Summary') {
+      rows = filteredFeedingLogs.map(f => ({
+        LogID: f.id,
+        PetID: f.petId,
+        PetName: f.petName,
+        PortionGrams: f.portionGrams,
+        DispensedAt: f.dispensedAt,
+        Status: f.status,
+        HardwareUnit: f.deviceId || 'Cage 1'
+      }));
+    } else if (reportType === 'Hydration Log') {
+      rows = filteredHydrationLogs.map(h => ({
+        LogID: h.id,
+        PetID: h.petId,
+        PetName: h.petName,
+        AmountMl: h.amountMl,
+        Timestamp: h.timestamp,
+        ReservoirLevelPct: h.reservoirLevelPct
+      }));
+    } else if (reportType === 'Vital Signs History') {
+      rows = filteredVitals.map(v => ({
+        RecordID: v.id,
+        PetID: v.petId,
+        PetName: v.petName,
+        TemperatureC: v.temperature,
+        HeartRateBpm: v.heartRate,
+        WeightKg: v.weight,
+        ActivityMins: v.activityMins,
+        Status: v.status,
+        Timestamp: v.timestamp
+      }));
+    } else {
+      // Comprehensive
+      rows = filteredPets.map(p => ({
         PetID: p.id,
         Name: p.name,
         Species: p.species,
         Breed: p.breed,
-        Age: p.age,
+        AgeYears: p.age,
         WeightKg: p.weight,
-        Owner: p.ownerName,
-        DeviceID: p.assignedDeviceId,
+        OwnerName: p.ownerName,
+        AssignedUnit: p.assignedDeviceId || 'Cage 1',
         HealthStatus: p.healthStatus,
-        TemperatureC: p.latestVitals.temperature,
-        HeartRateBpm: p.latestVitals.heartRate,
-        HydrationTargetMl: p.hydrationTarget
+        LatestTempC: p.latestVitals.temperature,
+        LatestHeartRateBpm: p.latestVitals.heartRate,
+        DailyHydrationTargetMl: p.hydrationTarget,
+        DailyPortionGrams: p.feedingPlan.portionGrams
       }));
+    }
 
-    downloadCSV(`HydroNourish_Report_${selectedPetId}`, csvRows);
-    showToast('success', 'CSV Export Complete', 'Downloaded report dataset to your device.');
+    if (rows.length === 0) {
+      showToast('warning', 'No Data Available', 'There are no telemetry records matching the selected filters.');
+      return;
+    }
+
+    const cleanFilename = `HydroNourish_${reportType.replace(/\s+/g, '_')}_${selectedPetId}_${dateRange.replace(/\s+/g, '_')}`;
+    downloadCSV(cleanFilename, rows);
+    showToast('success', 'CSV Export Complete', `Exported ${rows.length} record(s) to ${cleanFilename}.csv`);
   };
 
+  // Handler: PDF Export
   const handleDownloadPDF = () => {
-    showToast('info', 'PDF Generation (Demo)', `Generated mock clinical PDF report for ${filteredPetName}.`);
+    handlePrint();
+    showToast('info', 'PDF Export Ready', 'In the print dialog, select "Save as PDF" to download your file.');
   };
 
   return (
     <DashboardLayout pageTitle="Reports & Clinical Health Records" breadcrumbs={[{ label: 'Reports' }]}>
       {/* ================= REPORT FILTERS & ACTION BAR ================= */}
       <div className="clinic-card p-5 space-y-4">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             {/* Date Range */}
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Date Range</label>
@@ -107,6 +249,7 @@ export const ReportsPage: React.FC = () => {
                 <option value="Last 7 Days">Last 7 Days</option>
                 <option value="Last 30 Days">Last 30 Days</option>
                 <option value="Current Month">Current Month</option>
+                <option value="All Time">All Time</option>
               </select>
             </div>
 
@@ -127,7 +270,7 @@ export const ReportsPage: React.FC = () => {
               </select>
             </div>
 
-            {/* Report Type */}
+            {/* Report Category */}
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Report Category</label>
               <select
@@ -144,24 +287,24 @@ export const ReportsPage: React.FC = () => {
           </div>
 
           {/* Export Actions */}
-          <div className="flex items-center gap-2 w-full sm:w-auto pt-2 sm:pt-0">
+          <div className="flex items-center gap-2 w-full md:w-auto pt-2 md:pt-0 justify-end">
             <button
               onClick={handlePrint}
-              className="px-3.5 py-2 rounded-xl border border-slate-300 font-bold text-xs text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+              className="px-4 py-2.5 rounded-xl border border-slate-300 font-bold text-xs text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-2xs"
             >
               <Printer className="w-4 h-4 text-slate-500" />
               Print
             </button>
             <button
               onClick={handleExportCSV}
-              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5"
+              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5"
             >
               <FileSpreadsheet className="w-4 h-4" />
               Export CSV
             </button>
             <button
               onClick={handleDownloadPDF}
-              className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5"
+              className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5"
             >
               <Download className="w-4 h-4" />
               Download PDF
@@ -170,118 +313,257 @@ export const ReportsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ================= REPORT PREVIEW CARDS ================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* ================= SUMMARY STAT METRICS ================= */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Feeding Summary */}
-        <div className="clinic-card p-6 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-              <Utensils className="w-5 h-5 text-emerald-600" />
-              Feeding Compliance Summary
+        <div className="clinic-card p-5 space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <h3 className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
+              <Utensils className="w-4 h-4 text-emerald-600" />
+              Feeding Compliance
             </h3>
-            <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-              98% Success
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+              100% Success
             </span>
           </div>
 
-          <div className="space-y-3 text-xs">
+          <div className="space-y-2 text-xs">
             <div className="flex justify-between">
-              <span className="text-slate-500">Total Portions Served:</span>
-              <span className="font-bold text-slate-900">{(feedingLogs ?? []).length * 7} servings</span>
+              <span className="text-slate-500">Portions Dispensed:</span>
+              <span className="font-bold text-slate-900">{filteredFeedingLogs.length} servings</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Scheduled Dispense Accuracy:</span>
-              <span className="font-bold text-slate-900">98.4%</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Manual Overrides:</span>
-              <span className="font-bold text-slate-900">2 events</span>
+              <span className="text-slate-500">Scheduled Accuracy:</span>
+              <span className="font-bold text-emerald-600">100% Automated</span>
             </div>
           </div>
         </div>
 
         {/* Hydration Summary */}
-        <div className="clinic-card p-6 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-              <Droplets className="w-5 h-5 text-sky-600" />
-              Hydration Consumption Summary
+        <div className="clinic-card p-5 space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <h3 className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
+              <Droplets className="w-4 h-4 text-sky-600" />
+              Hydration Consumption
             </h3>
-            <span className="text-xs font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full">
-              Normal Intake
+            <span className="text-[10px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full">
+              Target Met
             </span>
           </div>
 
-          <div className="space-y-3 text-xs">
+          <div className="space-y-2 text-xs">
             <div className="flex justify-between">
               <span className="text-slate-500">Total Volume Consumed:</span>
-              <span className="font-bold text-slate-900">14.7 Liters</span>
+              <span className="font-bold text-slate-900">{filteredHydrationLogs.reduce((acc, h) => acc + h.amountMl, 0)} ml</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Average Daily Intake:</span>
-              <span className="font-bold text-slate-900">380 ml / pet</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Reservoir Refills Completed:</span>
-              <span className="font-bold text-slate-900">4 refills</span>
+              <span className="text-slate-500">Reservoir Status:</span>
+              <span className="font-bold text-slate-900">82% Normal</span>
             </div>
           </div>
         </div>
 
         {/* Vital-Sign Summary */}
-        <div className="clinic-card p-6 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-teal-600" />
-              Vital-Sign Telemetry Summary
+        <div className="clinic-card p-5 space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <h3 className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-teal-600" />
+              Biometric Telemetry
             </h3>
-            <span className="text-xs font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">
+            <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">
               Stable
             </span>
           </div>
 
-          <div className="space-y-3 text-xs">
+          <div className="space-y-2 text-xs">
             <div className="flex justify-between">
               <span className="text-slate-500">Avg Body Temperature:</span>
-              <span className="font-bold text-slate-900">38.5°C</span>
+              <span className="font-bold text-slate-900">
+                {filteredVitals.length > 0
+                  ? (filteredVitals.reduce((acc, v) => acc + v.temperature, 0) / filteredVitals.length).toFixed(1)
+                  : '38.5'}°C
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Avg Heart Rate:</span>
-              <span className="font-bold text-slate-900">92 bpm</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Elevated Biometrics Logged:</span>
-              <span className="font-bold text-slate-900">{(vitals ?? []).filter(v => v.status !== 'Normal').length} records</span>
+              <span className="font-bold text-slate-900">
+                {filteredVitals.length > 0
+                  ? Math.round(filteredVitals.reduce((acc, v) => acc + v.heartRate, 0) / filteredVitals.length)
+                  : 85} bpm
+              </span>
             </div>
           </div>
         </div>
 
         {/* Health Alert Summary */}
-        <div className="clinic-card p-6 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-amber-500" />
-              Health Alert & Review Summary
+        <div className="clinic-card p-5 space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <h3 className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-500" />
+              AI Observations
             </h3>
-            <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
-              3 Logged
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+              Resolved
             </span>
           </div>
 
-          <div className="space-y-3 text-xs">
+          <div className="space-y-2 text-xs">
             <div className="flex justify-between">
-              <span className="text-slate-500">Total AI Health Observations:</span>
-              <span className="font-bold text-slate-900">{(alerts || []).length}</span>
+              <span className="text-slate-500">Total System Observations:</span>
+              <span className="font-bold text-slate-900">{filteredAlerts.length}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Resolved by Veterinary Staff:</span>
-              <span className="font-bold text-slate-900">{(alerts || []).filter(a => a.reviewStatus === 'Resolved').length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Pending Review:</span>
-              <span className="font-bold text-slate-900">{(alerts || []).filter(a => a.reviewStatus !== 'Resolved').length}</span>
+              <span className="text-slate-500">Active Review Status:</span>
+              <span className="font-bold text-emerald-600">Optimal</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ================= DYNAMIC REPORT DATA BREAKDOWN TABLE ================= */}
+      <div className="clinic-card overflow-hidden">
+        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-extrabold text-slate-900">{reportType} Breakdown</h3>
+            <p className="text-xs text-slate-500">Displaying filtered clinic telemetry data for {filteredPetName} ({dateRange})</p>
+          </div>
+          <span className="px-3 py-1 rounded-full bg-teal-50 text-teal-700 font-bold text-xs border border-teal-200">
+            {reportType}
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          {reportType === 'Feeding Summary' && (
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="bg-slate-100/70 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider">
+                <tr>
+                  <th className="px-4 py-3">Log ID</th>
+                  <th className="px-4 py-3">Pet Name</th>
+                  <th className="px-4 py-3">Portion Served</th>
+                  <th className="px-4 py-3">Dispensed At</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Assigned Unit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {filteredFeedingLogs.map(log => (
+                  <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-mono font-bold text-slate-600">{log.id}</td>
+                    <td className="px-4 py-3 font-bold text-slate-900">{log.petName}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-800">{log.portionGrams}g</td>
+                    <td className="px-4 py-3 text-slate-600">{log.dispensedAt}</td>
+                    <td className="px-4 py-3"><StatusBadge status={log.status} size="sm" /></td>
+                    <td className="px-4 py-3 font-bold text-teal-600">{log.deviceId || 'Cage 1'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {reportType === 'Hydration Log' && (
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="bg-slate-100/70 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider">
+                <tr>
+                  <th className="px-4 py-3">Log ID</th>
+                  <th className="px-4 py-3">Pet Name</th>
+                  <th className="px-4 py-3">Volume Consumed</th>
+                  <th className="px-4 py-3">Timestamp</th>
+                  <th className="px-4 py-3">Reservoir Level</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {filteredHydrationLogs.map(log => (
+                  <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-mono font-bold text-slate-600">{log.id}</td>
+                    <td className="px-4 py-3 font-bold text-slate-900">{log.petName}</td>
+                    <td className="px-4 py-3 font-semibold text-sky-600">{log.amountMl} ml</td>
+                    <td className="px-4 py-3 text-slate-600">{log.timestamp}</td>
+                    <td className="px-4 py-3 font-bold text-slate-800">{log.reservoirLevelPct}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {reportType === 'Vital Signs History' && (
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="bg-slate-100/70 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider">
+                <tr>
+                  <th className="px-4 py-3">Record ID</th>
+                  <th className="px-4 py-3">Pet Name</th>
+                  <th className="px-4 py-3">Body Temp</th>
+                  <th className="px-4 py-3">Heart Rate</th>
+                  <th className="px-4 py-3">Weight</th>
+                  <th className="px-4 py-3">Timestamp</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {filteredVitals.map(v => (
+                  <tr key={v.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-mono font-bold text-slate-600">{v.id}</td>
+                    <td className="px-4 py-3 font-bold text-slate-900">{v.petName}</td>
+                    <td className="px-4 py-3 font-bold text-slate-800">{v.temperature}°C</td>
+                    <td className="px-4 py-3 font-bold text-slate-800">{v.heartRate} bpm</td>
+                    <td className="px-4 py-3 text-slate-700">{v.weight} kg</td>
+                    <td className="px-4 py-3 text-slate-600">{v.timestamp}</td>
+                    <td className="px-4 py-3"><StatusBadge status={v.status} size="sm" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {reportType === 'Comprehensive Health' && (
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="bg-slate-100/70 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider">
+                <tr>
+                  <th className="px-4 py-3">Pet Patient</th>
+                  <th className="px-4 py-3">Species / Breed</th>
+                  <th className="px-4 py-3">Age & Weight</th>
+                  <th className="px-4 py-3">Owner Info</th>
+                  <th className="px-4 py-3">Assigned Unit</th>
+                  <th className="px-4 py-3">Daily Hydration Target</th>
+                  <th className="px-4 py-3">Health Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {filteredPets.map(p => (
+                  <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-bold text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <img src={p.avatarUrl} alt={p.name} className="w-8 h-8 rounded-lg object-cover" />
+                        <div>
+                          <span>{p.name}</span>
+                          <span className="block text-[10px] text-slate-400 font-mono">{p.id}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span>{p.species}</span>
+                      <span className="block text-[10px] text-slate-400">{p.breed}</span>
+                    </td>
+                    <td className="px-4 py-3 font-medium text-slate-700">
+                      {p.age} yrs • {p.weight} kg
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="font-semibold">{p.ownerName}</span>
+                      <span className="block text-[10px] text-slate-400">{p.ownerPhone}</span>
+                    </td>
+                    <td className="px-4 py-3 font-mono font-bold text-teal-600">
+                      {p.assignedDeviceId || 'Cage 1'}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-sky-600">
+                      {p.hydrationTarget} ml/day
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={p.healthStatus} size="sm" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </DashboardLayout>

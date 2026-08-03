@@ -31,7 +31,7 @@ export const FeedingPage: React.FC = () => {
     foodType: 'High-Protein Kibble',
     portionGrams: 100,
     scheduledTime: '08:00 AM',
-    deviceId: devices[0]?.id || 'HN-DEV-0101'
+    deviceId: devices[0]?.id || 'Cage 1'
   });
 
   const handleOpenDispenseConfirm = (schedule: FeedingSchedule) => {
@@ -132,8 +132,8 @@ export const FeedingPage: React.FC = () => {
                   <th className="px-4 py-3">Portion Size</th>
                   <th className="px-4 py-3">Scheduled Time</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Device Used</th>
-                  <th className="px-4 py-3 text-right">Instant Action</th>
+                  <th className="px-4 py-3">Device Node</th>
+                  <th className="px-4 py-3 text-right">Dispense Mode</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
@@ -146,15 +146,12 @@ export const FeedingPage: React.FC = () => {
                     <td className="px-4 py-3">
                       <StatusBadge status={sch.dispenseStatus} size="sm" />
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-500">{sch.deviceId}</td>
+                    <td className="px-4 py-3 font-mono font-bold text-teal-600">{sch.deviceId}</td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleOpenDispenseConfirm(sch)}
-                        className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 font-bold transition-colors inline-flex items-center gap-1.5"
-                      >
-                        <Play className="w-3 h-3 fill-teal-700" />
-                        Dispense Now
-                      </button>
+                      <span className="px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 font-bold text-[11px] inline-flex items-center gap-1.5 border border-teal-200/60">
+                        <Cpu className="w-3 h-3 text-teal-600" />
+                        Automated Smart Dispense
+                      </span>
                     </td>
                   </tr>
                 ))}

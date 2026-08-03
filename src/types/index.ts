@@ -4,6 +4,11 @@ export type AlertSeverity = 'Info' | 'Warning' | 'Critical';
 export type ReviewStatus = 'Unreviewed' | 'In Review' | 'Resolved';
 export type UserRole = 'Super Admin' | 'Administrator' | 'Veterinarian' | 'Clinic Staff';
 
+// ─── New Session Workflow Status Types ────────────────────────────────────
+export type HardwareStatus = 'available' | 'occupied' | 'offline' | 'maintenance';
+export type PetSessionStatus = 'active' | 'completed' | 'cancelled';
+export type UserAccessStatus = 'active' | 'inactive' | 'archived';
+
 export interface Pet {
   id: string;
   name: string;
@@ -11,8 +16,10 @@ export interface Pet {
   breed: string;
   age: number; // in years
   weight: number; // in kg
+  sex?: 'Male' | 'Female';
   ownerName: string;
   ownerPhone: string;
+  ownerId?: string; // reference to PetOwner
   clinicRef: string;
   assignedDeviceId: string;
   healthStatus: HealthStatus;
@@ -29,6 +36,7 @@ export interface Pet {
     activityLevel: 'Low' | 'Normal' | 'High';
     lastMeasured: string;
   };
+  emergencyContact?: string;
   notes: string;
 }
 
@@ -52,6 +60,7 @@ export interface FeedingLog {
   dispensedAt: string;
   status: 'Success' | 'Manual Override' | 'Skipped';
   deviceId: string;
+  sessionId?: string;
 }
 
 export interface HydrationLog {
@@ -61,6 +70,7 @@ export interface HydrationLog {
   amountMl: number;
   timestamp: string;
   reservoirLevelPct: number;
+  sessionId?: string;
 }
 
 export interface VitalSignRecord {
@@ -73,6 +83,7 @@ export interface VitalSignRecord {
   activityMins: number;
   status: 'Normal' | 'Warning' | 'Critical';
   timestamp: string;
+  sessionId?: string;
 }
 
 export interface AIHealthAlert {
@@ -86,13 +97,16 @@ export interface AIHealthAlert {
   recommendedAction: string;
   timestamp: string;
   reviewStatus: ReviewStatus;
+  sessionId?: string;
 }
 
 export interface Device {
   id: string;
+  deviceName: string;
   assignedPetId: string;
   assignedPetName: string;
   status: DeviceStatus;
+  hardwareStatus: HardwareStatus;
   wifiSignalDbm: number;
   foodLevelPct: number;
   waterLevelPct: number;
@@ -143,4 +157,117 @@ export interface ToastMessage {
   type: 'success' | 'error' | 'info' | 'warning';
   title: string;
   message: string;
+}
+
+// ─── Pet Owner (for session-based temporary access) ───────────────────────
+
+export interface PetOwner {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  accessStatus: UserAccessStatus;
+  petIds: string[];
+  currentSessionId: string | null;
+  dateCreated: string;
+  lastLogin: string | null;
+  avatarUrl?: string;
+  address?: string;
+  notes?: string;
+}
+
+// ─── Pet Monitoring Session ───────────────────────────────────────────────
+
+export interface PetSession {
+  id: string;
+  petId: string;
+  petName: string;
+  petSpecies: string;
+  petBreed: string;
+  petAvatarUrl: string;
+  ownerId: string;
+  ownerName: string;
+  ownerEmail: string;
+  deviceId: string;
+  status: PetSessionStatus;
+  admissionDate: string;
+  expectedReleaseDate: string;
+  startTime: string;
+  releaseTime: string | null;
+  releaseCondition: string | null;
+  finalNotes: string | null;
+  cancelledReason: string | null;
+  completedBy: string | null;
+  emergencyContact: string;
+  feedingRecordCount: number;
+  hydrationRecordCount: number;
+  vitalSignRecordCount: number;
+  alertCount: number;
+  notes: string;
+  // Snapshot of pet data at admission time
+  petSnapshot: {
+    weight: number;
+    age: number;
+    feedingPlan: Pet['feedingPlan'];
+    hydrationTarget: number;
+    healthStatus: HealthStatus;
+  };
+}
+
+// ─── Activity Log ─────────────────────────────────────────────────────────
+
+export type ActivityAction =
+  | 'created_owner'
+  | 'registered_pet'
+  | 'assigned_hardware'
+  | 'started_session'
+  | 'completed_session'
+  | 'cancelled_session'
+  | 'deactivated_owner'
+  | 'archived_account'
+  | 'reactivated_account'
+  | 'changed_hardware_status'
+  | 'feeding_completed'
+  | 'water_level_low'
+  | 'food_level_low'
+  | 'abnormal_vital'
+  | 'device_disconnected';
+
+export interface ActivityLog {
+  id: string;
+  adminName: string;
+  action: ActivityAction;
+  ownerName: string | null;
+  petName: string | null;
+  sessionId: string | null;
+  timestamp: string;
+  result: 'success' | 'failed' | 'warning';
+  details?: string;
+}
+
+// ─── System Notification ──────────────────────────────────────────────────
+
+export type NotificationType =
+  | 'pet_assigned'
+  | 'session_started'
+  | 'feeding_completed'
+  | 'water_level_low'
+  | 'food_level_low'
+  | 'abnormal_vital'
+  | 'device_disconnected'
+  | 'session_completed'
+  | 'owner_deactivated'
+  | 'hardware_available'
+  | 'hardware_maintenance';
+
+export interface SystemNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  sessionId?: string;
+  petName?: string;
+  severity: 'info' | 'success' | 'warning' | 'critical';
 }

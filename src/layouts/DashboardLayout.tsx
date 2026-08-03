@@ -38,6 +38,7 @@ import {
   ShieldCheck,
   Sparkles,
   Zap,
+  ClipboardList,
 } from 'lucide-react';
 import { AIAssistantModal } from '../components/AIAssistantModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -110,6 +111,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // ─── Navigation Items ─────────────────────────────────────────────────
   const adminGroup = [
     { label: 'Dashboard', path: '/app', icon: Home, color: 'text-blue-600' },
+    { label: 'Session History', path: '/app/sessions', icon: ClipboardList, color: 'text-violet-600' },
     { label: 'Users', path: '/app/users', icon: Users, color: 'text-emerald-600' },
     { label: 'Reports', path: '/app/reports', icon: FileText, color: 'text-purple-600' },
     { label: 'Settings', path: '/app/settings', icon: Settings, color: 'text-slate-600' },
@@ -119,7 +121,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     { label: 'Pets', path: '/app/pets', icon: Dog, color: 'text-amber-600' },
     { label: 'Feeding', path: '/app/feeding', icon: Utensils, color: 'text-orange-600' },
     { label: 'Hydration', path: '/app/hydration', icon: Droplets, color: 'text-sky-600' },
-    { label: 'Vital Signs', path: '/app/vitals', icon: Activity, color: 'text-rose-600' },
   ];
 
   const automatedSubItems = [
@@ -131,12 +132,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       badge: unreviewedAlertsCount,
     },
     { label: 'Smart Devices', path: '/app/devices', icon: Cpu, color: 'text-teal-600' },
-    {
-      label: 'System Analytics',
-      path: '/app/vitals',
-      icon: Activity,
-      color: 'text-rose-500',
-    },
     {
       label: 'Clinic Settings',
       path: '/app/settings',
@@ -150,16 +145,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     isSubItem = false
   ) => {
     const Icon = item.icon;
-    const isActive =
-      location.pathname === item.path ||
-      (item.path !== '/app' && location.pathname.startsWith(item.path));
+    const isDashboard = item.path === '/app';
+    const active = isDashboard
+      ? location.pathname === '/app' || location.pathname === '/app/' || location.pathname === '/admin/dashboard'
+      : location.pathname === item.path || location.pathname.startsWith(item.path + '/');
 
     return (
       <NavLink
         key={item.path + item.label}
         to={item.path}
-        className={({ isActive: linkActive }) => {
-          const active = linkActive || isActive;
+        end={isDashboard}
+        className={() => {
           return `flex items-center gap-3 ${isSubItem ? 'px-3.5 py-2 text-xs' : 'px-3 py-2.5 text-xs'} font-semibold rounded-xl transition-all group relative ${
             active
               ? 'bg-teal-50/90 text-teal-900 border border-teal-200/80 shadow-xs font-bold'

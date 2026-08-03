@@ -60,8 +60,10 @@ export const DevicesPage: React.FC = () => {
     e.preventDefault();
     const pet = pets.find(p => p.id === formData.petId) || pets[0];
     addDevice({
+      deviceName: `HydroNourish Node ${formData.macAddress.slice(-5)}`,
       assignedPetId: pet.id,
       assignedPetName: pet.name,
+      hardwareStatus: 'available',
       wifiSignalDbm: formData.wifiSignalDbm,
       foodLevelPct: formData.foodLevelPct,
       waterLevelPct: formData.waterLevelPct,

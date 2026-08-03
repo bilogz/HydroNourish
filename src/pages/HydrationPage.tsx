@@ -29,7 +29,7 @@ export const HydrationPage: React.FC = () => {
   const { devices, hydrationLogs, refillWater } = useAppContext();
 
   const [confirmRefillOpen, setConfirmRefillOpen] = useState(false);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>((devices ?? [])[0]?.id || 'HN-DEV-0101');
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>((devices ?? [])[0]?.id || 'Cage 1');
 
   const selectedDevice = (devices ?? []).find(d => d.id === selectedDeviceId) ?? (devices ?? [])[0];
 

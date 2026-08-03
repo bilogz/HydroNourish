@@ -153,46 +153,46 @@ export const PetProfilePage: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="clinic-card p-5 space-y-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-            <Thermometer className="w-3.5 h-3.5 text-rose-500" />
-            Body Temperature
+            <Cpu className="w-3.5 h-3.5 text-teal-600" />
+            Assigned Smart Cage
           </span>
-          <div className="text-xl font-extrabold text-slate-900">
-            {formatTemperature(pet.latestVitals.temperature)}
+          <div className="text-xl font-extrabold text-teal-600">
+            {pet.assignedDeviceId || 'Unassigned'}
           </div>
-          <p className="text-[11px] text-slate-500">Normal Range: 38.0 - 39.2°C</p>
+          <p className="text-[11px] text-slate-500">Automated Feeder & Hydrator Node</p>
         </div>
 
         <div className="clinic-card p-5 space-y-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-            <Heart className="w-3.5 h-3.5 text-rose-500" />
-            Resting Heart Rate
+            <Utensils className="w-3.5 h-3.5 text-emerald-600" />
+            Food Hopper Level
           </span>
           <div className="text-xl font-extrabold text-slate-900">
-            {formatHeartRate(pet.latestVitals.heartRate)}
+            {assignedDevice ? `${assignedDevice.foodLevelPct}%` : '80%'}
           </div>
-          <p className="text-[11px] text-slate-500">Normal Range: 70 - 120 bpm</p>
+          <p className="text-[11px] text-slate-500">Automated timed kibble dispenser</p>
         </div>
 
         <div className="clinic-card p-5 space-y-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-            <Weight className="w-3.5 h-3.5 text-teal-600" />
+            <Droplets className="w-3.5 h-3.5 text-sky-600" />
+            Water Reservoir Level
+          </span>
+          <div className="text-xl font-extrabold text-slate-900">
+            {assignedDevice ? `${assignedDevice.waterLevelPct}%` : '85%'}
+          </div>
+          <p className="text-[11px] text-slate-500">Filtered fountain reservoir</p>
+        </div>
+
+        <div className="clinic-card p-5 space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+            <Weight className="w-3.5 h-3.5 text-indigo-600" />
             Current Weight
           </span>
           <div className="text-xl font-extrabold text-slate-900">
             {formatWeight(pet.weight)}
           </div>
           <p className="text-[11px] text-slate-500">Target Weight: {formatWeight(pet.weight)}</p>
-        </div>
-
-        <div className="clinic-card p-5 space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-            <Activity className="w-3.5 h-3.5 text-indigo-600" />
-            Daily Activity
-          </span>
-          <div className="text-xl font-extrabold text-slate-900">
-            {pet.latestVitals.activityLevel} Activity
-          </div>
-          <p className="text-[11px] text-slate-500">Sensor node collar log</p>
         </div>
       </div>
 
@@ -203,15 +203,15 @@ export const PetProfilePage: React.FC = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Cpu className="w-4 h-4 text-teal-600" />
-              Assigned Smart Device Node
+              Assigned Smart Cage Node
             </h3>
             {assignedDevice && <StatusBadge status={assignedDevice.status} size="sm" />}
           </div>
           {assignedDevice ? (
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-2">
               <div className="flex justify-between">
-                <span className="text-slate-500">Node ID:</span>
-                <span className="font-mono font-bold text-slate-900">{assignedDevice.id}</span>
+                <span className="text-slate-500">Cage Unit:</span>
+                <span className="font-mono font-bold text-teal-600">{assignedDevice.id}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Firmware:</span>
@@ -279,15 +279,15 @@ export const PetProfilePage: React.FC = () => {
       {/* ================= CHARTS SECTION ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7">
-          <ChartCard title="Vital Sign Telemetry Trend" subtitle="Temperature (°C) & Heart Rate (bpm)">
+          <ChartCard title="Automated Dispense & Consumption Telemetry" subtitle="Food Served (g) & Water Consumed (ml)">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={vitalTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
                 <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', fontSize: '12px' }} />
-                <Line type="monotone" dataKey="temp" name="Temperature (°C)" stroke="#0d9488" strokeWidth={2.5} />
-                <Line type="monotone" dataKey="hr" name="Heart Rate (bpm)" stroke="#0284c7" strokeWidth={2} strokeDasharray="3 3" />
+                <Line type="monotone" dataKey="temp" name="Food Dispensed (g)" stroke="#0d9488" strokeWidth={2.5} />
+                <Line type="monotone" dataKey="hr" name="Water Intake (ml/10)" stroke="#0284c7" strokeWidth={2} strokeDasharray="3 3" />
               </LineChart>
             </ResponsiveContainer>
           </ChartCard>
