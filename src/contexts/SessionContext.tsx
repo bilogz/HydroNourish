@@ -2,15 +2,8 @@
  * HydroNourish — Session Context
  * Heritage Animal Clinic Capstone Project
  *
- * Central state management for the single-device pet monitoring workflow.
- * Enforces the one-active-session-at-a-time business rule.
- *
- * Responsibilities:
- *  - Manage active session lifecycle (assign → monitor → complete/cancel)
- *  - Manage pet owners and their access status
- *  - Manage the single hardware device state
- *  - Track activity logs and system notifications
- *  - Persist session data in localStorage for the frontend-only demo
+ * Central state management for single-device pet monitoring sessions and pet owners,
+ * integrated dynamically with Supabase PostgreSQL and real-time database channels.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
@@ -36,7 +29,18 @@ import {
   initialNotifications,
 } from '../data/mockData';
 
-// ─── Helper: localStorage with fallback ───────────────────────────────────
+import {
+  fetchOwnersFromSupabase,
+  insertOwnerToSupabase,
+  updateOwnerInSupabase,
+  deleteOwnerFromSupabase,
+  fetchSessionsFromSupabase,
+  insertSessionToSupabase,
+  updateSessionInSupabase,
+  fetchDevicesFromSupabase,
+  updateDeviceInSupabase,
+  subscribeToSupabaseRealtime,
+} from '../services/supabase';
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
@@ -50,15 +54,10 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 function saveToStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Ignore storage errors
-  }
+  } catch {}
 }
 
-// ─── Context Type ─────────────────────────────────────────────────────────
-
 interface SessionContextType {
-  // State
   activeSession: PetSession | null;
   sessions: PetSession[];
   owners: PetOwner[];
@@ -66,7 +65,6 @@ interface SessionContextType {
   activityLogs: ActivityLog[];
   notifications: SystemNotification[];
 
-  // Session lifecycle
   canAssignPet: () => boolean;
   assignPetAndOwner: (pet: Pet, ownerId: string, sessionData: {
     admissionDate: string;
@@ -81,7 +79,6 @@ interface SessionContextType {
   }, adminName: string) => { success: boolean; error: string | null };
   cancelSession: (reason: string, adminName: string) => { success: boolean; error: string | null };
 
-  // Owner management
   addOwner: (owner: Omit<PetOwner, 'id' | 'dateCreated' | 'currentSessionId' | 'accessStatus' | 'lastLogin'>) => PetOwner;
   updateOwner: (id: string, data: Partial<PetOwner>) => void;
   deactivateOwner: (id: string, adminName: string) => void;
@@ -89,16 +86,13 @@ interface SessionContextType {
   archiveOwner: (id: string, adminName: string) => void;
   deleteOwnerPermanent: (id: string, adminName: string) => { success: boolean; error: string | null };
 
-  // Hardware management
   changeHardwareStatus: (status: HardwareStatus, adminName: string) => void;
 
-  // Notifications
   addNotification: (type: NotificationType, title: string, message: string, severity: SystemNotification['severity'], extra?: Partial<SystemNotification>) => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   unreadNotificationCount: number;
 
-  // Session history helpers
   getSessionsByStatus: (status: PetSessionStatus) => PetSession[];
   getSessionsByOwner: (ownerId: string) => PetSession[];
   getSessionsByPet: (petId: string) => PetSession[];
@@ -108,10 +102,7 @@ interface SessionContextType {
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
-// ─── Provider ─────────────────────────────────────────────────────────────
-
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // ─── State ─────────────────────────────────────────────────────────────
   const [sessions, setSessions] = useState<PetSession[]>(() =>
     loadFromStorage('hn_sessions', initialSessions)
   );
@@ -128,17 +119,55 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     loadFromStorage('hn_notifications', initialNotifications)
   );
 
-  // Derived: active session
   const activeSession = sessions.find(s => s.status === 'active') ?? null;
 
-  // ─── Persist to localStorage ──────────────────────────────────────────
+  // ─── Supabase Initial Sync ───────────────────────────────────────────
+  useEffect(() => {
+    async function syncSessionData() {
+      try {
+        const [remoteOwners, remoteSessions, remoteDevices] = await Promise.all([
+          fetchOwnersFromSupabase(),
+          fetchSessionsFromSupabase(),
+          fetchDevicesFromSupabase(),
+        ]);
+
+        if (remoteOwners && remoteOwners.length > 0) setOwners(remoteOwners);
+        if (remoteSessions && remoteSessions.length > 0) setSessions(remoteSessions);
+        if (remoteDevices && remoteDevices.length > 0) setHardware(remoteDevices[0]);
+      } catch (err) {
+        if (import.meta.env.DEV) console.warn('[HydroNourish] SessionContext sync notice.');
+      }
+    }
+
+    syncSessionData();
+  }, []);
+
+  // ─── Realtime Subscriptions ──────────────────────────────────────────
+  useEffect(() => {
+    const unsubscribe = subscribeToSupabaseRealtime(async (tableName) => {
+      if (tableName === 'pet_owners') {
+        const data = await fetchOwnersFromSupabase();
+        if (data) setOwners(data);
+      } else if (tableName === 'pet_sessions') {
+        const data = await fetchSessionsFromSupabase();
+        if (data) setSessions(data);
+      } else if (tableName === 'devices') {
+        const data = await fetchDevicesFromSupabase();
+        if (data && data.length > 0) setHardware(data[0]);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // ─── Storage Persistence ─────────────────────────────────────────────
   useEffect(() => { saveToStorage('hn_sessions', sessions); }, [sessions]);
   useEffect(() => { saveToStorage('hn_owners', owners); }, [owners]);
   useEffect(() => { saveToStorage('hn_hardware', hardware); }, [hardware]);
   useEffect(() => { saveToStorage('hn_activity_logs', activityLogs); }, [activityLogs]);
   useEffect(() => { saveToStorage('hn_notifications', notifications); }, [notifications]);
 
-  // ─── Activity Log Helper ──────────────────────────────────────────────
+  // ─── Log & Notification Helpers ─────────────────────────────────────
   const addLog = useCallback((
     adminName: string,
     action: ActivityAction,
@@ -162,7 +191,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setActivityLogs(prev => [newLog, ...prev]);
   }, []);
 
-  // ─── Notification Helper ──────────────────────────────────────────────
   const addNotification = useCallback((
     type: NotificationType,
     title: string,
@@ -194,7 +222,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const unreadNotificationCount = notifications.filter(n => !n.read).length;
 
   // ─── Session Lifecycle ────────────────────────────────────────────────
-
   const canAssignPet = useCallback((): boolean => {
     return !activeSession && (hardware.hardwareStatus === 'available');
   }, [activeSession, hardware.hardwareStatus]);
@@ -210,11 +237,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     },
     adminName: string
   ): { success: boolean; error: string | null } => {
-    // Enforce one-active-session rule
     if (activeSession) {
       return {
         success: false,
-        error: 'The HydroNourish hardware is currently assigned to another pet. Complete or cancel the existing session before assigning a new pet.'
+        error: 'The HydroNourish hardware is currently assigned to another pet. Complete or cancel the existing session first.'
       };
     }
 
@@ -226,14 +252,11 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     const owner = owners.find(o => o.id === ownerId);
-    if (!owner) {
-      return { success: false, error: 'Owner not found.' };
-    }
+    if (!owner) return { success: false, error: 'Owner not found.' };
 
     const now = new Date().toISOString();
     const sessionId = `SES-${Date.now().toString().slice(-6)}`;
 
-    // Create new session
     const newSession: PetSession = {
       id: sessionId,
       petId: pet.id,
@@ -271,7 +294,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setSessions(prev => [newSession, ...prev]);
 
-    // Set hardware to occupied
     setHardware(prev => ({
       ...prev,
       hardwareStatus: 'occupied' as HardwareStatus,
@@ -279,18 +301,19 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       assignedPetName: pet.name,
     }));
 
-    // Set owner access to active
     setOwners(prev => prev.map(o =>
       o.id === ownerId
         ? { ...o, accessStatus: 'active' as UserAccessStatus, currentSessionId: sessionId, lastLogin: now }
         : o
     ));
 
-    addLog(adminName, 'started_session', owner.name, pet.name, sessionId, 'success', `Assigned to ${hardware.id}`);
-    addLog(adminName, 'assigned_hardware', owner.name, pet.name, sessionId, 'success', hardware.id);
+    // Database persistence
+    insertSessionToSupabase(newSession);
+    updateDeviceInSupabase(hardware.id, { hardwareStatus: 'occupied', assignedPetId: pet.id, assignedPetName: pet.name });
+    updateOwnerInSupabase(ownerId, { accessStatus: 'active', currentSessionId: sessionId, lastLogin: now });
 
-    addNotification('pet_assigned', 'Pet Assigned', `${pet.name} has been assigned to HydroNourish Station Alpha.`, 'success', { petName: pet.name, sessionId });
-    addNotification('session_started', 'Session Started', `Monitoring session started for ${pet.name} (Owner: ${owner.name}).`, 'info', { petName: pet.name, sessionId });
+    addLog(adminName, 'started_session', owner.name, pet.name, sessionId, 'success', `Assigned to ${hardware.id}`);
+    addNotification('pet_assigned', 'Pet Assigned', `${pet.name} assigned to ${hardware.deviceName || hardware.id}.`, 'success', { petName: pet.name, sessionId });
 
     return { success: true, error: null };
   }, [activeSession, hardware, owners, addLog, addNotification]);
@@ -303,13 +326,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     },
     adminName: string
   ): { success: boolean; error: string | null } => {
-    if (!activeSession) {
-      return { success: false, error: 'No active session to complete.' };
-    }
+    if (!activeSession) return { success: false, error: 'No active session to complete.' };
 
     const now = releaseData.releaseTime || new Date().toISOString();
 
-    // Update session status to completed
     setSessions(prev => prev.map(s =>
       s.id === activeSession.id
         ? {
@@ -323,7 +343,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         : s
     ));
 
-    // Release hardware
     setHardware(prev => ({
       ...prev,
       hardwareStatus: 'available' as HardwareStatus,
@@ -331,46 +350,45 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       assignedPetName: '',
     }));
 
-    // Deactivate owner access
     setOwners(prev => prev.map(o =>
       o.id === activeSession.ownerId
         ? { ...o, accessStatus: 'inactive' as UserAccessStatus, currentSessionId: null }
         : o
     ));
 
-    addLog(adminName, 'completed_session', activeSession.ownerName, activeSession.petName, activeSession.id, 'success', releaseData.releaseCondition);
-    addLog(adminName, 'deactivated_owner', activeSession.ownerName, null, null, 'success');
+    // Database persistence
+    updateSessionInSupabase(activeSession.id, {
+      status: 'completed',
+      actualReleaseDate: now,
+      releaseCondition: releaseData.releaseCondition,
+      releaseNotes: releaseData.finalNotes,
+      releaseAdmin: adminName,
+    });
+    updateDeviceInSupabase(hardware.id, { hardwareStatus: 'available', assignedPetId: '', assignedPetName: '' });
+    if (activeSession.ownerId) {
+      updateOwnerInSupabase(activeSession.ownerId, { accessStatus: 'inactive', currentSessionId: null });
+    }
 
-    addNotification('session_completed', 'Session Completed', `${activeSession.petName}'s monitoring session has been completed. Records archived.`, 'success', { petName: activeSession.petName, sessionId: activeSession.id });
-    addNotification('owner_deactivated', 'Owner Access Deactivated', `${activeSession.ownerName}'s temporary monitoring access has been deactivated.`, 'info');
-    addNotification('hardware_available', 'Hardware Available', 'HydroNourish Station Alpha is now available for assignment.', 'info');
+    addLog(adminName, 'completed_session', activeSession.ownerName, activeSession.petName, activeSession.id, 'success', releaseData.releaseCondition);
+    addNotification('session_completed', 'Session Completed', `${activeSession.petName}'s monitoring session completed.`, 'success', { petName: activeSession.petName, sessionId: activeSession.id });
 
     return { success: true, error: null };
-  }, [activeSession, addLog, addNotification]);
+  }, [activeSession, hardware.id, addLog, addNotification]);
 
   const cancelSession = useCallback((
     reason: string,
     adminName: string
   ): { success: boolean; error: string | null } => {
-    if (!activeSession) {
-      return { success: false, error: 'No active session to cancel.' };
-    }
+    if (!activeSession) return { success: false, error: 'No active session to cancel.' };
 
     const now = new Date().toISOString();
 
-    // Update session status to cancelled
     setSessions(prev => prev.map(s =>
       s.id === activeSession.id
-        ? {
-            ...s,
-            status: 'cancelled' as PetSessionStatus,
-            releaseTime: now,
-            cancelledReason: reason,
-          }
+        ? { ...s, status: 'cancelled' as PetSessionStatus, releaseTime: now, cancelledReason: reason }
         : s
     ));
 
-    // Release hardware
     setHardware(prev => ({
       ...prev,
       hardwareStatus: 'available' as HardwareStatus,
@@ -378,22 +396,26 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       assignedPetName: '',
     }));
 
-    // Deactivate owner access
     setOwners(prev => prev.map(o =>
       o.id === activeSession.ownerId
         ? { ...o, accessStatus: 'inactive' as UserAccessStatus, currentSessionId: null }
         : o
     ));
 
-    addLog(adminName, 'cancelled_session', activeSession.ownerName, activeSession.petName, activeSession.id, 'success', reason);
+    // Database persistence
+    updateSessionInSupabase(activeSession.id, { status: 'cancelled', actualReleaseDate: now, releaseNotes: reason });
+    updateDeviceInSupabase(hardware.id, { hardwareStatus: 'available', assignedPetId: '', assignedPetName: '' });
+    if (activeSession.ownerId) {
+      updateOwnerInSupabase(activeSession.ownerId, { accessStatus: 'inactive', currentSessionId: null });
+    }
 
-    addNotification('hardware_available', 'Session Cancelled', `${activeSession.petName}'s session was cancelled. Hardware is now available.`, 'warning', { petName: activeSession.petName, sessionId: activeSession.id });
+    addLog(adminName, 'cancelled_session', activeSession.ownerName, activeSession.petName, activeSession.id, 'success', reason);
+    addNotification('hardware_available', 'Session Cancelled', `${activeSession.petName}'s session cancelled.`, 'warning');
 
     return { success: true, error: null };
-  }, [activeSession, addLog, addNotification]);
+  }, [activeSession, hardware.id, addLog, addNotification]);
 
   // ─── Owner Management ─────────────────────────────────────────────────
-
   const addOwner = useCallback((
     ownerData: Omit<PetOwner, 'id' | 'dateCreated' | 'currentSessionId' | 'accessStatus' | 'lastLogin'>
   ): PetOwner => {
@@ -407,37 +429,36 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       lastLogin: null,
     };
     setOwners(prev => [newOwner, ...prev]);
+    insertOwnerToSupabase(newOwner);
     return newOwner;
   }, [owners.length]);
 
   const updateOwner = useCallback((id: string, data: Partial<PetOwner>) => {
     setOwners(prev => prev.map(o => o.id === id ? { ...o, ...data } : o));
+    updateOwnerInSupabase(id, data);
   }, []);
 
   const deactivateOwner = useCallback((id: string, adminName: string) => {
     const owner = owners.find(o => o.id === id);
     if (!owner) return;
-    setOwners(prev => prev.map(o =>
-      o.id === id ? { ...o, accessStatus: 'inactive' as UserAccessStatus } : o
-    ));
+    setOwners(prev => prev.map(o => o.id === id ? { ...o, accessStatus: 'inactive' as UserAccessStatus } : o));
+    updateOwnerInSupabase(id, { accessStatus: 'inactive' });
     addLog(adminName, 'deactivated_owner', owner.name, null, null, 'success');
   }, [owners, addLog]);
 
   const reactivateOwner = useCallback((id: string, adminName: string) => {
     const owner = owners.find(o => o.id === id);
     if (!owner) return;
-    setOwners(prev => prev.map(o =>
-      o.id === id ? { ...o, accessStatus: 'inactive' as UserAccessStatus } : o
-    ));
+    setOwners(prev => prev.map(o => o.id === id ? { ...o, accessStatus: 'inactive' as UserAccessStatus } : o));
+    updateOwnerInSupabase(id, { accessStatus: 'inactive' });
     addLog(adminName, 'reactivated_account', owner.name, null, null, 'success');
   }, [owners, addLog]);
 
   const archiveOwner = useCallback((id: string, adminName: string) => {
     const owner = owners.find(o => o.id === id);
     if (!owner) return;
-    setOwners(prev => prev.map(o =>
-      o.id === id ? { ...o, accessStatus: 'archived' as UserAccessStatus } : o
-    ));
+    setOwners(prev => prev.map(o => o.id === id ? { ...o, accessStatus: 'archived' as UserAccessStatus } : o));
+    updateOwnerInSupabase(id, { accessStatus: 'archived' });
     addLog(adminName, 'archived_account', owner.name, null, null, 'success');
   }, [owners, addLog]);
 
@@ -445,35 +466,25 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const owner = owners.find(o => o.id === id);
     if (!owner) return { success: false, error: 'Owner not found.' };
 
-    // Cannot delete owner with active session
     if (owner.currentSessionId && activeSession?.ownerId === id) {
-      return { success: false, error: 'Cannot permanently delete an owner with an active monitoring session. Complete or cancel the session first.' };
+      return { success: false, error: 'Cannot delete owner with active monitoring session.' };
     }
 
     setOwners(prev => prev.filter(o => o.id !== id));
+    deleteOwnerFromSupabase(id);
     addLog(adminName, 'deactivated_owner', owner.name, null, null, 'warning', 'Permanent deletion');
     return { success: true, error: null };
   }, [owners, activeSession, addLog]);
 
   // ─── Hardware Management ──────────────────────────────────────────────
-
   const changeHardwareStatus = useCallback((status: HardwareStatus, adminName: string) => {
-    if (activeSession && status !== 'occupied') {
-      // Can't change hardware status while a session is active (except occupied which it already is)
-      return;
-    }
+    if (activeSession && status !== 'occupied') return;
     setHardware(prev => ({ ...prev, hardwareStatus: status }));
+    updateDeviceInSupabase(hardware.id, { hardwareStatus: status });
     addLog(adminName, 'changed_hardware_status', null, null, null, 'success', `Status changed to ${status}`);
-
-    if (status === 'maintenance') {
-      addNotification('hardware_maintenance', 'Hardware Maintenance', 'HydroNourish Station Alpha has been placed under maintenance.', 'warning');
-    } else if (status === 'available') {
-      addNotification('hardware_available', 'Hardware Available', 'HydroNourish Station Alpha is now available for assignment.', 'info');
-    }
-  }, [activeSession, addLog, addNotification]);
+  }, [activeSession, hardware.id, addLog]);
 
   // ─── Query Helpers ────────────────────────────────────────────────────
-
   const getSessionsByStatus = useCallback((status: PetSessionStatus) =>
     sessions.filter(s => s.status === status), [sessions]);
 
@@ -488,8 +499,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const getCompletedSessionCount = useCallback(() =>
     sessions.filter(s => s.status === 'completed').length, [sessions]);
-
-  // ─── Context Value ────────────────────────────────────────────────────
 
   const value: SessionContextType = {
     activeSession,
@@ -522,8 +531,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 };
-
-// ─── Hook ─────────────────────────────────────────────────────────────────
 
 export const useSession = (): SessionContextType => {
   const context = useContext(SessionContext);

@@ -2,26 +2,40 @@
  * HydroNourish — Supabase Data Service
  * Heritage Animal Clinic Capstone Project
  *
- * Provides data-fetching helpers for pet records.
- * Auth is handled separately in src/services/adminAuthService.ts.
- * The Supabase client is imported from src/lib/supabase.ts.
+ * Full dynamic data access layer for PostgreSQL tables with real-time sync.
+ * Falls back to null/false gracefully when Supabase is offline or env key is absent.
  */
 
 import { supabase } from '../lib/supabase';
-import type { Pet } from '../types';
+import type {
+  Pet,
+  FeedingSchedule,
+  FeedingLog,
+  HydrationLog,
+  VitalSignRecord,
+  AIHealthAlert,
+  Device,
+  ClinicUser,
+  PetOwner,
+  PetSession,
+  ClinicSettings,
+  UserRole,
+} from '../types';
 
 /**
- * Fetch Pets from the Supabase pets table.
- * Returns null on error so callers can fall back to local mock data.
+ * Checks if Supabase client key is valid before executing requests.
  */
-export async function fetchPetsFromSupabase(): Promise<Pet[] | null> {
+function isSupabaseConfigured(): boolean {
   const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
-  if (!rawKey || rawKey.includes('.placeholder')) {
-    return null; // Avoid making remote calls with placeholder key
-  }
+  return Boolean(rawKey && !rawKey.includes('.placeholder'));
+}
 
+// ─── 1. PETS ──────────────────────────────────────────────────────────────
+
+export async function fetchPetsFromSupabase(): Promise<Pet[] | null> {
+  if (!isSupabaseConfigured()) return null;
   try {
-    const { data, error } = await supabase.from('pets').select('*');
+    const { data, error } = await supabase.from('pets').select('*').order('created_at', { ascending: false });
     if (error || !data) return null;
 
     return data.map((item) => ({
@@ -31,14 +45,16 @@ export async function fetchPetsFromSupabase(): Promise<Pet[] | null> {
       breed: item.breed,
       age: Number(item.age),
       weight: Number(item.weight),
+      sex: (item.sex ?? 'Male') as Pet['sex'],
       ownerName: item.owner_name,
       ownerPhone: item.owner_phone,
+      ownerId: item.owner_id || undefined,
       clinicRef: item.clinic_ref,
       assignedDeviceId: item.assigned_device_id ?? 'Cage 1',
       healthStatus: (item.health_status ?? 'Healthy') as Pet['healthStatus'],
       avatarUrl:
         item.avatar_url ??
-        'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200',
+        'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&q=80&w=300',
       feedingPlan: {
         portionGrams: Number(item.portion_grams) || 120,
         timesPerDay: Number(item.times_per_day) || 3,
@@ -51,31 +67,29 @@ export async function fetchPetsFromSupabase(): Promise<Pet[] | null> {
         activityLevel: (item.latest_activity ?? 'Normal') as Pet['latestVitals']['activityLevel'],
         lastMeasured: 'Today',
       },
-      notes: '',
+      emergencyContact: item.emergency_contact || undefined,
+      notes: item.notes || '',
     }));
   } catch (err) {
-    if (import.meta.env.DEV) {
-      console.warn('[HydroNourish] Supabase pets fetch notice — falling back to mock data.');
-    }
+    if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase pets fetch error:', err);
     return null;
   }
 }
 
-/**
- * Insert a new Pet record into Supabase.
- * Returns true on success, false on error.
- */
 export async function insertPetToSupabase(pet: Pet): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
   try {
-    const { error } = await supabase.from('pets').insert({
+    const { error } = await supabase.from('pets').upsert({
       id: pet.id,
       name: pet.name,
       species: pet.species,
       breed: pet.breed,
       age: pet.age,
       weight: pet.weight,
+      sex: pet.sex || 'Male',
       owner_name: pet.ownerName,
       owner_phone: pet.ownerPhone,
+      owner_id: pet.ownerId || null,
       clinic_ref: pet.clinicRef,
       assigned_device_id: pet.assignedDeviceId,
       health_status: pet.healthStatus,
@@ -87,58 +101,634 @@ export async function insertPetToSupabase(pet: Pet): Promise<boolean> {
       latest_temp: pet.latestVitals.temperature,
       latest_heart_rate: pet.latestVitals.heartRate,
       latest_activity: pet.latestVitals.activityLevel,
+      emergency_contact: pet.emergencyContact || null,
+      notes: pet.notes || '',
     });
     return !error;
   } catch (err) {
-    if (import.meta.env.DEV) {
-      console.warn('[HydroNourish] Supabase pet insert notice.');
-    }
+    if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase pet insert error:', err);
     return false;
   }
 }
 
-/**
- * Fetch Users/Admin Profiles from Supabase admin_profiles table.
- * Returns null if Supabase is unavailable or table is empty.
- */
-export async function fetchUsersFromSupabase(): Promise<import('../types').ClinicUser[] | null> {
-  const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
-  if (!rawKey || rawKey.includes('.placeholder')) {
+export async function updatePetInSupabase(id: string, updated: Partial<Pet>): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const payload: Record<string, any> = {};
+    if (updated.name !== undefined) payload.name = updated.name;
+    if (updated.species !== undefined) payload.species = updated.species;
+    if (updated.breed !== undefined) payload.breed = updated.breed;
+    if (updated.age !== undefined) payload.age = updated.age;
+    if (updated.weight !== undefined) payload.weight = updated.weight;
+    if (updated.sex !== undefined) payload.sex = updated.sex;
+    if (updated.ownerName !== undefined) payload.owner_name = updated.ownerName;
+    if (updated.ownerPhone !== undefined) payload.owner_phone = updated.ownerPhone;
+    if (updated.healthStatus !== undefined) payload.health_status = updated.healthStatus;
+    if (updated.assignedDeviceId !== undefined) payload.assigned_device_id = updated.assignedDeviceId;
+    if (updated.avatarUrl !== undefined) payload.avatar_url = updated.avatarUrl;
+    if (updated.hydrationTarget !== undefined) payload.hydration_target = updated.hydrationTarget;
+    if (updated.emergencyContact !== undefined) payload.emergency_contact = updated.emergencyContact;
+    if (updated.notes !== undefined) payload.notes = updated.notes;
+
+    if (updated.feedingPlan) {
+      if (updated.feedingPlan.portionGrams !== undefined) payload.portion_grams = updated.feedingPlan.portionGrams;
+      if (updated.feedingPlan.timesPerDay !== undefined) payload.times_per_day = updated.feedingPlan.timesPerDay;
+      if (updated.feedingPlan.foodType !== undefined) payload.food_type = updated.feedingPlan.foodType;
+    }
+
+    if (updated.latestVitals) {
+      if (updated.latestVitals.temperature !== undefined) payload.latest_temp = updated.latestVitals.temperature;
+      if (updated.latestVitals.heartRate !== undefined) payload.latest_heart_rate = updated.latestVitals.heartRate;
+      if (updated.latestVitals.activityLevel !== undefined) payload.latest_activity = updated.latestVitals.activityLevel;
+    }
+
+    const { error } = await supabase.from('pets').update(payload).eq('id', id);
+    return !error;
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase pet update error:', err);
+    return false;
+  }
+}
+
+export async function deletePetFromSupabase(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('pets').delete().eq('id', id);
+    return !error;
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase pet delete error:', err);
+    return false;
+  }
+}
+
+// ─── 2. FEEDING SCHEDULES ──────────────────────────────────────────────────
+
+export async function fetchSchedulesFromSupabase(): Promise<FeedingSchedule[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase.from('feeding_schedules').select('*').order('created_at', { ascending: false });
+    if (error || !data) return null;
+
+    return data.map((item) => ({
+      id: item.id,
+      petId: item.pet_id,
+      petName: item.pet_name,
+      foodType: item.food_type ?? 'Veterinary Dry Kibble',
+      portionGrams: Number(item.portion_grams),
+      scheduledTime: item.scheduled_time,
+      dispenseStatus: item.dispense_status as FeedingSchedule['dispenseStatus'],
+      deviceId: item.device_id,
+      lastDispensedAt: item.last_dispensed_at || undefined,
+    }));
+  } catch (err) {
     return null;
   }
+}
 
+export async function insertScheduleToSupabase(schedule: FeedingSchedule): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
   try {
-    const { data, error } = await supabase.from('admin_profiles').select('*');
+    const { error } = await supabase.from('feeding_schedules').upsert({
+      id: schedule.id,
+      pet_id: schedule.petId,
+      pet_name: schedule.petName,
+      food_type: schedule.foodType,
+      portion_grams: schedule.portionGrams,
+      scheduled_time: schedule.scheduledTime,
+      dispense_status: schedule.dispenseStatus,
+      device_id: schedule.deviceId,
+      last_dispensed_at: schedule.lastDispensedAt || null,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function updateScheduleInSupabase(id: string, updated: Partial<FeedingSchedule>): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const payload: Record<string, any> = {};
+    if (updated.dispenseStatus !== undefined) payload.dispense_status = updated.dispenseStatus;
+    if (updated.lastDispensedAt !== undefined) payload.last_dispensed_at = updated.lastDispensedAt;
+    if (updated.portionGrams !== undefined) payload.portion_grams = updated.portionGrams;
+    if (updated.scheduledTime !== undefined) payload.scheduled_time = updated.scheduledTime;
+
+    const { error } = await supabase.from('feeding_schedules').update(payload).eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// ─── 3. FEEDING LOGS ───────────────────────────────────────────────────────
+
+export async function fetchFeedingLogsFromSupabase(): Promise<FeedingLog[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase.from('feeding_logs').select('*').order('created_at', { ascending: false });
+    if (error || !data) return null;
+
+    return data.map((item) => ({
+      id: item.id,
+      petId: item.pet_id,
+      petName: item.pet_name,
+      portionGrams: Number(item.portion_grams),
+      dispensedAt: item.dispensed_at,
+      status: item.status as FeedingLog['status'],
+      deviceId: item.device_id,
+      sessionId: item.session_id || undefined,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+export async function insertFeedingLogToSupabase(log: FeedingLog): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('feeding_logs').upsert({
+      id: log.id,
+      pet_id: log.petId,
+      pet_name: log.petName,
+      portion_grams: log.portionGrams,
+      dispensed_at: log.dispensedAt,
+      status: log.status,
+      device_id: log.deviceId,
+      session_id: log.sessionId || null,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// ─── 4. HYDRATION LOGS ─────────────────────────────────────────────────────
+
+export async function fetchHydrationLogsFromSupabase(): Promise<HydrationLog[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase.from('hydration_logs').select('*').order('created_at', { ascending: false });
+    if (error || !data) return null;
+
+    return data.map((item) => ({
+      id: item.id,
+      petId: item.pet_id,
+      petName: item.pet_name,
+      amountMl: Number(item.amount_ml),
+      timestamp: item.timestamp,
+      reservoirLevelPct: Number(item.reservoir_level_pct),
+      sessionId: item.session_id || undefined,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+export async function insertHydrationLogToSupabase(log: HydrationLog): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('hydration_logs').upsert({
+      id: log.id,
+      pet_id: log.petId,
+      pet_name: log.petName,
+      amount_ml: log.amountMl,
+      timestamp: log.timestamp,
+      reservoir_level_pct: log.reservoirLevelPct,
+      session_id: log.sessionId || null,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// ─── 5. VITAL SIGNS ────────────────────────────────────────────────────────
+
+export async function fetchVitalsFromSupabase(): Promise<VitalSignRecord[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase.from('vital_signs').select('*').order('created_at', { ascending: false });
+    if (error || !data) return null;
+
+    return data.map((item) => ({
+      id: item.id,
+      petId: item.pet_id,
+      petName: item.pet_name,
+      temperature: Number(item.temperature),
+      heartRate: Number(item.heart_rate),
+      weight: Number(item.weight),
+      activityMins: Number(item.activity_mins),
+      status: item.status as VitalSignRecord['status'],
+      timestamp: item.timestamp,
+      sessionId: item.session_id || undefined,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+export async function insertVitalRecordToSupabase(vital: VitalSignRecord): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('vital_signs').upsert({
+      id: vital.id,
+      pet_id: vital.petId,
+      pet_name: vital.petName,
+      temperature: vital.temperature,
+      heart_rate: vital.heartRate,
+      weight: vital.weight,
+      activity_mins: vital.activityMins,
+      status: vital.status,
+      timestamp: vital.timestamp,
+      session_id: vital.sessionId || null,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// ─── 6. AI ALERTS ──────────────────────────────────────────────────────────
+
+export async function fetchAIAlertsFromSupabase(): Promise<AIHealthAlert[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase.from('ai_alerts').select('*').order('created_at', { ascending: false });
+    if (error || !data) return null;
+
+    return data.map((item) => ({
+      id: item.id,
+      petId: item.pet_id,
+      petName: item.pet_name,
+      alertType: item.alert_type,
+      observedReading: item.observed_reading,
+      severity: item.severity as AIHealthAlert['severity'],
+      aiObservation: item.ai_observation,
+      recommendedAction: item.recommended_action,
+      reviewStatus: item.review_status as AIHealthAlert['reviewStatus'],
+      timestamp: item.timestamp,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+export async function insertAIAlertToSupabase(alert: AIHealthAlert): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('ai_alerts').upsert({
+      id: alert.id,
+      pet_id: alert.petId,
+      pet_name: alert.petName,
+      alert_type: alert.alertType,
+      observed_reading: alert.observedReading,
+      severity: alert.severity,
+      ai_observation: alert.aiObservation,
+      recommended_action: alert.recommendedAction,
+      review_status: alert.reviewStatus,
+      timestamp: alert.timestamp,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function updateAIAlertStatusInSupabase(id: string, status: AIHealthAlert['reviewStatus']): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('ai_alerts').update({ review_status: status }).eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// ─── 7. ESP32 HARDWARE DEVICES ─────────────────────────────────────────────
+
+export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase.from('devices').select('*').order('created_at', { ascending: false });
+    if (error || !data) return null;
+
+    return data.map((item) => ({
+      id: item.id,
+      deviceName: item.device_name ?? 'HydroNourish Smart Cage Unit',
+      assignedPetId: item.assigned_pet_id || '',
+      assignedPetName: item.assigned_pet_name || '',
+      status: item.status as Device['status'],
+      hardwareStatus: (item.hardware_status ?? 'vacant') as Device['hardwareStatus'],
+      wifiSignalDbm: Number(item.wifi_signal_dbm),
+      foodLevelPct: Number(item.food_level_pct),
+      waterLevelPct: Number(item.water_level_pct),
+      batteryPct: Number(item.battery_pct),
+      isPluggedIn: Boolean(item.is_plugged_in),
+      lastTransmission: item.last_transmission || 'Just now',
+      firmwareVersion: item.firmware_version || 'v2.4.1-ESP32',
+      macAddress: item.mac_address || '24:0A:C4:00:01:A1',
+    }));
+  } catch {
+    return null;
+  }
+}
+
+export async function insertDeviceToSupabase(device: Device): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('devices').upsert({
+      id: device.id,
+      device_name: device.deviceName,
+      assigned_pet_id: device.assignedPetId || null,
+      assigned_pet_name: device.assignedPetName || null,
+      status: device.status,
+      hardware_status: device.hardwareStatus || 'vacant',
+      wifi_signal_dbm: device.wifiSignalDbm,
+      food_level_pct: device.foodLevelPct,
+      water_level_pct: device.waterLevelPct,
+      battery_pct: device.batteryPct,
+      is_plugged_in: device.isPluggedIn,
+      last_transmission: device.lastTransmission,
+      firmware_version: device.firmwareVersion,
+      mac_address: device.macAddress,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function updateDeviceInSupabase(id: string, updated: Partial<Device>): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const payload: Record<string, any> = {};
+    if (updated.status !== undefined) payload.status = updated.status;
+    if (updated.hardwareStatus !== undefined) payload.hardware_status = updated.hardwareStatus;
+    if (updated.assignedPetId !== undefined) payload.assigned_pet_id = updated.assignedPetId;
+    if (updated.assignedPetName !== undefined) payload.assigned_pet_name = updated.assignedPetName;
+    if (updated.foodLevelPct !== undefined) payload.food_level_pct = updated.foodLevelPct;
+    if (updated.waterLevelPct !== undefined) payload.water_level_pct = updated.waterLevelPct;
+    if (updated.batteryPct !== undefined) payload.battery_pct = updated.batteryPct;
+    if (updated.lastTransmission !== undefined) payload.last_transmission = updated.lastTransmission;
+
+    const { error } = await supabase.from('devices').update(payload).eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// ─── 8. CLINIC USERS / STAFF ──────────────────────────────────────────────
+
+export async function fetchUsersFromSupabase(): Promise<ClinicUser[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase.from('clinic_users').select('*').order('created_at', { ascending: false });
     if (error || !data || data.length === 0) return null;
 
-    return data.map((item) => {
-      const roleMap: Record<string, import('../types').UserRole> = {
-        super_admin: 'Super Admin',
-        admin: 'Administrator',
-        veterinarian: 'Veterinarian',
-        staff: 'Clinic Staff',
-      };
-      const role = roleMap[item.role] || (item.role as import('../types').UserRole) || 'Administrator';
-
-      return {
-        id: item.id,
-        name: item.full_name,
-        fullName: item.full_name,
-        email: item.email,
-        role: role,
-        department: item.department || 'Clinic Management',
-        status: item.status === 'active' ? 'Active' : 'Inactive',
-        lastActive: item.last_login_at ? new Date(item.last_login_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now (Active)',
-        avatarUrl:
-          item.avatar_url ||
-          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-        isProtected: role === 'Super Admin' || item.email === 'joecelgarcia1@gmail.com',
-      };
-    });
-  } catch (err) {
-    if (import.meta.env.DEV) {
-      console.warn('[HydroNourish] Supabase users fetch notice.');
-    }
+    return data.map((item) => ({
+      id: item.id,
+      name: item.name || item.full_name,
+      fullName: item.full_name || item.name,
+      email: item.email,
+      role: item.role as UserRole,
+      department: item.department,
+      status: (item.status === 'Active' ? 'Active' : 'Inactive') as ClinicUser['status'],
+      lastActive: item.last_active || 'Now (Active)',
+      avatarUrl:
+        item.avatar_url ||
+        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+      isProtected: Boolean(item.is_protected),
+    }));
+  } catch {
     return null;
   }
+}
+
+// ─── 9. PET OWNERS ─────────────────────────────────────────────────────────
+
+export async function fetchOwnersFromSupabase(): Promise<PetOwner[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase.from('pet_owners').select('*').order('date_created', { ascending: false });
+    if (error || !data) return null;
+
+    return data.map((item) => ({
+      id: item.id,
+      name: item.name,
+      email: item.email,
+      phone: item.phone,
+      accessStatus: item.access_status as PetOwner['accessStatus'],
+      petIds: Array.isArray(item.pet_ids) ? item.pet_ids : [],
+      currentSessionId: item.current_session_id || null,
+      dateCreated: item.date_created,
+      lastLogin: item.last_login || undefined,
+      notes: item.notes || '',
+    }));
+  } catch {
+    return null;
+  }
+}
+
+export async function insertOwnerToSupabase(owner: PetOwner): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('pet_owners').upsert({
+      id: owner.id,
+      name: owner.name,
+      email: owner.email,
+      phone: owner.phone,
+      access_status: owner.accessStatus,
+      pet_ids: owner.petIds,
+      current_session_id: owner.currentSessionId || null,
+      date_created: owner.dateCreated,
+      last_login: owner.lastLogin || null,
+      notes: owner.notes || null,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function updateOwnerInSupabase(id: string, updated: Partial<PetOwner>): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const payload: Record<string, any> = {};
+    if (updated.name !== undefined) payload.name = updated.name;
+    if (updated.email !== undefined) payload.email = updated.email;
+    if (updated.phone !== undefined) payload.phone = updated.phone;
+    if (updated.accessStatus !== undefined) payload.access_status = updated.accessStatus;
+    if (updated.petIds !== undefined) payload.pet_ids = updated.petIds;
+    if (updated.currentSessionId !== undefined) payload.current_session_id = updated.currentSessionId;
+    if (updated.lastLogin !== undefined) payload.last_login = updated.lastLogin;
+    if (updated.notes !== undefined) payload.notes = updated.notes;
+
+    const { error } = await supabase.from('pet_owners').update(payload).eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteOwnerFromSupabase(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('pet_owners').delete().eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// ─── 10. PET SESSIONS ──────────────────────────────────────────────────────
+
+export async function fetchSessionsFromSupabase(): Promise<PetSession[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase.from('pet_sessions').select('*').order('created_at', { ascending: false });
+    if (error || !data) return null;
+
+    return data.map((item) => ({
+      id: item.id,
+      petId: item.pet_id,
+      petName: item.pet_name,
+      ownerId: item.owner_id || '',
+      ownerName: item.owner_name,
+      deviceId: item.device_id,
+      admissionDate: item.admission_date,
+      expectedReleaseDate: item.expected_release_date,
+      actualReleaseDate: item.actual_release_date || undefined,
+      status: item.status as PetSession['status'],
+      admissionNotes: item.admission_notes || undefined,
+      releaseNotes: item.release_notes || undefined,
+      emergencyContact: item.emergency_contact || undefined,
+      admissionAdmin: item.admission_admin,
+      releaseAdmin: item.release_admin || undefined,
+      releaseCondition: item.release_condition || undefined,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+export async function insertSessionToSupabase(session: PetSession): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('pet_sessions').upsert({
+      id: session.id,
+      pet_id: session.petId,
+      pet_name: session.petName,
+      owner_id: session.ownerId || null,
+      owner_name: session.ownerName,
+      device_id: session.deviceId,
+      admission_date: session.admissionDate,
+      expected_release_date: session.expectedReleaseDate,
+      actual_release_date: session.actualReleaseDate || null,
+      status: session.status,
+      admission_notes: session.admissionNotes || null,
+      release_notes: session.releaseNotes || null,
+      emergency_contact: session.emergencyContact || null,
+      admission_admin: session.admissionAdmin,
+      release_admin: session.releaseAdmin || null,
+      release_condition: session.releaseCondition || null,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function updateSessionInSupabase(id: string, updated: Partial<PetSession>): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const payload: Record<string, any> = {};
+    if (updated.status !== undefined) payload.status = updated.status;
+    if (updated.actualReleaseDate !== undefined) payload.actual_release_date = updated.actualReleaseDate;
+    if (updated.releaseNotes !== undefined) payload.release_notes = updated.releaseNotes;
+    if (updated.releaseAdmin !== undefined) payload.release_admin = updated.releaseAdmin;
+    if (updated.releaseCondition !== undefined) payload.release_condition = updated.releaseCondition;
+
+    const { error } = await supabase.from('pet_sessions').update(payload).eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// ─── 11. CLINIC SETTINGS ───────────────────────────────────────────────────
+
+export async function fetchSettingsFromSupabase(): Promise<ClinicSettings | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase.from('clinic_settings').select('*').eq('id', 1).single();
+    if (error || !data) return null;
+
+    return {
+      clinicName: data.clinic_name,
+      clinicAddress: data.clinic_address,
+      clinicPhone: data.clinic_phone,
+      licenseId: data.license_id,
+      defaultPortionGrams: Number(data.default_portion_grams),
+      defaultHydrationMlPerKg: Number(data.default_hydration_ml_per_kg),
+      tempWarningMin: Number(data.temp_warning_min),
+      tempWarningMax: Number(data.temp_warning_max),
+      hrWarningMin: Number(data.hr_warning_min),
+      hrWarningMax: Number(data.hr_warning_max),
+      emailNotifications: Boolean(data.email_notifications),
+      smsNotifications: Boolean(data.sms_notifications),
+      browserNotifications: Boolean(data.browser_notifications),
+      theme: data.theme,
+      compactLayout: Boolean(data.compact_layout),
+      apiEndpoint: data.api_endpoint,
+      apiSecretKey: data.api_secret_key,
+      webhookUrl: data.webhook_url,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function updateSettingsInSupabase(updated: Partial<ClinicSettings>): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const payload: Record<string, any> = {};
+    if (updated.clinicName !== undefined) payload.clinic_name = updated.clinicName;
+    if (updated.clinicAddress !== undefined) payload.clinic_address = updated.clinicAddress;
+    if (updated.clinicPhone !== undefined) payload.clinic_phone = updated.clinicPhone;
+    if (updated.licenseId !== undefined) payload.license_id = updated.licenseId;
+    if (updated.defaultPortionGrams !== undefined) payload.default_portion_grams = updated.defaultPortionGrams;
+    if (updated.defaultHydrationMlPerKg !== undefined) payload.default_hydration_ml_per_kg = updated.defaultHydrationMlPerKg;
+    if (updated.tempWarningMin !== undefined) payload.temp_warning_min = updated.tempWarningMin;
+    if (updated.tempWarningMax !== undefined) payload.temp_warning_max = updated.tempWarningMax;
+    if (updated.hrWarningMin !== undefined) payload.hr_warning_min = updated.hrWarningMin;
+    if (updated.hrWarningMax !== undefined) payload.hr_warning_max = updated.hrWarningMax;
+
+    const { error } = await supabase.from('clinic_settings').upsert({ id: 1, ...payload });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// ─── 12. REAL-TIME MULTI-TABLE SUBSCRIPTION ───────────────────────────────
+
+export function subscribeToSupabaseRealtime(onTableChange: (tableName: string, payload: any) => void) {
+  if (!isSupabaseConfigured()) return () => {};
+
+  const channel = supabase
+    .channel('hydronourish_realtime')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public' },
+      (payload) => {
+        onTableChange(payload.table, payload);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }

@@ -2,12 +2,8 @@
  * HydroNourish — App Context
  * Heritage Animal Clinic Capstone Project
  *
- * Provides global application state for pet data, schedules, alerts,
- * devices, users, settings, and UI preferences.
- *
- * Authentication is handled separately in src/contexts/AuthContext.tsx.
- * LocalStorage is used ONLY for harmless UI preferences (sidebar state).
- * It is never used for auth tokens, roles, or sensitive data.
+ * Fully dynamic global state management integrated with Supabase PostgreSQL,
+ * Supabase Realtime subscriptions, and ESP32 hardware telemetry stream engine.
  */
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
@@ -35,13 +31,38 @@ import {
   initialUsers,
   initialSettings,
 } from '../data/mockData';
-import { fetchPetsFromSupabase } from '../services/supabase';
+
 import {
-  fetchClinicUsers,
+  fetchPetsFromSupabase,
+  insertPetToSupabase,
+  updatePetInSupabase,
+  deletePetFromSupabase,
+  fetchSchedulesFromSupabase,
+  insertScheduleToSupabase,
+  updateScheduleInSupabase,
+  fetchFeedingLogsFromSupabase,
+  insertFeedingLogToSupabase,
+  fetchHydrationLogsFromSupabase,
+  insertHydrationLogToSupabase,
+  fetchVitalsFromSupabase,
+  fetchAIAlertsFromSupabase,
+  updateAIAlertStatusInSupabase,
+  fetchDevicesFromSupabase,
+  insertDeviceToSupabase,
+  updateDeviceInSupabase,
+  fetchUsersFromSupabase,
+  fetchSettingsFromSupabase,
+  updateSettingsInSupabase,
+  subscribeToSupabaseRealtime,
+} from '../services/supabase';
+
+import {
   insertClinicUser,
   updateClinicUser,
   toggleClinicUserStatus,
 } from '../services/clinicUserService';
+
+import { generateTelemetryDelta, processTelemetryPayload } from '../services/telemetryService';
 
 interface AppContextType {
   pets: Pet[];
@@ -55,7 +76,7 @@ interface AppContextType {
   settings: ClinicSettings;
   toasts: ToastMessage[];
 
-  // Navigation & UI State (harmless preferences — OK in localStorage)
+  // Navigation & UI State
   sidebarCollapsed: boolean;
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   mobileSidebarOpen: boolean;
@@ -92,7 +113,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('hn_pets');
       if (saved) {
         const parsed = JSON.parse(saved) as Pet[];
-        // Filter out legacy extra pets if present and sanitize assignedDeviceId
         const filtered = parsed
           .filter(p => p.id === 'PET-001' || !['PET-002', 'PET-003', 'PET-004', 'PET-005', 'PET-006'].includes(p.id))
           .map(p => ({
@@ -113,110 +133,136 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [vitals, setVitals] = useState<VitalSignRecord[]>(initialVitals || []);
   const [alerts, setAlerts] = useState<AIHealthAlert[]>(initialAIAlerts || []);
   const [devices, setDevices] = useState<Device[]>(initialDevices || []);
-  const [users, setUsers] = useState<ClinicUser[]>(() => {
-    try {
-      const saved = localStorage.getItem('hn_users');
-      if (saved) {
-        const parsed = JSON.parse(saved) as ClinicUser[];
-        const sanitized = parsed.map(u => {
-          if (u.email.toLowerCase().includes('marcgermineganan') || u.email.toLowerCase().includes('marcgermine')) {
-            return {
-              ...u,
-              name: 'Marc Germine Ganan',
-              fullName: 'Marc Germine Ganan',
-              role: 'Super Admin' as const,
-              department: 'Chief Executive & Master System Controller',
-              status: 'Active' as const,
-              isProtected: true,
-              password: 'Admin#123'
-            };
-          }
-          return u;
-        });
-
-        // Ensure Marc Germine Ganan account exists
-        if (!sanitized.some(u => u.email.toLowerCase().includes('marcgermineganan'))) {
-          sanitized.push({
-            id: 'USR-SUPER-02',
-            name: 'Marc Germine Ganan',
-            fullName: 'Marc Germine Ganan',
-            email: 'marcgermineganan05@gmail.com',
-            role: 'Super Admin',
-            department: 'Chief Executive & Master System Controller',
-            status: 'Active',
-            lastActive: 'Now (Active)',
-            avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
-            isProtected: true,
-            password: 'Admin#123'
-          });
-        }
-
-        return sanitized;
-      }
-      return initialUsers || [];
-    } catch {
-      return initialUsers || [];
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('hn_users', JSON.stringify(users));
-    } catch {
-      // Ignore storage errors
-    }
-  }, [users]);
-  const [settings, setSettings] = useState<ClinicSettings>(
-    initialSettings || ({} as ClinicSettings)
-  );
+  const [users, setUsers] = useState<ClinicUser[]>(initialUsers || []);
+  const [settings, setSettings] = useState<ClinicSettings>(initialSettings || ({} as ClinicSettings));
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // ─── UI-only preferences in localStorage (safe, not auth-related) ────
+  // Navigation UI Preferences
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem('hn_sidebar_collapsed') === 'true';
   });
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  // ─── Sync Effects ─────────────────────────────────────────────────────
+  // ─── Initial Database Synchronization ────────────────────────────────
+  useEffect(() => {
+    async function syncAllDataFromSupabase() {
+      try {
+        const [
+          remotePets,
+          remoteSchedules,
+          remoteFeedingLogs,
+          remoteHydrationLogs,
+          remoteVitals,
+          remoteAlerts,
+          remoteDevices,
+          remoteUsers,
+          remoteSettings,
+        ] = await Promise.all([
+          fetchPetsFromSupabase(),
+          fetchSchedulesFromSupabase(),
+          fetchFeedingLogsFromSupabase(),
+          fetchHydrationLogsFromSupabase(),
+          fetchVitalsFromSupabase(),
+          fetchAIAlertsFromSupabase(),
+          fetchDevicesFromSupabase(),
+          fetchUsersFromSupabase(),
+          fetchSettingsFromSupabase(),
+        ]);
 
+        if (remotePets && remotePets.length > 0) setPets(remotePets);
+        if (remoteSchedules && remoteSchedules.length > 0) setSchedules(remoteSchedules);
+        if (remoteFeedingLogs && remoteFeedingLogs.length > 0) setFeedingLogs(remoteFeedingLogs);
+        if (remoteHydrationLogs && remoteHydrationLogs.length > 0) setHydrationLogs(remoteHydrationLogs);
+        if (remoteVitals && remoteVitals.length > 0) setVitals(remoteVitals);
+        if (remoteAlerts && remoteAlerts.length > 0) setAlerts(remoteAlerts);
+        if (remoteDevices && remoteDevices.length > 0) setDevices(remoteDevices);
+        if (remoteUsers && remoteUsers.length > 0) setUsers(remoteUsers);
+        if (remoteSettings) setSettings(remoteSettings);
+      } catch (err) {
+        if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase full sync notice.');
+      }
+    }
+
+    syncAllDataFromSupabase();
+  }, []);
+
+  // ─── Realtime Database Listener ──────────────────────────────────────
+  useEffect(() => {
+    const unsubscribe = subscribeToSupabaseRealtime(async (tableName) => {
+      if (tableName === 'pets') {
+        const data = await fetchPetsFromSupabase();
+        if (data) setPets(data);
+      } else if (tableName === 'feeding_schedules') {
+        const data = await fetchSchedulesFromSupabase();
+        if (data) setSchedules(data);
+      } else if (tableName === 'feeding_logs') {
+        const data = await fetchFeedingLogsFromSupabase();
+        if (data) setFeedingLogs(data);
+      } else if (tableName === 'hydration_logs') {
+        const data = await fetchHydrationLogsFromSupabase();
+        if (data) setHydrationLogs(data);
+      } else if (tableName === 'vital_signs') {
+        const data = await fetchVitalsFromSupabase();
+        if (data) setVitals(data);
+      } else if (tableName === 'ai_alerts') {
+        const data = await fetchAIAlertsFromSupabase();
+        if (data) setAlerts(data);
+      } else if (tableName === 'devices') {
+        const data = await fetchDevicesFromSupabase();
+        if (data) setDevices(data);
+      } else if (tableName === 'clinic_users') {
+        const data = await fetchUsersFromSupabase();
+        if (data) setUsers(data);
+      } else if (tableName === 'clinic_settings') {
+        const data = await fetchSettingsFromSupabase();
+        if (data) setSettings(data);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // ─── Live Dynamic Telemetry Simulation Engine ────────────────────────
+  useEffect(() => {
+    const telemetryInterval = setInterval(async () => {
+      if (devices.length === 0 || pets.length === 0) return;
+
+      const activeDev = devices[0];
+      const activePet = pets.find((p) => p.id === activeDev.assignedPetId) || pets[0];
+      if (!activePet) return;
+
+      const reading = generateTelemetryDelta(activeDev, activePet);
+
+      await processTelemetryPayload(
+        activePet,
+        activeDev,
+        reading,
+        (newVital) => setVitals((prev) => [newVital, ...prev.slice(0, 49)]),
+        (newAlert) => setAlerts((prev) => [newAlert, ...prev]),
+        (devUpdate) =>
+          setDevices((prev) =>
+            prev.map((d) => (d.id === activeDev.id ? { ...d, ...devUpdate } : d))
+          )
+      );
+    }, 20000); // Pulse every 20 seconds for dynamic telemetry
+
+    return () => clearInterval(telemetryInterval);
+  }, [devices, pets]);
+
+  // ─── UI Storage Effects ──────────────────────────────────────────────
   useEffect(() => {
     try {
       localStorage.setItem('hn_pets', JSON.stringify(pets));
-    } catch {
-      // Ignore storage errors
-    }
+    } catch {}
   }, [pets]);
-
-  // Sync with Supabase database on mount (pets and admin_profiles tables)
-  useEffect(() => {
-    async function syncDatabase() {
-      try {
-        const remotePets = await fetchPetsFromSupabase();
-        if (remotePets && Array.isArray(remotePets) && remotePets.length > 0) {
-          setPets(remotePets);
-        }
-      } catch {
-        // Fall back to initial data silently
-      }
-
-      try {
-        const remoteUsers = await fetchClinicUsers();
-        if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
-          setUsers(remoteUsers);
-        }
-      } catch {
-        // Fall back silently
-      }
-    }
-    syncDatabase();
-  }, []);
 
   useEffect(() => {
     localStorage.setItem('hn_sidebar_collapsed', String(sidebarCollapsed));
   }, [sidebarCollapsed]);
 
-  // ─── Toast Helpers ────────────────────────────────────────────────────
-
+  // ─── Toast Helpers ───────────────────────────────────────────────────
   const showToast = (type: ToastMessage['type'], title: string, message: string) => {
     const id = 'toast-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5);
     setToasts((prev) => [...prev, { id, type, title, message }]);
@@ -229,43 +275,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // ─── Pet Handlers ─────────────────────────────────────────────────────
-
-  const addPet = (petData: Omit<Pet, 'id'>) => {
+  // ─── Pet Handlers ────────────────────────────────────────────────────
+  const addPet = async (petData: Omit<Pet, 'id'>) => {
     const newId = `PET-${String((pets?.length ?? 0) + 1).padStart(3, '0')}`;
     const newPet: Pet = { ...petData, id: newId };
     setPets((prev) => [newPet, ...prev]);
-    showToast('success', 'Pet Registered', `${newPet.name} has been added to Heritage Animal Clinic.`);
+    showToast('success', 'Pet Registered', `${newPet.name} added to database.`);
+    await insertPetToSupabase(newPet);
   };
 
-  const updatePet = (id: string, updated: Partial<Pet>) => {
+  const updatePet = async (id: string, updated: Partial<Pet>) => {
     setPets((prev) => prev.map((p) => (p.id === id ? { ...p, ...updated } : p)));
-    showToast('success', 'Pet Updated', 'Pet profile changes saved.');
+    showToast('success', 'Pet Updated', 'Pet profile updated.');
+    await updatePetInSupabase(id, updated);
   };
 
-  const deletePet = (id: string) => {
+  const deletePet = async (id: string) => {
     const petName = (pets ?? []).find((p) => p.id === id)?.name || 'Pet';
     setPets((prev) => prev.filter((p) => p.id !== id));
-    showToast('info', 'Pet Removed', `${petName} record deleted.`);
+    showToast('info', 'Pet Removed', `${petName} record removed.`);
+    await deletePetFromSupabase(id);
   };
 
-  // ─── Feeding Handlers ─────────────────────────────────────────────────
-
-  const addSchedule = (data: Omit<FeedingSchedule, 'id' | 'dispenseStatus'>) => {
+  // ─── Feeding Handlers ────────────────────────────────────────────────
+  const addSchedule = async (data: Omit<FeedingSchedule, 'id' | 'dispenseStatus'>) => {
     const newId = `SCH-${Date.now().toString().slice(-4)}`;
     const newSch: FeedingSchedule = { ...data, id: newId, dispenseStatus: 'Pending' };
     setSchedules((prev) => [newSch, ...prev]);
     showToast('success', 'Schedule Created', `New feeding rule added for ${data.petName}.`);
+    await insertScheduleToSupabase(newSch);
   };
 
-  const dispenseNow = (scheduleId: string) => {
+  const dispenseNow = async (scheduleId: string) => {
     const sch = (schedules ?? []).find((s) => s.id === scheduleId);
     if (!sch) return;
 
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     setSchedules((prev) =>
       prev.map((s) =>
         s.id === scheduleId
-          ? { ...s, dispenseStatus: 'Dispensed', lastDispensedAt: 'Just now' }
+          ? { ...s, dispenseStatus: 'Dispensed', lastDispensedAt: timestamp }
           : s
       )
     );
@@ -275,55 +324,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       petId: sch.petId,
       petName: sch.petName,
       portionGrams: sch.portionGrams,
-      dispensedAt: 'Just now',
+      dispensedAt: timestamp,
       status: 'Manual Override',
       deviceId: sch.deviceId,
     };
     setFeedingLogs((prev) => [newLog, ...prev]);
     showToast('success', 'Feeding Command Sent', `Dispensed ${sch.portionGrams}g for ${sch.petName}.`);
+
+    await updateScheduleInSupabase(scheduleId, { dispenseStatus: 'Dispensed', lastDispensedAt: timestamp });
+    await insertFeedingLogToSupabase(newLog);
   };
 
-  // ─── Hydration Handlers ───────────────────────────────────────────────
-
-  const refillWater = (deviceId: string) => {
+  // ─── Hydration Handlers ──────────────────────────────────────────────
+  const refillWater = async (deviceId: string) => {
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, waterLevelPct: 100, status: 'Online' } : d))
     );
 
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Unit';
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const newLog: HydrationLog = {
       id: `HL-${Date.now().toString().slice(-4)}`,
       petId: dev?.assignedPetId || 'DEV',
       petName: petName,
       amountMl: 500,
-      timestamp: 'Just now',
+      timestamp: timestamp,
       reservoirLevelPct: 100,
     };
     setHydrationLogs((prev) => [newLog, ...prev]);
-    showToast('success', 'Water Reservoir Refilled', `Dispenser for ${petName} is now 100% full.`);
+    showToast('success', 'Water Refilled', `Dispenser for ${petName} is 100% full.`);
+
+    await updateDeviceInSupabase(deviceId, { waterLevelPct: 100, status: 'Online' });
+    await insertHydrationLogToSupabase(newLog);
   };
 
-  // ─── Alert Handlers ───────────────────────────────────────────────────
-
-  const acknowledgeAlert = (alertId: string) => {
+  // ─── Alert Handlers ──────────────────────────────────────────────────
+  const acknowledgeAlert = async (alertId: string) => {
     setAlerts((prev) =>
       prev.map((a) => (a.id === alertId ? { ...a, reviewStatus: 'In Review' } : a))
     );
-    showToast('info', 'Alert In Review', 'Marked alert for veterinary staff evaluation.');
+    showToast('info', 'Alert In Review', 'Marked alert for evaluation.');
+    await updateAIAlertStatusInSupabase(alertId, 'In Review');
   };
 
-  const resolveAlert = (alertId: string) => {
+  const resolveAlert = async (alertId: string) => {
     setAlerts((prev) =>
       prev.map((a) => (a.id === alertId ? { ...a, reviewStatus: 'Resolved' } : a))
     );
     showToast('success', 'Alert Resolved', 'Health observation marked resolved.');
+    await updateAIAlertStatusInSupabase(alertId, 'Resolved');
   };
 
-  // ─── Device Handlers ──────────────────────────────────────────────────
-
-  const addDevice = (devData: Omit<Device, 'id' | 'status' | 'lastTransmission'>) => {
+  // ─── Device Handlers ─────────────────────────────────────────────────
+  const addDevice = async (devData: Omit<Device, 'id' | 'status' | 'lastTransmission'>) => {
     const newId = `Cage ${(devices?.length ?? 0) + 1}`;
     const newDev: Device = {
       ...devData,
@@ -333,10 +388,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setDevices((prev) => [newDev, ...prev]);
     showToast('success', 'Device Connected', `Smart ${newId} paired to ${devData.assignedPetName}.`);
+    await insertDeviceToSupabase(newDev);
   };
 
-  // ─── User Handlers ────────────────────────────────────────────────────
-
+  // ─── User Handlers ───────────────────────────────────────────────────
   const addUser = async (userData: Omit<ClinicUser, 'id' | 'lastActive'>) => {
     const newId = `USR-${String((users?.length ?? 0) + 1).padStart(2, '0')}`;
     const displayName = userData.fullName || userData.name;
@@ -348,42 +403,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       lastActive: 'Just registered'
     };
 
-    // Optimistic UI update
     setUsers((prev) => [newUser, ...prev]);
-
-    // Persist to Supabase clinic_users table
     const result = await insertClinicUser(newUser);
     if (result.success) {
-      showToast('success', 'Staff Member Added', `${displayName} registered as ${userData.role} and saved to database.`);
+      showToast('success', 'Staff Member Added', `${displayName} registered as ${userData.role} in database.`);
     } else {
-      showToast('warning', 'Saved Locally', `${displayName} added locally. Database sync: ${result.error || 'unavailable'}`);
+      showToast('warning', 'Saved Locally', `${displayName} registered locally.`);
     }
   };
 
   const updateUser = async (id: string, updated: Partial<ClinicUser>) => {
     const displayName = updated.fullName || updated.name;
-    // Optimistic UI update
     setUsers((prev) =>
       prev.map((u) => {
         if (u.id === id) {
           const name = displayName || u.fullName || u.name;
-          return {
-            ...u,
-            ...updated,
-            name: name,
-            fullName: name
-          };
+          return { ...u, ...updated, name: name, fullName: name };
         }
         return u;
       })
     );
 
-    // Persist to Supabase clinic_users table
     const result = await updateClinicUser(id, updated);
     if (result.success) {
-      showToast('success', 'Account Updated', 'User account details updated and saved to database.');
+      showToast('success', 'Account Updated', 'User profile updated in database.');
     } else {
-      showToast('warning', 'Saved Locally', `Changes saved locally. Database sync: ${result.error || 'unavailable'}`);
+      showToast('warning', 'Saved Locally', 'User profile updated locally.');
     }
   };
 
@@ -391,36 +436,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const currentUser = users.find((u) => u.id === userId);
     if (!currentUser) return;
 
-    const newStatus = currentUser.status === 'Active' ? 'Inactive' as const : 'Active' as const;
+    const newStatus = currentUser.status === 'Active' ? ('Inactive' as const) : ('Active' as const);
 
-    // Optimistic UI update
     setUsers((prev) =>
-      prev.map((u) =>
-        u.id === userId ? { ...u, status: newStatus } : u
-      )
+      prev.map((u) => (u.id === userId ? { ...u, status: newStatus } : u))
     );
 
-    // Persist to Supabase clinic_users table
     const result = await toggleClinicUserStatus(userId, currentUser.status);
     if (!result.success) {
-      // Revert on failure
       setUsers((prev) =>
-        prev.map((u) =>
-          u.id === userId ? { ...u, status: currentUser.status } : u
-        )
+        prev.map((u) => (u.id === userId ? { ...u, status: currentUser.status } : u))
       );
       showToast('error', 'Status Update Failed', result.error || 'Could not update user status in database.');
     }
   };
 
-  // ─── Settings Handler ─────────────────────────────────────────────────
-
-  const updateSettings = (newSet: Partial<ClinicSettings>) => {
+  // ─── Settings Handler ────────────────────────────────────────────────
+  const updateSettings = async (newSet: Partial<ClinicSettings>) => {
     setSettings((prev) => ({ ...prev, ...newSet }));
     showToast('success', 'Settings Saved', 'System preferences updated successfully.');
+    await updateSettingsInSupabase(newSet);
   };
-
-  // ─── Provider ─────────────────────────────────────────────────────────
 
   return (
     <AppContext.Provider

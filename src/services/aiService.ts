@@ -189,3 +189,8 @@ export async function analyzePetTelemetry(input: PetTelemetryInput): Promise<AIO
   // 3. Fallback: Local Clinical Engine
   return generateLocalClinicalObservation(input);
 }
+
+/**
+ * Alias export for telemetry service
+ */
+export const generateAIVeterinaryObservation = analyzePetTelemetry;

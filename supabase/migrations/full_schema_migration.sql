@@ -1,7 +1,7 @@
 -- ====================================================================
--- HYDRO NOURISH — HERITAGE ANIMAL CLINIC SUPABASE POSTGRESQL SCHEMA
--- Full relational schema with RLS Policies & Initial Seed Data
--- Connection: postgresql://postgres.nibsyjmdyfdvvwttcnkx:JoecelGarcia#1@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres
+-- HYDRO NOURISH — FULL SUPABASE MIGRATION SCRIPT
+-- Heritage Animal Clinic Capstone Project
+-- Run this script directly in the Supabase SQL Editor.
 -- ====================================================================
 
 -- 1. PET PATIENTS TABLE
@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS public.clinic_settings (
 );
 
 -- ====================================================================
--- ENABLE ROW LEVEL SECURITY AND CREATE PUBLIC PERMISSIVE POLICIES
+-- RLS POLICIES FOR ALL TABLES
 -- ====================================================================
 
 DO $$ 
@@ -213,62 +213,3 @@ BEGIN
         EXECUTE format('CREATE POLICY %I ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl || '_allow_all', tbl);
     END LOOP;
 END $$;
-
--- ====================================================================
--- SEED INITIAL DATA
--- ====================================================================
-
-INSERT INTO public.clinic_users (id, name, full_name, email, role, department, status, last_active, is_protected)
-VALUES 
-  ('USR-SUPER-01', 'Joecel Garcia', 'Joecel Garcia', 'joecelgarcia1@gmail.com', 'Super Admin', 'Chief Executive & Master System Controller', 'Active', 'Now (Active)', TRUE),
-  ('USR-SUPER-02', 'Marc Germine Ganan', 'Marc Germine Ganan', 'marcgermineganan05@gmail.com', 'Super Admin', 'Chief Executive & Master System Controller', 'Active', 'Now (Active)', TRUE),
-  ('USR-00', 'Heritage System Admin', 'Heritage System Admin', 'heritagelink45@gmail.com', 'Administrator', 'Lead Security & IT Systems', 'Active', 'Now (Active 2FA)', FALSE),
-  ('USR-01', 'Dr. Sarah Jenkins', 'Dr. Sarah Jenkins', 's.jenkins@heritageanimalclinic.com', 'Veterinarian', 'Chief Veterinary Medical Officer', 'Active', 'Now (Active)', FALSE)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.pet_owners (id, name, email, phone, access_status, pet_ids, notes)
-VALUES
-  ('OWN-001', 'Eleanor Vance', 'eleanor.vance@email.com', '(555) 234-5678', 'inactive', '["PET-001"]'::jsonb, 'Preferred communication via email.')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.pets (id, name, species, breed, age, weight, sex, owner_name, owner_phone, owner_id, clinic_ref, assigned_device_id, health_status, portion_grams, times_per_day, food_type, hydration_target, latest_temp, latest_heart_rate)
-VALUES 
-  ('PET-001', 'Max', 'Dog', 'Golden Retriever', 4.0, 29.5, 'Male', 'Eleanor Vance', '(555) 234-5678', 'OWN-001', 'REF-2026-081', 'Cage 1', 'Healthy', 250, 2, 'High-Protein Adult Kibble', 1400, 38.5, 85)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.devices (id, device_name, assigned_pet_id, assigned_pet_name, status, hardware_status, wifi_signal_dbm, food_level_pct, water_level_pct, battery_pct, is_plugged_in, firmware_version, mac_address)
-VALUES
-  ('Cage 1', 'HydroNourish Smart Cage Unit', 'PET-001', 'Max', 'Online', 'occupied', -54, 78, 82, 98, TRUE, 'v2.4.1-ESP32', '24:0A:C4:00:01:A1')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.feeding_schedules (id, pet_id, pet_name, food_type, portion_grams, scheduled_time, dispense_status, device_id, last_dispensed_at)
-VALUES
-  ('SCH-101', 'PET-001', 'Max', 'High-Protein Adult Kibble', 125, '08:00 AM', 'Dispensed', 'Cage 1', '2026-07-27 08:00 AM'),
-  ('SCH-102', 'PET-001', 'Max', 'High-Protein Adult Kibble', 125, '06:00 PM', 'Pending', 'Cage 1', NULL)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.feeding_logs (id, pet_id, pet_name, portion_grams, dispensed_at, status, device_id, session_id)
-VALUES
-  ('FL-301', 'PET-001', 'Max', 125, '2026-07-27 08:00 AM', 'Success', 'Cage 1', 'SES-DEMO-001'),
-  ('FL-302', 'PET-001', 'Max', 125, '2026-07-26 06:00 PM', 'Success', 'Cage 1', 'SES-DEMO-001')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.hydration_logs (id, pet_id, pet_name, amount_ml, timestamp, reservoir_level_pct, session_id)
-VALUES
-  ('HL-401', 'PET-001', 'Max', 320, '2026-07-27 09:30 AM', 82, 'SES-DEMO-001'),
-  ('HL-402', 'PET-001', 'Max', 280, '2026-07-27 01:45 PM', 74, 'SES-DEMO-001')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.vital_signs (id, pet_id, pet_name, temperature, heart_rate, weight, activity_mins, status, timestamp, session_id)
-VALUES
-  ('VIT-501', 'PET-001', 'Max', 38.5, 85, 29.5, 45, 'Normal', '2026-07-27 08:00 AM', 'SES-DEMO-001')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.ai_alerts (id, pet_id, pet_name, alert_type, observed_reading, severity, ai_observation, recommended_action, review_status, timestamp)
-VALUES
-  ('ALT-701', 'PET-001', 'Max', 'Hydration Target Achieved', '1,400 ml consumed daily target met', 'Info', 'Optimal hydration levels maintained consistently for 48 hours.', 'Maintain current automated feeding and water dispenser schedule.', 'Resolved', '2026-07-27 09:15 AM')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.clinic_settings (id, clinic_name, clinic_address, clinic_phone, license_id, default_portion_grams, default_hydration_ml_per_kg)
-VALUES (1, 'Heritage Animal Clinic', '742 Evergreen Terrace, Medical District, Sector 4', '(555) 890-1234', 'VET-LIC-2026-9817', 100, 50)
-ON CONFLICT (id) DO NOTHING;
