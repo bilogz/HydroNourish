@@ -50,6 +50,7 @@ import {
   fetchDevicesFromSupabase,
   insertDeviceToSupabase,
   updateDeviceInSupabase,
+  deleteDeviceFromSupabase,
   fetchUsersFromSupabase,
   fetchSettingsFromSupabase,
   updateSettingsInSupabase,
@@ -89,6 +90,8 @@ interface AppContextType {
 
   addSchedule: (schedule: Omit<FeedingSchedule, 'id' | 'dispenseStatus'>) => void;
   dispenseNow: (scheduleId: string) => void;
+  dispenseDirect: (deviceId: string, grams?: number, foodType?: string) => void;
+  dispenseWaterDirect: (deviceId: string, amountMl?: number) => void;
 
   refillWater: (deviceId: string) => void;
 
@@ -96,6 +99,7 @@ interface AppContextType {
   resolveAlert: (alertId: string) => void;
 
   addDevice: (device: Omit<Device, 'id' | 'status' | 'lastTransmission'>) => void;
+  removeDevice: (id: string) => void;
   addUser: (user: Omit<ClinicUser, 'id' | 'lastActive'>) => void;
   updateUser: (id: string, updated: Partial<ClinicUser>) => void;
   toggleUserStatus: (userId: string) => void;
@@ -171,7 +175,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [];
     } catch { return []; }
   });
-  const [devices, setDevices] = useState<Device[]>([]);
+  const [devices, setDevices] = useState<Device[]>(() => {
+    try {
+      const saved = localStorage.getItem('hn_devices');
+      if (saved) return JSON.parse(saved) as Device[];
+      return [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('hn_devices', JSON.stringify(devices));
+    } catch {}
+  }, [devices]);
+
   const [users, setUsers] = useState<ClinicUser[]>(initialUsers || []);
   const [settings, setSettings] = useState<ClinicSettings>(initialSettings || ({} as ClinicSettings));
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -214,10 +233,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (remoteHydrationLogs && remoteHydrationLogs.length > 0) setHydrationLogs(remoteHydrationLogs);
         if (remoteVitals && remoteVitals.length > 0) setVitals(remoteVitals);
         if (remoteAlerts && remoteAlerts.length > 0) setAlerts(remoteAlerts);
-        if (remoteDevices && remoteDevices.length > 0 && remoteDevices[0].status === 'Online') {
+        if (remoteDevices) {
           setDevices(remoteDevices);
-        } else {
-          setDevices([]);
         }
         if (remoteUsers && remoteUsers.length > 0) setUsers(remoteUsers);
         if (remoteSettings) setSettings(remoteSettings);
@@ -227,6 +244,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     syncAllDataFromSupabase();
+
+    // Fast 1.5-second polling for active ESP32 hardware telemetry
+    const devicePollInterval = setInterval(async () => {
+      const devData = await fetchDevicesFromSupabase();
+      if (devData) {
+        setDevices(devData);
+      }
+    }, 1500);
+
+    return () => clearInterval(devicePollInterval);
   }, []);
 
   // ─── Realtime Database Listener ──────────────────────────────────────
@@ -252,8 +279,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data) setAlerts(data);
       } else if (tableName === 'devices') {
         const data = await fetchDevicesFromSupabase();
-        if (data && data.length > 0 && data[0].status === 'Online') setDevices(data);
-        else setDevices([]);
+        if (data) setDevices(data);
       } else if (tableName === 'clinic_users') {
         const data = await fetchUsersFromSupabase();
         if (data) setUsers(data);
@@ -354,29 +380,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const sch = (schedules ?? []).find((s) => s.id === scheduleId);
     if (!sch) return;
 
-    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // Set to Pending so ESP32 detects the signal and physically rotates the servo
     setSchedules((prev) =>
       prev.map((s) =>
         s.id === scheduleId
-          ? { ...s, dispenseStatus: 'Dispensed', lastDispensedAt: timestamp }
+          ? { ...s, dispenseStatus: 'Pending' }
           : s
       )
     );
 
-    const newLog: FeedingLog = {
-      id: `FL-${Date.now().toString().slice(-4)}`,
-      petId: sch.petId,
-      petName: sch.petName,
-      portionGrams: sch.portionGrams,
-      dispensedAt: timestamp,
-      status: 'Manual Override',
-      deviceId: sch.deviceId,
-    };
-    setFeedingLogs((prev) => [newLog, ...prev]);
-    showToast('success', 'Feeding Command Sent', `Dispensed ${sch.portionGrams}g for ${sch.petName}.`);
+    showToast('info', 'Hardware Signal Sent', `Dispense trigger dispatched to node ${sch.deviceId || 'ESP32'}.`);
+    await updateScheduleInSupabase(scheduleId, { dispenseStatus: 'Pending' });
+  };
 
-    await updateScheduleInSupabase(scheduleId, { dispenseStatus: 'Dispensed', lastDispensedAt: timestamp });
-    await insertFeedingLogToSupabase(newLog);
+  const dispenseDirect = async (deviceId: string, portionGrams: number = 60, foodType: string = 'Veterinary Dry Kibble') => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const petName = dev?.assignedPetName || 'Max';
+    const petId = dev?.assignedPetId || 'PET-001';
+
+    const newSch: FeedingSchedule = {
+      id: `SCH-DIR-${Date.now().toString().slice(-4)}`,
+      petId,
+      petName,
+      foodType,
+      portionGrams,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId: deviceId,
+    };
+
+    setSchedules((prev) => [newSch, ...prev]);
+    showToast('success', 'Remote Dispense Triggered', `Triggered ${portionGrams}g portion command to ${deviceId}.`);
+    await insertScheduleToSupabase(newSch);
+  };
+
+  const dispenseWaterDirect = async (deviceId: string, amountMl: number = 250) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const petName = dev?.assignedPetName || 'Max';
+    const petId = dev?.assignedPetId || 'PET-001';
+
+    const newSch: FeedingSchedule = {
+      id: `SCH-WTR-${Date.now().toString().slice(-4)}`,
+      petId,
+      petName,
+      foodType: 'Fresh Filtered Water',
+      portionGrams: amountMl,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId: deviceId,
+    };
+
+    setSchedules((prev) => [newSch, ...prev]);
+
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const newLog: HydrationLog = {
+      id: `HL-${Date.now().toString().slice(-4)}`,
+      petId,
+      petName,
+      amountMl,
+      timestamp,
+      reservoirLevelPct: Math.min(100, Math.max(10, (dev?.waterLevelPct || 80) + 15)),
+    };
+    setHydrationLogs((prev) => [newLog, ...prev]);
+
+    showToast('success', 'Water Dispense Triggered', `Triggered ${amountMl}ml water pump to ${deviceId}.`);
+    await insertScheduleToSupabase(newSch);
+    await insertHydrationLogToSupabase(newLog);
   };
 
   // ─── Hydration Handlers ──────────────────────────────────────────────
@@ -423,16 +492,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // ─── Device Handlers ─────────────────────────────────────────────────
   const addDevice = async (devData: Omit<Device, 'id' | 'status' | 'lastTransmission'>) => {
-    const newId = `Cage ${(devices?.length ?? 0) + 1}`;
+    const macTag = devData.macAddress ? devData.macAddress.replace(/:/g, '').slice(-4).toUpperCase() : Date.now().toString().slice(-4);
+    const newId = `HN-NODE-${macTag}`;
     const newDev: Device = {
       ...devData,
       id: newId,
       status: 'Online',
       lastTransmission: 'Just now',
     };
-    setDevices((prev) => [newDev, ...prev]);
+    setDevices((prev) => [newDev, ...prev.filter(d => d.id !== newId)]);
     showToast('success', 'Device Connected', `Smart ${newId} paired to ${devData.assignedPetName}.`);
     await insertDeviceToSupabase(newDev);
+  };
+
+  const removeDevice = async (id: string) => {
+    setDevices((prev) => prev.filter((d) => d.id !== id));
+    showToast('info', 'Device Disconnected', `Node ${id} unpaired successfully.`);
+    await deleteDeviceFromSupabase(id);
   };
 
   // ─── User Handlers ───────────────────────────────────────────────────
@@ -524,10 +600,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deletePet,
         addSchedule,
         dispenseNow,
+        dispenseDirect,
+        dispenseWaterDirect,
         refillWater,
         acknowledgeAlert,
         resolveAlert,
         addDevice,
+        removeDevice,
         addUser,
         updateUser,
         toggleUserStatus,

@@ -407,30 +407,69 @@ export async function updateAIAlertStatusInSupabase(id: string, status: AIHealth
 
 // ─── 7. ESP32 HARDWARE DEVICES ─────────────────────────────────────────────
 
+/**
+ * Computes the heartbeat status of a device based on its last_transmission ISO timestamp.
+ * Returns: 'Online' | 'Connecting' | 'Offline' and age in seconds.
+ *
+ * ESP32 sends every 2-3s:
+ *   < 20s   = Online (Rock-solid active live stream)
+ *   20-35s  = Connecting (Negotiating handshake / ping delay)
+ *   > 35s   = Offline (Hardware powered off / disconnected)
+ */
+function getHeartbeatStatus(lastTransmission: string | null | undefined): { status: Device['status']; ageSec: number } {
+  if (!lastTransmission) return { status: 'Offline', ageSec: 9999 };
+  const raw = String(lastTransmission).trim();
+
+  const parsed = Date.parse(raw);
+  if (!isNaN(parsed)) {
+    const ageSec = Math.round((Date.now() - parsed) / 1000);
+    if (ageSec <= 20) return { status: 'Online', ageSec };
+    if (ageSec <= 35) return { status: 'Connecting' as Device['status'], ageSec };
+    return { status: 'Offline', ageSec };
+  }
+
+  // Unparseable (uptime:xxx or legacy "Just now") = treat as offline
+  return { status: 'Offline', ageSec: 9999 };
+}
+
 export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
   if (!isSupabaseConfigured()) return null;
   try {
     const { data, error } = await supabase.from('devices').select('*').order('created_at', { ascending: false });
     if (error || !data) return null;
 
-    const userDevices = data.filter(item => !['HN-DEV-0101', 'HN-DEV-0102', 'HN-DEV-0103', 'HN-DEV-0104', 'HN-DEV-0105', 'Cage 1', 'Cage 2', 'Cage 3'].includes(item.id));
+    return data.map((item) => {
+      const { status: computedStatus, ageSec } = getHeartbeatStatus(item.last_transmission);
+      const isOffline = computedStatus === 'Offline';
+      const isConnecting = computedStatus === ('Connecting' as Device['status']);
 
-    return userDevices.map((item) => ({
-      id: item.id,
-      deviceName: item.device_name ?? 'HydroNourish Smart Cage Unit',
-      assignedPetId: item.assigned_pet_id || '',
-      assignedPetName: item.assigned_pet_name || '',
-      status: item.status as Device['status'],
-      hardwareStatus: (item.hardware_status ?? 'vacant') as Device['hardwareStatus'],
-      wifiSignalDbm: Number(item.wifi_signal_dbm),
-      foodLevelPct: Number(item.food_level_pct),
-      waterLevelPct: Number(item.water_level_pct),
-      batteryPct: Number(item.battery_pct),
-      isPluggedIn: Boolean(item.is_plugged_in),
-      lastTransmission: item.last_transmission || 'Never',
-      firmwareVersion: item.firmware_version || 'v2.4.1-ESP32',
-      macAddress: item.mac_address || '00:00:00:00:00:00',
-    }));
+      // Format the last transmission for display
+      let displayTransmission: string;
+      if (isOffline) {
+        displayTransmission = 'Disconnected — No heartbeat';
+      } else if (isConnecting) {
+        displayTransmission = `Reconnecting — last ping ${ageSec}s ago`;
+      } else {
+        displayTransmission = ageSec <= 3 ? 'Live — Just now' : `Live — ${ageSec}s ago`;
+      }
+
+      return {
+        id: item.id,
+        deviceName: 'HydroNourish Smart Cage Unit',
+        assignedPetId: item.assigned_pet_id || '',
+        assignedPetName: item.assigned_pet_name || '',
+        status: computedStatus,
+        hardwareStatus: 'occupied' as Device['hardwareStatus'],
+        wifiSignalDbm: isOffline ? 0 : Number(item.wifi_signal_dbm),
+        foodLevelPct: Number(item.food_level_pct),
+        waterLevelPct: Number(item.water_level_pct),
+        batteryPct: Number(item.battery_pct),
+        isPluggedIn: isOffline ? false : Boolean(item.is_plugged_in),
+        lastTransmission: displayTransmission,
+        firmwareVersion: item.firmware_version || 'v2.4.1-ESP32',
+        macAddress: item.mac_address || '00:00:00:00:00:00',
+      };
+    });
   } catch {
     return null;
   }
@@ -441,11 +480,9 @@ export async function insertDeviceToSupabase(device: Device): Promise<boolean> {
   try {
     const { error } = await supabase.from('devices').upsert({
       id: device.id,
-      device_name: device.deviceName,
       assigned_pet_id: device.assignedPetId || null,
       assigned_pet_name: device.assignedPetName || null,
       status: device.status,
-      hardware_status: device.hardwareStatus || 'vacant',
       wifi_signal_dbm: device.wifiSignalDbm,
       food_level_pct: device.foodLevelPct,
       water_level_pct: device.waterLevelPct,
@@ -466,7 +503,6 @@ export async function updateDeviceInSupabase(id: string, updated: Partial<Device
   try {
     const payload: Record<string, any> = {};
     if (updated.status !== undefined) payload.status = updated.status;
-    if (updated.hardwareStatus !== undefined) payload.hardware_status = updated.hardwareStatus;
     if (updated.assignedPetId !== undefined) payload.assigned_pet_id = updated.assignedPetId;
     if (updated.assignedPetName !== undefined) payload.assigned_pet_name = updated.assignedPetName;
     if (updated.foodLevelPct !== undefined) payload.food_level_pct = updated.foodLevelPct;
@@ -475,6 +511,16 @@ export async function updateDeviceInSupabase(id: string, updated: Partial<Device
     if (updated.lastTransmission !== undefined) payload.last_transmission = updated.lastTransmission;
 
     const { error } = await supabase.from('devices').update(payload).eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteDeviceFromSupabase(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('devices').delete().eq('id', id);
     return !error;
   } catch {
     return false;
