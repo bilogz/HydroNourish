@@ -11,6 +11,7 @@ import { useSession } from '../contexts/SessionContext';
 import { useAppContext } from '../hooks/useAppContext';
 import { StatusBadge } from '../components/StatusBadge';
 import { Logo } from '../components/Logo';
+import { LiveCameraWidget } from '../components/LiveCameraWidget';
 import {
   Dog,
   Utensils,
@@ -446,6 +447,12 @@ export const OwnerDashboardPage: React.FC = () => {
                 </p>
               </div>
             )}
+
+            {/* Real-Time Live Pet Camera Stream */}
+            <LiveCameraWidget
+              title={`${myActiveSession?.petName || focusedPet?.name || 'Pet'} Live Clinic Cam`}
+              subtitle="Live Video Feed & Bowl Stream"
+            />
 
             {/* Gauges & Telemetry */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

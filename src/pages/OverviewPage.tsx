@@ -10,6 +10,7 @@ import { HardwareAssignmentCard } from '../components/session/HardwareAssignment
 import { AssignPetOwnerModal } from '../components/session/AssignPetOwnerModal';
 import { CompleteSessionModal } from '../components/session/CompleteSessionModal';
 import { CancelSessionModal } from '../components/session/CancelSessionModal';
+import { LiveCameraWidget } from '../components/LiveCameraWidget';
 import { useAppContext } from '../hooks/useAppContext';
 import { useSession } from '../contexts/SessionContext';
 import {
@@ -256,6 +257,12 @@ export const OverviewPage: React.FC = () => {
           badgeType={activeAlertsCount > 0 ? 'alert' : 'success'}
         />
       </div>
+
+      {/* ================= LIVE PET WARD CAMERA FEED ================= */}
+      <LiveCameraWidget
+        title="Live Clinic Ward & Bowl Camera Feed"
+        subtitle="Real-Time 30 FPS Stream • ESP32-CAM Node"
+      />
 
       {/* ================= CHARTS SECTION ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
