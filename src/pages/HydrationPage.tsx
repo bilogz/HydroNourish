@@ -203,7 +203,9 @@ export const HydrationPage: React.FC = () => {
               <div className="flex-1 space-y-3 text-xs">
                 <div>
                   <span className="text-slate-400 font-bold uppercase text-[10px]">Assigned Patient</span>
-                  <p className="text-base font-extrabold text-slate-900">{selectedDevice.assignedPetName || 'Unassigned'}</p>
+                  <p className="text-base font-extrabold text-slate-900">
+                    {selectedDevice.assignedPetName || pets.find(p => p.id === selectedDevice.assignedPetId)?.name || pets[0]?.name || 'Max'}
+                  </p>
                 </div>
                 <div>
                   <span className="text-slate-400 font-bold uppercase text-[10px]">Refill Status</span>
@@ -217,6 +219,20 @@ export const HydrationPage: React.FC = () => {
                 <div>
                   <span className="text-slate-400 font-bold uppercase text-[10px]">Transmission Node</span>
                   <p className="font-mono font-bold text-slate-700">{selectedDevice.id}</p>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-bold uppercase text-[10px]">Water Purity (TDS)</span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="font-mono font-bold text-slate-800">{selectedDevice.waterQualityPpm ?? 0} PPM</span>
+                    {(() => {
+                      const tds = selectedDevice.waterQualityPpm ?? 0;
+                      if (tds === 0) return <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">Dry</span>;
+                      if (tds <= 300) return <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Pure</span>;
+                      if (tds <= 600) return <span className="text-[9px] font-bold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded">Good</span>;
+                      if (tds <= 900) return <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">Fair</span>;
+                      return <span className="text-[9px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">Filter Req</span>;
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>
@@ -277,7 +293,9 @@ export const HydrationPage: React.FC = () => {
               {lowWaterDevices.map((dev) => (
                 <div key={dev.id} className="clinic-card p-4 border-l-4 border-l-amber-500 flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-bold text-slate-900">{dev.assignedPetName || 'Unassigned'} ({dev.id})</span>
+                    <span className="text-xs font-bold text-slate-900">
+                      {dev.assignedPetName || pets.find(p => p.id === dev.assignedPetId)?.name || pets[0]?.name || 'Max'} ({dev.id})
+                    </span>
                     <p className="text-xs text-amber-700 font-semibold mt-0.5">Reservoir Level: {dev.waterLevelPct}%</p>
                   </div>
                   <button

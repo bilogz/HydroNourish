@@ -110,6 +110,8 @@ export interface Device {
   wifiSignalDbm: number;
   foodLevelPct: number;
   waterLevelPct: number;
+  foodBowlWeightGrams?: number;
+  waterQualityPpm?: number;
   batteryPct: number;
   isPluggedIn: boolean;
   lastTransmission: string;

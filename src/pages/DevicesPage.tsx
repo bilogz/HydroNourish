@@ -19,7 +19,8 @@ import {
   Info,
   RefreshCw,
   Sliders,
-  Trash2
+  Trash2,
+  Scale
 } from 'lucide-react';
 
 export const DevicesPage: React.FC = () => {
@@ -254,31 +255,69 @@ export const DevicesPage: React.FC = () => {
                             {featuredDevice.isPluggedIn ? 'AC Mains Plugged' : `${featuredDevice.batteryPct}% Battery`}
                           </span>
                         </div>
-
-                        {/* Level Progress Bars */}
-                        <div className="pt-2 space-y-3">
-                          <div>
-                            <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
-                              <span className="flex items-center gap-1.5"><Utensils className="w-3.5 h-3.5 text-emerald-600" /> Food Hopper Level</span>
-                              <span className="font-mono text-emerald-600">{featuredDevice.foodLevelPct}%</span>
-                            </div>
-                            <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                              <div style={{ width: `${featuredDevice.foodLevelPct}%` }} className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500" />
+                      {/* Real-Time Sensor Telemetry Grid */}
+                      <div className="pt-2 space-y-3">
+                        {/* Live Sensors Readout */}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          {/* Live Load Cell Weight */}
+                          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex flex-col justify-between">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                              <Scale className="w-3 h-3 text-emerald-600" />
+                              Food Bowl Scale
+                            </span>
+                            <div className="flex items-baseline justify-between mt-1">
+                              <span className="font-mono text-sm font-extrabold text-slate-800">
+                                {featuredDevice.foodBowlWeightGrams ? featuredDevice.foodBowlWeightGrams.toFixed(1) : '0.0'} g
+                              </span>
+                              <span className="text-[10px] text-slate-400">Load Cell</span>
                             </div>
                           </div>
 
-                          <div>
-                            <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
-                              <span className="flex items-center gap-1.5"><Droplets className="w-3.5 h-3.5 text-sky-600" /> Water Reservoir Level</span>
-                              <span className="font-mono text-sky-600">{featuredDevice.waterLevelPct}%</span>
+                          {/* Live TDS Water Quality */}
+                          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex flex-col justify-between">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                              <Droplets className="w-3 h-3 text-sky-600" />
+                              Water Quality (TDS)
+                            </span>
+                            <div className="flex items-baseline justify-between mt-1">
+                              <span className="font-mono text-sm font-extrabold text-slate-800">
+                                {featuredDevice.waterQualityPpm ?? 0} PPM
+                              </span>
+                              {(() => {
+                                const tds = featuredDevice.waterQualityPpm ?? 0;
+                                if (tds === 0) return <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">Dry</span>;
+                                if (tds <= 300) return <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Pure</span>;
+                                if (tds <= 600) return <span className="text-[9px] font-bold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded">Good Tap</span>;
+                                if (tds <= 900) return <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">Fair</span>;
+                                return <span className="text-[9px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">Filter Req</span>;
+                              })()}
                             </div>
-                            <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                              <div style={{ width: `${featuredDevice.waterLevelPct}%` }} className="h-full bg-gradient-to-r from-sky-500 to-blue-500 rounded-full transition-all duration-500" />
-                            </div>
+                          </div>
+                        </div>
+
+                        {/* Level Progress Bars */}
+                        <div>
+                          <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
+                            <span className="flex items-center gap-1.5"><Utensils className="w-3.5 h-3.5 text-emerald-600" /> Food Hopper Level</span>
+                            <span className="font-mono text-emerald-600">{featuredDevice.foodLevelPct}%</span>
+                          </div>
+                          <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div style={{ width: `${featuredDevice.foodLevelPct}%` }} className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500" />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
+                            <span className="flex items-center gap-1.5"><Droplets className="w-3.5 h-3.5 text-sky-600" /> Water Reservoir Depth</span>
+                            <span className="font-mono text-sky-600">{featuredDevice.waterLevelPct}%</span>
+                          </div>
+                          <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div style={{ width: `${featuredDevice.waterLevelPct}%` }} className="h-full bg-gradient-to-r from-sky-500 to-blue-500 rounded-full transition-all duration-500" />
                           </div>
                         </div>
                       </div>
                     </div>
+                  </div>
 
                     {/* Quick Dispense & Action Controls */}
                     <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs gap-2">
