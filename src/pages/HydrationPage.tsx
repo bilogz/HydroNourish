@@ -4,6 +4,7 @@ import { StatCard } from '../components/StatCard';
 import { ChartCard } from '../components/ChartCard';
 import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { Modal } from '../components/Modal';
 import { useAppContext } from '../hooks/useAppContext';
 import { Link } from 'react-router-dom';
 import {
@@ -14,7 +15,11 @@ import {
   Cpu,
   Clock,
   Plus,
-  WifiOff
+  WifiOff,
+  Sliders,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import {
   AreaChart,
@@ -27,34 +32,57 @@ import {
 } from 'recharts';
 import { formatHydration } from '../utils/formatters';
 
+const PAGE_SIZE = 10;
+
 export const HydrationPage: React.FC = () => {
-  const { devices, pets, hydrationLogs, refillWater } = useAppContext();
+  const { devices, pets, hydrationLogs, refillWater, dispenseWaterDirect, showToast } = useAppContext();
 
   const [confirmRefillOpen, setConfirmRefillOpen] = useState(false);
+  const [customWaterModalOpen, setCustomWaterModalOpen] = useState(false);
+  const [customWaterLevelPct, setCustomWaterLevelPct] = useState(75);
+  const [logPage, setLogPage] = useState(1);
 
   // Check if an active Online device is connected
-  const isDeviceConnected = useMemo(() => {
-    return Boolean(
-      devices &&
-      devices.length > 0 &&
-      devices[0].status === 'Online' &&
-      devices[0].id !== 'No Device Connected' &&
-      devices[0].id !== 'Unassigned'
-    );
+  const selectedDevice = useMemo(() => {
+    if (!devices || devices.length === 0) return null;
+    return devices.find(d => d.id === 'HN-NODE-F778' || d.status === 'Online') || devices[0];
   }, [devices]);
 
-  const selectedDevice = isDeviceConnected ? devices[0] : null;
+  const isDeviceConnected = Boolean(selectedDevice && selectedDevice.status === 'Online');
 
   const lowWaterDevices = useMemo(() => {
     if (!isDeviceConnected || !selectedDevice) return [];
     return selectedDevice.waterLevelPct < 30 ? [selectedDevice] : [];
   }, [isDeviceConnected, selectedDevice]);
 
+  // Clean deduplicated logs
+  const displayLogs = useMemo(() => {
+    if (!hydrationLogs || hydrationLogs.length === 0) return [];
+    const seen = new Set();
+    const unique = [];
+    for (const log of hydrationLogs) {
+      const key = `${log.id}-${log.timestamp}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(log);
+      }
+    }
+    return unique;
+  }, [hydrationLogs]);
+
+  // Paginated Hydration Logs (10 per page)
+  const totalLogPages = Math.max(1, Math.ceil(displayLogs.length / PAGE_SIZE));
+  const currentLogPage = Math.min(logPage, totalLogPages);
+  const paginatedHydrationLogs = displayLogs.slice(
+    (currentLogPage - 1) * PAGE_SIZE,
+    currentLogPage * PAGE_SIZE
+  );
+
   // Dynamic calculations
   const totalWaterConsumedMl = useMemo(() => {
-    if (!isDeviceConnected || !hydrationLogs || hydrationLogs.length === 0) return 0;
-    return hydrationLogs.reduce((acc, log) => acc + (log.amountMl || 0), 0);
-  }, [isDeviceConnected, hydrationLogs]);
+    if (!isDeviceConnected || !displayLogs || displayLogs.length === 0) return 0;
+    return displayLogs.reduce((acc, log) => acc + (log.amountMl || 0), 0);
+  }, [isDeviceConnected, displayLogs]);
 
   const totalHydrationTargetMl = useMemo(() => {
     if (!isDeviceConnected || !pets || pets.length === 0) return 0;
@@ -66,7 +94,7 @@ export const HydrationPage: React.FC = () => {
     return selectedDevice.waterLevelPct;
   }, [isDeviceConnected, selectedDevice]);
 
-  // Dynamic Intake Rate Curve constructed from real hydration logs
+  // Dynamic Intake Rate Curve
   const dynamicHydrationChartData = useMemo(() => {
     const timeSlots = [
       { time: '06:00 AM', ml: 0 },
@@ -77,14 +105,14 @@ export const HydrationPage: React.FC = () => {
       { time: '09:00 PM', ml: 0 },
     ];
 
-    if (!isDeviceConnected || !hydrationLogs || hydrationLogs.length === 0) {
+    if (!isDeviceConnected || !displayLogs || displayLogs.length === 0) {
       return timeSlots;
     }
 
     let runningSum = 0;
-    const step = Math.ceil(hydrationLogs.length / timeSlots.length);
+    const step = Math.max(1, Math.ceil(displayLogs.length / timeSlots.length));
     return timeSlots.map((slot, index) => {
-      const logsForSlot = hydrationLogs.slice(index * step, (index + 1) * step);
+      const logsForSlot = displayLogs.slice(index * step, (index + 1) * step);
       const slotSum = logsForSlot.reduce((acc, l) => acc + (l.amountMl || 0), 0);
       runningSum += slotSum;
       return {
@@ -92,7 +120,7 @@ export const HydrationPage: React.FC = () => {
         ml: totalHydrationTargetMl > 0 ? Math.min(totalHydrationTargetMl, runningSum) : runningSum,
       };
     });
-  }, [isDeviceConnected, hydrationLogs, totalHydrationTargetMl]);
+  }, [isDeviceConnected, displayLogs, totalHydrationTargetMl]);
 
   const handleOpenRefillModal = () => {
     if (selectedDevice) {
@@ -106,8 +134,31 @@ export const HydrationPage: React.FC = () => {
     }
   };
 
+  const handleExecuteCustomWater = async () => {
+    if (selectedDevice) {
+      // Calculate duration/volume mapped from 1-100%
+      const volumeMl = Math.round((customWaterLevelPct / 100) * 350);
+      await dispenseWaterDirect(selectedDevice.id, volumeMl);
+      setCustomWaterModalOpen(false);
+    }
+  };
+
   return (
-    <DashboardLayout pageTitle="Smart Hydration Monitoring" breadcrumbs={[{ label: 'Hydration' }]}>
+    <DashboardLayout pageTitle="Automated Smart Hydration System" breadcrumbs={[{ label: 'Hydration' }]}>
+      {/* Automated System Status Banner */}
+      <div className="clinic-card p-4 bg-sky-500/10 border-sky-200 flex items-center justify-between text-xs text-sky-900 mb-2">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-sky-600 shrink-0" />
+          <span>
+            <strong>Automated Smart Hydration:</strong> Auto-refill sensors maintain ideal water reservoir levels. Use <strong>Custom Manual Water Pump</strong> below for on-demand customization.
+          </span>
+        </div>
+        <span className="font-bold text-sky-700 hidden sm:inline flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full ${isDeviceConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+          {isDeviceConnected ? `Node ${selectedDevice?.id} Online` : 'No Hydrator Node Synced'}
+        </span>
+      </div>
+
       {/* ================= STAT CARDS ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
@@ -163,7 +214,7 @@ export const HydrationPage: React.FC = () => {
             <div className="space-y-1">
               <h3 className="text-base font-extrabold text-slate-900">No Device Connected</h3>
               <p className="text-xs text-slate-500 max-w-xs">
-                The single smart hydration station is offline or not currently connected.
+                The smart hydration station is offline or not currently connected.
               </p>
             </div>
             <Link
@@ -237,13 +288,22 @@ export const HydrationPage: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={handleOpenRefillModal}
-              className="w-full py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refill Reservoir Container to 100%
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setCustomWaterModalOpen(true)}
+                className="py-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              >
+                <Sliders className="w-4 h-4 text-sky-400" />
+                Custom Water Pump
+              </button>
+              <button
+                onClick={handleOpenRefillModal}
+                className="py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Refill to 100%
+              </button>
+            </div>
           </div>
         )}
 
@@ -300,7 +360,7 @@ export const HydrationPage: React.FC = () => {
                   </div>
                   <button
                     onClick={handleOpenRefillModal}
-                    className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs"
+                    className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs cursor-pointer active:scale-95"
                   >
                     Refill Now
                   </button>
@@ -329,14 +389,14 @@ export const HydrationPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {(!isDeviceConnected || !hydrationLogs || hydrationLogs.length === 0) ? (
+                  {(!isDeviceConnected || displayLogs.length === 0) ? (
                     <tr>
                       <td colSpan={4} className="px-4 py-6 text-center text-slate-400 italic">
                         No hydration telemetry logs recorded yet. Connect a device station to begin recording.
                       </td>
                     </tr>
                   ) : (
-                    hydrationLogs.map((log) => (
+                    paginatedHydrationLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-slate-50/80">
                         <td className="px-4 py-3 font-bold text-slate-900">{log.petName}</td>
                         <td className="px-4 py-3 font-bold text-sky-700">{formatHydration(log.amountMl)}</td>
@@ -348,23 +408,125 @@ export const HydrationPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Carousel Bullet Pagination Footer for Hydration */}
+            {displayLogs.length > PAGE_SIZE && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-slate-200 text-xs">
+                <div className="text-slate-500 font-medium">
+                  Showing <span className="font-bold text-slate-800">{(currentLogPage - 1) * PAGE_SIZE + 1}–{Math.min(currentLogPage * PAGE_SIZE, displayLogs.length)}</span> of <span className="font-bold text-slate-800">{displayLogs.length}</span> logs
+                </div>
+
+                {/* Bullet Dots & Controls */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setLogPage(Math.max(1, currentLogPage - 1))}
+                    disabled={currentLogPage === 1}
+                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    title="Previous 10"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Interactive Carousel Bullets */}
+                  <div className="flex items-center gap-1.5 px-2">
+                    {Array.from({ length: totalLogPages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => setLogPage(page)}
+                        className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                          currentLogPage === page
+                            ? 'w-6 bg-sky-600 shadow-xs'
+                            : 'w-2 bg-slate-300 hover:bg-slate-400'
+                        }`}
+                        title={`Page ${page}`}
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setLogPage(Math.min(totalLogPages, currentLogPage + 1))}
+                    disabled={currentLogPage === totalLogPages}
+                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    title="Next 10"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
+      {/* ================= CUSTOM MANUAL WATER PUMP MODAL (1-100% LEVEL SCALE) ================= */}
+      <Modal
+        isOpen={customWaterModalOpen}
+        onClose={() => setCustomWaterModalOpen(false)}
+        title="Custom Manual Water Pump Override"
+        subtitle="On-Demand Water Level Trigger (1% - 100%)"
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-slate-600 leading-relaxed">
+            The system maintains hydration <strong>automatically</strong>. Use this tool to trigger an immediate custom water level for the bowl.
+          </p>
+
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <label className="font-bold text-slate-700 uppercase">Target Water Dispense Level</label>
+              <span className="font-bold text-sky-600 text-sm">{customWaterLevelPct}% Level</span>
+            </div>
+            <input
+              type="range"
+              min="1"
+              max="100"
+              step="1"
+              value={customWaterLevelPct}
+              onChange={e => setCustomWaterLevelPct(Number(e.target.value))}
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-500"
+            />
+            <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
+              <span>1% (Sip)</span>
+              <span>25%</span>
+              <span>50% (Half)</span>
+              <span>75%</span>
+              <span>100% (Full Fill)</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-sky-50 rounded-xl border border-sky-200/60 text-sky-800 text-[11px] flex items-center gap-2">
+            <Droplets className="w-4 h-4 text-sky-600 shrink-0" />
+            <span>Water pump on node <strong>{selectedDevice?.id || 'HN-NODE-F778'}</strong> will activate to reach <strong>{customWaterLevelPct}% Level</strong> (~{Math.round(customWaterLevelPct * 30)} ms).</span>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setCustomWaterModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleExecuteCustomWater}
+              className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-sm cursor-pointer active:scale-95"
+            >
+              Pump to {customWaterLevelPct}% Level Now
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* ================= REFILL CONFIRM DIALOG ================= */}
-      {selectedDevice && (
-        <ConfirmDialog
-          isOpen={confirmRefillOpen}
-          onClose={() => setConfirmRefillOpen(false)}
-          onConfirm={handleConfirmRefill}
-          title="Refill Water Reservoir Container"
-          message={`Are you sure you want to refill the water reservoir container for ${selectedDevice.id} (${selectedDevice.assignedPetName}) to 100% capacity?`}
-          confirmLabel="Confirm Refill"
-          cancelLabel="Cancel"
-          variant="info"
-        />
-      )}
+      <ConfirmDialog
+        isOpen={confirmRefillOpen}
+        onClose={() => setConfirmRefillOpen(false)}
+        onConfirm={handleConfirmRefill}
+        title="Confirm Water Reservoir Container Refill"
+        message={`Are you sure you have physically refilled the reservoir container on dispenser ${selectedDevice?.id} to 100% full capacity?`}
+        confirmText="Confirm 100% Full"
+        variant="info"
+      />
     </DashboardLayout>
   );
 };

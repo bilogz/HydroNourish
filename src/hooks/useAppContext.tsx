@@ -294,12 +294,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // ─── Live Dynamic Telemetry Simulation Engine ────────────────────────
+    // --- Live Dynamic Telemetry Simulation Engine -------------------------
   useEffect(() => {
     const telemetryInterval = setInterval(async () => {
-      if (devices.length === 0 || devices[0].status !== 'Online' || !devices[0].assignedPetId) return;
+      if (devices.length === 0) return;
+      const activeDev = devices.find(d => d.id === 'HN-NODE-F778' || d.status === 'Online') || devices[0];
+      if (!activeDev || activeDev.status !== 'Online' || !activeDev.assignedPetId) return;
 
-      const activeDev = devices[0];
+      // Pure real hardware telemetry: Do NOT inject random simulated deltas for real ESP32 hardware
+      if (activeDev.id === 'HN-NODE-F778' || activeDev.id.startsWith('HN-NODE') || activeDev.macAddress?.includes('1C:C3:AB')) {
+        return;
+      }
       const activePet = pets.find((p) => p.id === activeDev.assignedPetId) || pets[0];
       if (!activePet) return;
 
@@ -393,24 +398,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateScheduleInSupabase(scheduleId, { dispenseStatus: 'Pending' });
   };
 
-  const dispenseDirect = async (deviceId: string, portionGrams: number = 60, foodType: string = 'Veterinary Dry Kibble') => {
+  const dispenseDirect = async (deviceId: string, portionGrams: number = 75, foodType: string = '80° Gate Cycle (+80° Open / -80° Close)') => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
+    const targetDeviceId = deviceId || dev?.id || 'HN-NODE-F778';
 
     const newSch: FeedingSchedule = {
       id: `SCH-DIR-${Date.now().toString().slice(-4)}`,
       petId,
       petName,
       foodType,
-      portionGrams,
+      portionGrams: 75,
       scheduledTime: 'Instant Manual',
       dispenseStatus: 'Pending',
-      deviceId: deviceId,
+      deviceId: targetDeviceId,
     };
 
     setSchedules((prev) => [newSch, ...prev]);
-    showToast('success', 'Remote Dispense Triggered', `Triggered ${portionGrams}g portion command to ${deviceId}.`);
+    showToast('success', '80° Gate Cycle Triggered', `Opening +80° & closing -80° on node ${targetDeviceId}.`);
+
+    // ⚡ Ultra-Fast Parallel Dispatch: Direct LAN REST + Supabase Cloud Queue
+    try {
+      fetch('http://192.168.100.159/api/dispense/food', { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      fetch('http://hydronourish.local/api/dispense/food', { method: 'POST', mode: 'no-cors' }).catch(() => {});
+    } catch {}
+
     await insertScheduleToSupabase(newSch);
   };
 

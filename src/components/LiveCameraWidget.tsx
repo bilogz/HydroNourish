@@ -176,30 +176,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             <span className="hidden sm:inline">AI Scanner</span>
           </button>
 
-          {/* Deep AI Vision Diagnostics Button */}
-          <button
-            onClick={handleRunAiScan}
-            disabled={isAnalyzing || streamError}
-            title="Run Deep Multimodal AI Veterinary Analysis"
-            className={`px-3 py-2 rounded-lg font-bold transition-all text-xs flex items-center gap-1.5 shadow-md ${
-              isAnalyzing
-                ? 'bg-indigo-600 text-white cursor-wait opacity-80'
-                : 'bg-gradient-to-r from-teal-500 to-indigo-600 hover:from-teal-400 hover:to-indigo-500 text-white cursor-pointer active:scale-95'
-            }`}
-          >
-            {isAnalyzing ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>Analyzing...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span className="hidden sm:inline">AI Health Check</span>
-                <span className="sm:hidden">AI</span>
-              </>
-            )}
-          </button>
+          
 
           {allowIpChange && (
             <button

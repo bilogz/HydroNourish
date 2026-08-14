@@ -489,7 +489,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               title="Launch AI Clinical Assistant"
             >
               <Sparkles className="w-4 h-4 text-teal-600" />
-              <span className="hidden sm:inline">AI Check</span>
+              <span className="hidden sm:inline">AI Pet Summary</span>
             </button>
 
             {/* Notifications */}

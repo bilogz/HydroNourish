@@ -14,33 +14,67 @@ import {
   Clock,
   Cpu,
   ShieldCheck,
-  AlertTriangle
+  Sliders,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
+const PAGE_SIZE = 10;
+
 export const FeedingPage: React.FC = () => {
-  const { pets, devices, schedules, feedingLogs, addSchedule, dispenseNow } = useAppContext();
+  const { pets, devices, schedules, feedingLogs, addSchedule, dispenseNow, dispenseDirect, showToast } = useAppContext();
+
+  // Derive active featured device
+  const selectedDevice = (devices && devices.length > 0)
+    ? (devices.find(d => d.id === 'HN-NODE-F778' || d.status === 'Online') || devices[0])
+    : null;
 
   const isDeviceConnected = Boolean(
-    devices &&
-    devices.length > 0 &&
-    devices[0].status === 'Online' &&
-    devices[0].id !== 'No Device Connected' &&
-    devices[0].id !== 'Unassigned'
+    selectedDevice &&
+    selectedDevice.status === 'Online' &&
+    selectedDevice.id !== 'No Device Connected' &&
+    selectedDevice.id !== 'Unassigned'
   );
+
+  // Pagination state for Schedules and Logs
+  const [schedulePage, setSchedulePage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
 
   // Modals state
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [customManualModalOpen, setCustomManualModalOpen] = useState(false);
   const [confirmDispenseModalOpen, setConfirmDispenseModalOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<FeedingSchedule | null>(null);
+
+  // Custom Manual Dispense State
+  const [customPortion, setCustomPortion] = useState(75);
+  const [customPetId, setCustomPetId] = useState(pets[0]?.id || 'PET-001');
 
   // Add Schedule Form
   const [formData, setFormData] = useState({
     petId: pets[0]?.id || '',
     foodType: 'High-Protein Kibble',
-    portionGrams: 100,
+    portionGrams: 75,
     scheduledTime: '08:00 AM',
-    deviceId: isDeviceConnected ? devices[0].id : 'Cage 1'
+    deviceId: isDeviceConnected && selectedDevice ? selectedDevice.id : 'HN-NODE-F778'
   });
+
+  // Calculate Paginated Schedules (10 per page)
+  const totalSchedulePages = Math.max(1, Math.ceil(schedules.length / PAGE_SIZE));
+  const currentSchedulePage = Math.min(schedulePage, totalSchedulePages);
+  const paginatedSchedules = schedules.slice(
+    (currentSchedulePage - 1) * PAGE_SIZE,
+    currentSchedulePage * PAGE_SIZE
+  );
+
+  // Calculate Paginated Feeding Logs (10 per page)
+  const totalHistoryPages = Math.max(1, Math.ceil(feedingLogs.length / PAGE_SIZE));
+  const currentHistoryPage = Math.min(historyPage, totalHistoryPages);
+  const paginatedLogs = feedingLogs.slice(
+    (currentHistoryPage - 1) * PAGE_SIZE,
+    currentHistoryPage * PAGE_SIZE
+  );
 
   const handleOpenDispenseConfirm = (schedule: FeedingSchedule) => {
     setSelectedSchedule(schedule);
@@ -51,6 +85,13 @@ export const FeedingPage: React.FC = () => {
     if (selectedSchedule) {
       dispenseNow(selectedSchedule.id);
     }
+  };
+
+  const handleExecuteCustomManual = async () => {
+    const pet = pets.find(p => p.id === customPetId) || pets[0];
+    const devId = selectedDevice?.id || 'HN-NODE-F778';
+    await dispenseDirect(devId, customPortion, `Custom Manual (${customPortion}g)`);
+    setCustomManualModalOpen(false);
   };
 
   const handleAddSubmit = (e: React.FormEvent) => {
@@ -65,20 +106,22 @@ export const FeedingPage: React.FC = () => {
       deviceId: formData.deviceId
     });
     setAddModalOpen(false);
+    showToast('success', 'Automated Schedule Created', `Scheduled ${formData.portionGrams}g at ${formData.scheduledTime} for ${pet.name}.`);
   };
 
   return (
-    <DashboardLayout pageTitle="Automated Pet Feeding System" breadcrumbs={[{ label: 'Feeding' }]}>
-      {/* Safety Notice Header */}
+    <DashboardLayout pageTitle="Automated Smart Feeding System" breadcrumbs={[{ label: 'Feeding' }]}>
+      {/* Automated System Status Banner */}
       <div className="clinic-card p-4 bg-teal-500/10 border-teal-200 flex items-center justify-between text-xs text-teal-900">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
+          <Sparkles className="w-4 h-4 text-teal-600 shrink-0" />
           <span>
-            <strong>Manual Dispense Control:</strong> Triggering manual dispense commands sends a calibrated servo trigger signal to the assigned ESP32 unit.
+            <strong>Automated Smart Feeding:</strong> All schedules are automated by default with high-torque precision. Use the <strong>Custom Manual Dispense</strong> button below whenever on-demand override is needed.
           </span>
         </div>
-        <span className="font-bold text-teal-700 hidden sm:inline">
-          {isDeviceConnected ? '1 Feeder Node Synced' : 'No Feeder Node Synced'}
+        <span className="font-bold text-teal-700 hidden sm:inline flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full ${isDeviceConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+          {isDeviceConnected ? `Node ${selectedDevice?.id} Online` : 'No Feeder Node Synced'}
         </span>
       </div>
 
@@ -91,7 +134,7 @@ export const FeedingPage: React.FC = () => {
           icon={Utensils}
           iconBgColor={isDeviceConnected ? "bg-teal-50" : "bg-slate-100"}
           iconTextColor={isDeviceConnected ? "text-teal-600" : "text-slate-400"}
-          badgeText={isDeviceConnected ? "Success" : "Offline"}
+          badgeText={isDeviceConnected ? "Active" : "Offline"}
           badgeType={isDeviceConnected ? "success" : "neutral"}
         />
         <StatCard
@@ -101,35 +144,50 @@ export const FeedingPage: React.FC = () => {
           icon={Clock}
           iconBgColor={isDeviceConnected ? "bg-amber-50" : "bg-slate-100"}
           iconTextColor={isDeviceConnected ? "text-amber-600" : "text-slate-400"}
-          badgeText={isDeviceConnected ? "Queued" : "Offline"}
+          badgeText={isDeviceConnected ? "Automated" : "Offline"}
           badgeType={isDeviceConnected ? "warning" : "neutral"}
         />
         <StatCard
           title="Feeder Hopper Container Level"
-          value={isDeviceConnected && devices[0] ? `${devices[0].foodLevelPct}% Avg` : 'N/A'}
+          value={isDeviceConnected && selectedDevice ? `${selectedDevice.foodLevelPct}%` : 'N/A'}
           subtitle={isDeviceConnected ? "Container Capacity" : "No device connected"}
           icon={Cpu}
           iconBgColor={isDeviceConnected ? "bg-emerald-50" : "bg-slate-100"}
           iconTextColor={isDeviceConnected ? "text-emerald-600" : "text-slate-400"}
-          badgeText={isDeviceConnected ? (devices[0]?.foodLevelPct > 30 ? "Sufficient" : "Low") : "Offline"}
-          badgeType={isDeviceConnected ? (devices[0]?.foodLevelPct > 30 ? "success" : "alert") : "neutral"}
+          badgeText={isDeviceConnected ? (selectedDevice && selectedDevice.foodLevelPct > 30 ? "Sufficient" : "Low") : "Offline"}
+          badgeType={isDeviceConnected ? (selectedDevice && selectedDevice.foodLevelPct > 30 ? "success" : "alert") : "neutral"}
         />
       </div>
 
       {/* ================= FEEDING SCHEDULES TABLE ================= */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-extrabold text-slate-900">Active Feeding Schedules</h2>
-            <p className="text-xs text-slate-500">Automated timed dispensing rules per patient</p>
+            <h2 className="text-base font-extrabold text-slate-900">Automated Feeding Schedules</h2>
+            <p className="text-xs text-slate-500">Scheduled automated dispensing rules per patient (10 per page)</p>
           </div>
-          <button
-            onClick={() => setAddModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add Schedule
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCustomManualModalOpen(true)}
+              disabled={!isDeviceConnected}
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-2 ${
+                isDeviceConnected
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white cursor-pointer active:scale-95'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              }`}
+              title={isDeviceConnected ? 'Custom Manual Dispense Override' : 'Device is offline'}
+            >
+              <Sliders className="w-4 h-4" />
+              Custom Manual Dispense
+            </button>
+            <button
+              onClick={() => setAddModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              Add Schedule
+            </button>
+          </div>
         </div>
 
         <div className="clinic-card overflow-hidden">
@@ -143,37 +201,97 @@ export const FeedingPage: React.FC = () => {
                   <th className="px-4 py-3">Scheduled Time</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Device Node</th>
-                  <th className="px-4 py-3 text-right">Dispense Mode</th>
+                  <th className="px-4 py-3 text-right">Mode</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {schedules.map(sch => (
-                  <tr key={sch.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-4 py-3 font-bold text-slate-900">{sch.petName}</td>
-                    <td className="px-4 py-3 text-slate-600">{sch.foodType}</td>
-                    <td className="px-4 py-3 font-bold text-teal-700">{sch.portionGrams} grams</td>
-                    <td className="px-4 py-3 font-semibold text-slate-800">{sch.scheduledTime}</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={sch.dispenseStatus} size="sm" />
-                    </td>
-                    <td className="px-4 py-3 font-mono font-bold text-teal-600">{sch.deviceId}</td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 font-bold text-[11px] inline-flex items-center gap-1.5 border border-teal-200/60">
-                        <Cpu className="w-3 h-3 text-teal-600" />
-                        Automated Smart Dispense
-                      </span>
+                {schedules.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-6 text-center text-slate-400 italic">
+                      No automated schedules configured yet. Click "Add Schedule" above.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  paginatedSchedules.map(sch => (
+                    <tr key={sch.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-4 py-3 font-bold text-slate-900">{sch.petName}</td>
+                      <td className="px-4 py-3 text-slate-600">{sch.foodType}</td>
+                      <td className="px-4 py-3 font-bold text-teal-700">{sch.portionGrams} grams</td>
+                      <td className="px-4 py-3 font-semibold text-slate-800">{sch.scheduledTime}</td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={sch.dispenseStatus} size="sm" />
+                      </td>
+                      <td className="px-4 py-3 font-mono font-bold text-teal-600">{sch.deviceId}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 font-bold text-[11px] inline-flex items-center gap-1.5 border border-teal-200/60">
+                          <Cpu className="w-3 h-3 text-teal-600" />
+                          Automated
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
+
+          {/* Carousel Bullet Pagination Footer */}
+          {schedules.length > PAGE_SIZE && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-slate-200 text-xs">
+              <div className="text-slate-500 font-medium">
+                Showing <span className="font-bold text-slate-800">{(currentSchedulePage - 1) * PAGE_SIZE + 1}–{Math.min(currentSchedulePage * PAGE_SIZE, schedules.length)}</span> of <span className="font-bold text-slate-800">{schedules.length}</span> schedules
+              </div>
+
+              {/* Bullet Dots & Controls */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSchedulePage(Math.max(1, currentSchedulePage - 1))}
+                  disabled={currentSchedulePage === 1}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  title="Previous 10"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Interactive Carousel Bullets */}
+                <div className="flex items-center gap-1.5 px-2">
+                  {Array.from({ length: totalSchedulePages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setSchedulePage(page)}
+                      className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                        currentSchedulePage === page
+                          ? 'w-6 bg-teal-600 shadow-xs'
+                          : 'w-2 bg-slate-300 hover:bg-slate-400'
+                      }`}
+                      title={`Page ${page}`}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setSchedulePage(Math.min(totalSchedulePages, currentSchedulePage + 1))}
+                  disabled={currentSchedulePage === totalSchedulePages}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  title="Next 10"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* ================= HISTORICAL FEEDING LOGS ================= */}
       <div className="space-y-4 pt-4">
-        <h2 className="text-base font-extrabold text-slate-900">Dispense History Log</h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-extrabold text-slate-900">Dispense History Log</h2>
+            <p className="text-xs text-slate-500">Historical automated and custom dispense events (10 per page)</p>
+          </div>
+        </div>
+
         <div className="clinic-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-700">
@@ -183,32 +301,158 @@ export const FeedingPage: React.FC = () => {
                   <th className="px-4 py-3">Pet</th>
                   <th className="px-4 py-3">Portion Served</th>
                   <th className="px-4 py-3">Timestamp</th>
-                  <th className="px-4 py-3">Trigger Type</th>
+                  <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Device Node</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {feedingLogs.map(log => (
-                  <tr key={log.id} className="hover:bg-slate-50/80">
-                    <td className="px-4 py-3 font-mono font-bold text-slate-400">{log.id}</td>
-                    <td className="px-4 py-3 font-bold text-slate-900">{log.petName}</td>
-                    <td className="px-4 py-3 font-bold text-emerald-700">{log.portionGrams}g</td>
-                    <td className="px-4 py-3 text-slate-500">{log.dispensedAt}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-md font-semibold text-[10px] ${
-                        log.status === 'Success' ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700'
-                      }`}>
-                        {log.status}
-                      </span>
+                {feedingLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-6 text-center text-slate-400 italic">
+                      No feeding history logs recorded yet.
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-400">{log.deviceId}</td>
                   </tr>
-                ))}
+                ) : (
+                  paginatedLogs.map(log => (
+                    <tr key={log.id} className="hover:bg-slate-50/80">
+                      <td className="px-4 py-3 font-mono font-bold text-slate-400">{log.id}</td>
+                      <td className="px-4 py-3 font-bold text-slate-900">{log.petName}</td>
+                      <td className="px-4 py-3 font-bold text-emerald-700">{log.portionGrams}g</td>
+                      <td className="px-4 py-3 text-slate-500">{log.dispensedAt}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-md font-semibold text-[10px] ${
+                          log.status === 'Success' ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700'
+                        }`}>
+                          {log.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-slate-400">{log.deviceId}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
+
+          {/* Carousel Bullet Pagination Footer for Logs */}
+          {feedingLogs.length > PAGE_SIZE && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-slate-200 text-xs">
+              <div className="text-slate-500 font-medium">
+                Showing <span className="font-bold text-slate-800">{(currentHistoryPage - 1) * PAGE_SIZE + 1}–{Math.min(currentHistoryPage * PAGE_SIZE, feedingLogs.length)}</span> of <span className="font-bold text-slate-800">{feedingLogs.length}</span> logs
+              </div>
+
+              {/* Bullet Dots & Controls */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setHistoryPage(Math.max(1, currentHistoryPage - 1))}
+                  disabled={currentHistoryPage === 1}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  title="Previous 10"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Interactive Carousel Bullets */}
+                <div className="flex items-center gap-1.5 px-2">
+                  {Array.from({ length: totalHistoryPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setHistoryPage(page)}
+                      className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                        currentHistoryPage === page
+                          ? 'w-6 bg-teal-600 shadow-xs'
+                          : 'w-2 bg-slate-300 hover:bg-slate-400'
+                      }`}
+                      title={`Page ${page}`}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setHistoryPage(Math.min(totalHistoryPages, currentHistoryPage + 1))}
+                  disabled={currentHistoryPage === totalHistoryPages}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  title="Next 10"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* ================= CUSTOM MANUAL DISPENSE MODAL ================= */}
+      <Modal
+        isOpen={customManualModalOpen}
+        onClose={() => setCustomManualModalOpen(false)}
+        title="Custom Manual Dispense Override"
+        subtitle="On-Demand Custom Portion Trigger"
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-slate-600 leading-relaxed">
+            The system operates on <strong>Automated Schedules</strong> by default. Use this tool to customize and trigger an immediate on-demand portion.
+          </p>
+
+          <div>
+            <label className="block font-bold text-slate-700 uppercase mb-1">Target Patient</label>
+            <select
+              value={customPetId}
+              onChange={e => setCustomPetId(e.target.value)}
+              className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:outline-none font-semibold text-xs"
+            >
+              {pets.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.species} - {p.id})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <label className="font-bold text-slate-700 uppercase">Portion Size</label>
+              <span className="font-bold text-amber-600 text-sm">{customPortion} grams</span>
+            </div>
+            <input
+              type="range"
+              min="15"
+              max="200"
+              step="5"
+              value={customPortion}
+              onChange={e => setCustomPortion(Number(e.target.value))}
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+            />
+            <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
+              <span>15g (Snack)</span>
+              <span>75g (Standard)</span>
+              <span>200g (Full Meal)</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/60 text-amber-800 text-[11px] flex items-center gap-2">
+            <Sliders className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>Dispenser node <strong>{selectedDevice?.id || 'HN-NODE-F778'}</strong> will execute a precision 80° gate cycle.</span>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setCustomManualModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleExecuteCustomManual}
+              className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold shadow-sm cursor-pointer active:scale-95"
+            >
+              Dispense {customPortion}g Now
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ================= ADD SCHEDULE MODAL ================= */}
       <Modal
@@ -299,13 +543,13 @@ export const FeedingPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setAddModalOpen(false)}
-              className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700 hover:bg-slate-50"
+              className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold shadow-sm"
+              className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold shadow-sm cursor-pointer active:scale-95"
             >
               Save Schedule
             </button>
@@ -318,8 +562,8 @@ export const FeedingPage: React.FC = () => {
         isOpen={confirmDispenseModalOpen}
         onClose={() => setConfirmDispenseModalOpen(false)}
         onConfirm={handleConfirmDispense}
-        title="Confirm Manual Food Dispense"
-        message={`Are you sure you want to dispense ${selectedSchedule?.portionGrams}g of ${selectedSchedule?.foodType} for ${selectedSchedule?.petName} on unit ${selectedSchedule?.deviceId}?`}
+        title="Confirm Automated Dispense Trigger"
+        message={`Are you sure you want to trigger ${selectedSchedule?.portionGrams}g of ${selectedSchedule?.foodType} for ${selectedSchedule?.petName} on unit ${selectedSchedule?.deviceId}?`}
         confirmText="Dispense Food"
         variant="info"
       />

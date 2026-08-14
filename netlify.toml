@@ -1,10 +1,18 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "20"
 
+# Route API requests to Netlify Functions (Prevents SPA fallback from swallowing API calls)
+[[redirects]]
+  from = "/api/device-telemetry"
+  to = "/.netlify/functions/device-telemetry"
+  status = 200
+
+# SPA Router Fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"

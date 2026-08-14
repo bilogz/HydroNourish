@@ -112,7 +112,8 @@ export const OverviewPage: React.FC = () => {
   const completedSessionCount = getCompletedSessionCount();
   const activeSessionCount = activeSession ? 1 : 0;
   const hwStatusLabel = (hardware && hardware.hardwareStatus) ? (hardware.hardwareStatus.charAt(0).toUpperCase() + hardware.hardwareStatus.slice(1)) : 'Available';
-  const hasDeviceConnected = Boolean((devices ?? []).length > 0 && (devices ?? [])[0]?.status === 'Online' && hardware && hardware.status === 'Online' && hardware.id !== 'No Device Connected');
+  const activeOnlineDev = (devices ?? []).find(d => d.status === 'Online' && d.id !== 'No Device Connected');
+  const hasDeviceConnected = Boolean(activeOnlineDev || (hardware && hardware.status === 'Online' && hardware.id !== 'No Device Connected'));
 
   // Recent activity from session context
   const recentLogs = activityLogs.slice(0, 6);

@@ -190,17 +190,20 @@ export async function insertScheduleToSupabase(schedule: FeedingSchedule): Promi
   try {
     const { error } = await supabase.from('feeding_schedules').upsert({
       id: schedule.id,
-      pet_id: schedule.petId,
-      pet_name: schedule.petName,
-      food_type: schedule.foodType,
-      portion_grams: schedule.portionGrams,
-      scheduled_time: schedule.scheduledTime,
-      dispense_status: schedule.dispenseStatus,
-      device_id: schedule.deviceId,
-      last_dispensed_at: schedule.lastDispensedAt || null,
+      pet_id: schedule.petId || 'PET-001',
+      pet_name: schedule.petName || 'Max',
+      portion_grams: schedule.portionGrams || 75,
+      scheduled_time: schedule.scheduledTime || 'Instant Manual',
+      dispense_status: 'Pending',
+      device_id: schedule.deviceId || 'HN-NODE-F778',
     });
-    return !error;
-  } catch {
+    if (error) {
+      console.error('[SUPABASE] insertSchedule error:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[SUPABASE] insertSchedule exception:', err);
     return false;
   }
 }
@@ -417,21 +420,20 @@ export async function updateAIAlertStatusInSupabase(id: string, status: AIHealth
  *   > 35s   = Offline (Hardware powered off / disconnected)
  */
 function getHeartbeatStatus(lastTransmission: string | null | undefined, dbStatus?: string): { status: Device['status']; ageSec: number } {
-  if (dbStatus === 'Online') {
-    return { status: 'Online', ageSec: 2 };
-  }
-  if (!lastTransmission) return { status: 'Online', ageSec: 5 };
+  if (!lastTransmission) return { status: 'Offline', ageSec: 9999 };
   const raw = String(lastTransmission).trim();
+  const parsed = Date.parse(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
 
-  const parsed = Date.parse(raw);
-  if (!isNaN(parsed)) {
-    const ageSec = Math.round((Date.now() - parsed) / 1000);
-    if (ageSec <= 90) return { status: 'Online', ageSec };
-    if (ageSec <= 180) return { status: 'Connecting' as Device['status'], ageSec };
-    return { status: 'Online', ageSec }; // Keep online for connected active paired nodes
-  }
+  if (isNaN(parsed)) return { status: 'Offline', ageSec: 9999 };
 
-  return { status: 'Online', ageSec: 2 };
+  const ageSec = Math.max(0, Math.round((Date.now() - parsed) / 1000));
+
+  // Online: telemetry received within last 30 seconds (ESP32 transmits every 3-5s)
+  if (ageSec <= 30) return { status: 'Online', ageSec };
+  // Connecting/Transient: 30-60 seconds
+  if (ageSec <= 60) return { status: 'Connecting' as Device['status'], ageSec };
+  // Offline: disconnected / unplugged (> 60 seconds)
+  return { status: 'Offline', ageSec };
 }
 
 export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
@@ -443,12 +445,14 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
     return data.map((item) => {
       const { status: computedStatus, ageSec } = getHeartbeatStatus(item.last_transmission, item.status);
 
-      let displayTransmission: string = 'Live — Just now';
-      if (ageSec <= 5) {
-        displayTransmission = 'Live — Synchronized';
-      } else {
-        displayTransmission = `Live — ${ageSec}s ago`;
-      }
+      let displayTransmission = 'Offline';
+        if (computedStatus === 'Online') {
+          displayTransmission = ageSec <= 5 ? 'Live — Synchronized' : `${ageSec}s ago`;
+        } else if (computedStatus === 'Connecting') {
+          displayTransmission = `Connecting (${ageSec}s ago)`;
+        } else {
+          displayTransmission = ageSec < 60 ? `Offline (${ageSec}s ago)` : (ageSec < 3600 ? `Offline (${Math.round(ageSec / 60)}m ago)` : 'Offline');
+        }
 
       let fw = item.firmware_version || 'v2.4.1-ESP32';
       let parsedTds = (item.water_quality_ppm !== null && item.water_quality_ppm !== undefined) ? Number(item.water_quality_ppm) : 0;

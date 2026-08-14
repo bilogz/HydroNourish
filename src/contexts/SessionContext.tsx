@@ -152,8 +152,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         if (remoteOwners && remoteOwners.length > 0) setOwners(remoteOwners);
         if (remoteSessions && remoteSessions.length > 0) setSessions(remoteSessions);
-        if (remoteDevices && remoteDevices.length > 0 && remoteDevices[0].status === 'Online') {
-          setHardware(remoteDevices[0]);
+        if (remoteDevices && remoteDevices.length > 0) {
+          const activeNode = remoteDevices.find(d => d.id === 'HN-NODE-F778' || d.status === 'Online') || remoteDevices[0];
+          setHardware(activeNode);
         } else {
           setHardware(defaultEmptyHardware);
         }
