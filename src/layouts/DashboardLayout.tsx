@@ -39,6 +39,7 @@ import {
   Sparkles,
   Zap,
   ClipboardList,
+  HeartHandshake,
 } from 'lucide-react';
 import { AIAssistantModal } from '../components/AIAssistantModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';

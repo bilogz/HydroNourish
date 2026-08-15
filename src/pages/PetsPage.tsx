@@ -23,6 +23,8 @@ import {
 import { formatWeight, formatTemperature } from '../utils/formatters';
 
 export const PetsPage: React.FC = () => {
+  const addPetFileRef = React.useRef<HTMLInputElement>(null);
+  const editPetFileRef = React.useRef<HTMLInputElement>(null);
   const { pets, devices, addPet, updatePet, deletePet } = useAppContext();
   const navigate = useNavigate();
 

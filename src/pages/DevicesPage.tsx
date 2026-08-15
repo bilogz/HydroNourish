@@ -481,7 +481,7 @@ export const DevicesPage: React.FC = () => {
                             ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95'
                             : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         }`}
-                        title={isOnline ? 'Automated Smart Dispense (80° Gate Cycle)' : 'Node is offline'}
+                        title={isOnline ? 'Automated Smart Dispense (90° Gate Cycle)' : 'Node is offline'}
                       >
                         <Utensils className="w-4 h-4" />
                         Feed

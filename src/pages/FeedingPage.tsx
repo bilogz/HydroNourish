@@ -432,7 +432,7 @@ export const FeedingPage: React.FC = () => {
 
           <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/60 text-amber-800 text-[11px] flex items-center gap-2">
             <Sliders className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>Dispenser node <strong>{selectedDevice?.id || 'HN-NODE-F778'}</strong> will execute a precision 80° gate cycle.</span>
+            <span>Dispenser node <strong>{selectedDevice?.id || 'HN-NODE-F778'}</strong> will execute a precision 90° gate cycle.</span>
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">

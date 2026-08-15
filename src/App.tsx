@@ -29,6 +29,7 @@ import { AdminLoginPage } from './pages/auth/AdminLoginPage';
 // Admin Dashboard Pages (all protected)
 import { OverviewPage } from './pages/OverviewPage';
 import { PetsPage } from './pages/PetsPage';
+import { PetOwnersPage } from './pages/PetOwnersPage';
 import { PetProfilePage } from './pages/PetProfilePage';
 import { FeedingPage } from './pages/FeedingPage';
 import { HydrationPage } from './pages/HydrationPage';

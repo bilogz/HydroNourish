@@ -117,7 +117,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('hn_pets');
       if (saved) {
         const parsed = JSON.parse(saved) as Pet[];
-        return parsed.filter(p => !['PET-001', 'PET-002', 'PET-003', 'PET-004', 'PET-005', 'PET-006'].includes(p.id));
+        return parsed;
       }
       return [];
     } catch {
@@ -130,7 +130,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('hn_schedules');
       if (saved) {
         const parsed = JSON.parse(saved) as FeedingSchedule[];
-        return parsed.filter(s => !s.id.startsWith('SCH-10'));
+        return parsed;
       }
       return [];
     } catch { return []; }
@@ -140,7 +140,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('hn_feeding_logs');
       if (saved) {
         const parsed = JSON.parse(saved) as FeedingLog[];
-        return parsed.filter(f => !f.id.startsWith('FL-30'));
+        return parsed;
       }
       return [];
     } catch { return []; }
@@ -150,7 +150,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('hn_hydration_logs');
       if (saved) {
         const parsed = JSON.parse(saved) as HydrationLog[];
-        return parsed.filter(h => !h.id.startsWith('HL-40'));
+        return parsed;
       }
       return [];
     } catch { return []; }
@@ -160,7 +160,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('hn_vitals');
       if (saved) {
         const parsed = JSON.parse(saved) as VitalSignRecord[];
-        return parsed.filter(v => !v.id.startsWith('VIT-50'));
+        return parsed;
       }
       return [];
     } catch { return []; }
@@ -398,7 +398,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateScheduleInSupabase(scheduleId, { dispenseStatus: 'Pending' });
   };
 
-  const dispenseDirect = async (deviceId: string, portionGrams: number = 75, foodType: string = '80° Gate Cycle (+80° Open / -80° Close)') => {
+  const dispenseDirect = async (deviceId: string, portionGrams: number = 75, foodType: string = '90° Gate Cycle (+90° Open / -90° Close)') => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
@@ -416,7 +416,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setSchedules((prev) => [newSch, ...prev]);
-    showToast('success', '80° Gate Cycle Triggered', `Opening +80° & closing -80° on node ${targetDeviceId}.`);
+    showToast('success', '90° Gate Cycle Triggered', `Opening +90° & closing -90° on node ${targetDeviceId}.`);
 
     // ⚡ Ultra-Fast Parallel Dispatch: Direct LAN REST + Supabase Cloud Queue
     try {

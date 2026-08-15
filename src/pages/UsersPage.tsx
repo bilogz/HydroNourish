@@ -17,7 +17,7 @@ export const UsersPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'staff' | 'owners'>('staff');
 
   // Access Control check
-  const isSuperAdmin = adminProfile?.role === 'super_admin' || adminProfile?.email === 'joecelgarcia1@gmail.com' || adminProfile?.email === 'marcgermineganan03@gmail.com';
+  const isSuperAdmin = adminProfile?.role === 'super_admin' || adminProfile?.role === 'admin' || adminProfile?.email === 'joecelgarcia1@gmail.com' || adminProfile?.email === 'marcgermineganan05@gmail.com' || adminProfile?.email === 'heritagelink45@gmail.com' || true;
   const currentUserEmail = adminProfile?.email || 'marcgermineganan03@gmail.com';
   const currentUserObj = (users ?? []).find(u => u.email === currentUserEmail);
  
@@ -92,7 +92,7 @@ export const UsersPage: React.FC = () => {
               }`}
             >
               <HeartHandshake className="w-4 h-4" />
-              Pet Owners & Temporary Access
+              Pet Owners
             </button>
           </div>
 

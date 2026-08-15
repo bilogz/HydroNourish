@@ -52,7 +52,7 @@ export const OwnerLoginPage: React.FC<OwnerLoginPageProps> = ({ defaultTab = 'lo
             </div>
             <div className="space-y-0.5">
               <p className="text-xs font-extrabold text-teal-700 uppercase tracking-widest">
-                Pet Owner & Patient Portal
+                Pet Owner Portal
               </p>
               <p className="text-[10px] text-slate-500 font-medium">
                 Heritage Animal Clinic · Health & Nutrition Telemetry

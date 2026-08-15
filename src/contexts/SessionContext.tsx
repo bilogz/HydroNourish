@@ -122,11 +122,11 @@ const defaultEmptyHardware: Device = {
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [sessions, setSessions] = useState<PetSession[]>(() => {
     const saved = loadFromStorage<PetSession[]>('hn_sessions', []);
-    return saved.filter(s => !s.id.startsWith('SES-DEMO'));
+    return saved;
   });
   const [owners, setOwners] = useState<PetOwner[]>(() => {
     const saved = loadFromStorage<PetOwner[]>('hn_owners', []);
-    return saved.filter(o => !['OWN-001', 'OWN-002', 'OWN-003', 'OWN-004'].includes(o.id));
+    return saved;
   });
   const [hardware, setHardware] = useState<Device>(defaultEmptyHardware);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() => {

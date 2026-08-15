@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { PetOwner } from '../../types';
+import { PetOwner, Pet } from '../../types';
 import { StatusBadge } from '../StatusBadge';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { Modal } from '../Modal';
 import { useSession } from '../../contexts/SessionContext';
 import { useAppContext } from '../../hooks/useAppContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -14,9 +15,10 @@ import {
   Trash2,
   Phone,
   Mail,
-  Calendar,
   Dog,
-  Clock,
+  Eye,
+  Edit3,
+  Plus,
 } from 'lucide-react';
 
 export const PetOwnerDirectoryTable: React.FC = () => {
@@ -28,7 +30,7 @@ export const PetOwnerDirectoryTable: React.FC = () => {
     archiveOwner,
     deleteOwnerPermanent,
   } = useSession();
-  const { showToast } = useAppContext();
+  const { pets, updatePet, showToast } = useAppContext();
   const { adminProfile } = useAuth();
 
   const adminName = adminProfile?.full_name ?? 'Administrator';
@@ -36,6 +38,19 @@ export const PetOwnerDirectoryTable: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'archived'>('all');
   const [deleteTarget, setDeleteTarget] = useState<PetOwner | null>(null);
+
+  // Pet Viewing / Editing modal states
+  const [viewingOwner, setViewingOwner] = useState<PetOwner | null>(null);
+  const [editingPet, setEditingPet] = useState<Pet | null>(null);
+  const [petForm, setPetForm] = useState({
+    name: '',
+    species: 'Dog',
+    breed: '',
+    age: 2,
+    weight: 8,
+    sex: 'Male',
+    notes: '',
+  });
 
   const filteredOwners = useMemo(() => {
     let list = [...owners];
@@ -55,72 +70,105 @@ export const PetOwnerDirectoryTable: React.FC = () => {
     return list;
   }, [owners, statusFilter, searchQuery]);
 
+  const getPetsForOwner = (owner: PetOwner): Pet[] => {
+    return (pets ?? []).filter(
+      (p) =>
+        (p.ownerId && p.ownerId === owner.id) ||
+        (p.ownerName && p.ownerName.toLowerCase() === owner.name.toLowerCase()) ||
+        (owner.petIds && owner.petIds.includes(p.id))
+    );
+  };
+
+  const handleOpenEditPet = (pet: Pet) => {
+    setEditingPet(pet);
+    setPetForm({
+      name: pet.name,
+      species: pet.species,
+      breed: pet.breed,
+      age: pet.age,
+      weight: pet.weight,
+      sex: (pet.sex as any) || 'Male',
+      notes: pet.notes || '',
+    });
+  };
+
+  const handleSavePetEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPet) return;
+
+    updatePet(editingPet.id, {
+      name: petForm.name,
+      species: petForm.species as any,
+      breed: petForm.breed,
+      age: Number(petForm.age),
+      weight: Number(petForm.weight),
+      sex: petForm.sex as any,
+      notes: petForm.notes,
+    });
+
+    showToast('success', 'PET DETAILS UPDATED', petForm.name + "'s profile was updated successfully.");
+    setEditingPet(null);
+  };
+
   const handleDeleteConfirm = () => {
     if (!deleteTarget) return;
     const res = deleteOwnerPermanent(deleteTarget.id, adminName);
     if (res.success) {
-      showToast('success', 'Owner Deleted', `${deleteTarget.name} has been permanently deleted.`);
+      showToast('info', 'Account Deleted', deleteTarget.name + ' was permanently removed.');
     } else {
-      showToast('error', 'Deletion Blocked', res.error || 'Failed to delete owner.');
+      showToast('error', 'Action Blocked', res.error ?? 'Could not delete owner.');
     }
     setDeleteTarget(null);
   };
 
   return (
-    <div className="clinic-card overflow-hidden space-y-4 p-5">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div>
-          <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Pet Owner Access Directory</h3>
-          <p className="text-xs text-slate-500">Temporary pet-monitoring access & account records</p>
+    <div className="space-y-4">
+      {/* Search and Filters */}
+      <div className="clinic-card p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search by owner name, email, phone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none"
+          />
         </div>
-
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by owner name, email, phone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none"
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Filter className="w-4 h-4 text-slate-400" />
-            {(['all', 'active', 'inactive', 'archived'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setStatusFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  statusFilter === f
-                    ? 'bg-teal-100 text-teal-800 border border-teal-200'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-1.5">
+          <Filter className="w-4 h-4 text-slate-400" />
+          {(['all', 'active', 'inactive', 'archived'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setStatusFilter(f)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                statusFilter === f
+                  ? 'bg-teal-100 text-teal-800 border border-teal-200'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto border border-slate-200 rounded-xl">
+      <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
               <th className="text-left px-4 py-3 font-bold text-slate-600 uppercase tracking-wider">Owner ID</th>
               <th className="text-left px-4 py-3 font-bold text-slate-600 uppercase tracking-wider">Name & Contact</th>
               <th className="text-left px-4 py-3 font-bold text-slate-600 uppercase tracking-wider">Access Status</th>
-              <th className="text-left px-4 py-3 font-bold text-slate-600 uppercase tracking-wider">Current Monitoring Session</th>
-              <th className="text-left px-4 py-3 font-bold text-slate-600 uppercase tracking-wider">Date Created</th>
-              <th className="text-left px-4 py-3 font-bold text-slate-600 uppercase tracking-wider">Last Login</th>
+              <th className="text-left px-4 py-3 font-bold text-slate-600 uppercase tracking-wider">Registered Pets</th>
+              <th className="text-left px-4 py-3 font-bold text-slate-600 uppercase tracking-wider">Current Session</th>
               <th className="text-center px-4 py-3 font-bold text-slate-600 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filteredOwners.map((owner) => {
+              const ownerPets = getPetsForOwner(owner);
               const isCurrentSessionOwner = activeSession && activeSession.ownerId === owner.id;
               return (
                 <tr key={owner.id} className="hover:bg-slate-50/50 transition-colors">
@@ -136,6 +184,15 @@ export const PetOwnerDirectoryTable: React.FC = () => {
                     <StatusBadge status={owner.accessStatus.charAt(0).toUpperCase() + owner.accessStatus.slice(1)} size="sm" />
                   </td>
                   <td className="px-4 py-3">
+                    <button
+                      onClick={() => setViewingOwner(owner)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-[11px] border border-teal-200 transition-colors"
+                    >
+                      <Dog className="w-3.5 h-3.5 text-teal-600" />
+                      {ownerPets.length} {ownerPets.length === 1 ? 'Pet' : 'Pets'} (View)
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
                     {isCurrentSessionOwner ? (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[11px] border border-indigo-200">
                         <Dog className="w-3.5 h-3.5 text-indigo-500" />
@@ -145,19 +202,20 @@ export const PetOwnerDirectoryTable: React.FC = () => {
                       <span className="text-slate-400 text-[11px]">No active session</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-slate-600 font-medium">
-                    {new Date(owner.dateCreated).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600 font-medium">
-                    {owner.lastLogin ? new Date(owner.lastLogin).toLocaleString() : 'Never'}
-                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        onClick={() => setViewingOwner(owner)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-all text-[11px] flex items-center gap-1"
+                        title="View & Edit Pets"
+                      >
+                        <Eye className="w-3 h-3 text-slate-500" /> View Pets
+                      </button>
                       {owner.accessStatus === 'active' && (
                         <button
                           onClick={() => {
                             deactivateOwner(owner.id, adminName);
-                            showToast('warning', 'Access Deactivated', `${owner.name}'s monitoring access was deactivated.`);
+                            showToast('warning', 'Access Deactivated', owner.name + "'s monitoring access was deactivated.");
                           }}
                           className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 font-semibold transition-all text-[11px] flex items-center gap-1"
                           title="Deactivate Access"
@@ -169,24 +227,12 @@ export const PetOwnerDirectoryTable: React.FC = () => {
                         <button
                           onClick={() => {
                             reactivateOwner(owner.id, adminName);
-                            showToast('success', 'Access Granted', `${owner.name}'s monitoring access was updated.`);
+                            showToast('success', 'Access Granted', owner.name + "'s monitoring access was updated.");
                           }}
                           className="px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200 font-semibold transition-all text-[11px] flex items-center gap-1"
                           title="Set Inactive/Ready"
                         >
-                          <UserCheck className="w-3 h-3" /> Reset Status
-                        </button>
-                      )}
-                      {owner.accessStatus !== 'archived' && (
-                        <button
-                          onClick={() => {
-                            archiveOwner(owner.id, adminName);
-                            showToast('info', 'Account Archived', `${owner.name}'s record has been archived.`);
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 font-semibold transition-all text-[11px] flex items-center gap-1"
-                          title="Archive Account"
-                        >
-                          <Archive className="w-3 h-3" /> Archive
+                          <UserCheck className="w-3 h-3" /> Reset
                         </button>
                       )}
                       <button
@@ -203,7 +249,7 @@ export const PetOwnerDirectoryTable: React.FC = () => {
             })}
             {filteredOwners.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                   No pet owners found matching your filter criteria.
                 </td>
               </tr>
@@ -212,12 +258,158 @@ export const PetOwnerDirectoryTable: React.FC = () => {
         </table>
       </div>
 
+      {/* MODAL: VIEW & EDIT PETS OF OWNER */}
+      <Modal
+        isOpen={!!viewingOwner}
+        onClose={() => setViewingOwner(null)}
+        title={viewingOwner ? 'Pets Registered Under ' + viewingOwner.name : 'Owner Pets'}
+        subtitle="View telemetry status, patient details, and edit medical profiles"
+        maxWidth="lg"
+      >
+        {viewingOwner && (
+          <div className="space-y-4 text-xs">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+              <div>
+                <p className="font-bold text-slate-900">{viewingOwner.name}</p>
+                <p className="text-slate-500">{viewingOwner.email} • {viewingOwner.phone}</p>
+              </div>
+              <StatusBadge status={viewingOwner.accessStatus.charAt(0).toUpperCase() + viewingOwner.accessStatus.slice(1)} size="sm" />
+            </div>
+
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+              {getPetsForOwner(viewingOwner).map((pet) => (
+                <div key={pet.id} className="p-3.5 rounded-xl border border-slate-200 bg-white flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <img src={pet.avatarUrl} alt={pet.name} className="w-10 h-10 rounded-xl object-cover" />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900">{pet.name}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 font-semibold">{pet.species} • {pet.breed}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">Age: {pet.age} yrs | Weight: {pet.weight} kg | Sex: {pet.sex || 'Male'}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleOpenEditPet(pet)}
+                    className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs flex items-center gap-1 border border-teal-200"
+                  >
+                    <Edit3 className="w-3 h-3" /> Edit Details
+                  </button>
+                </div>
+              ))}
+
+              {getPetsForOwner(viewingOwner).length === 0 && (
+                <p className="text-center py-6 text-slate-400 italic">No registered pets found for this owner.</p>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* MODAL: EDIT PET DETAILS */}
+      <Modal
+        isOpen={!!editingPet}
+        onClose={() => setEditingPet(null)}
+        title={editingPet ? 'Edit ' + editingPet.name + ' Details' : 'Edit Pet'}
+        subtitle="Update animal age, weight, breed, and health notes"
+      >
+        <form onSubmit={handleSavePetEdit} className="space-y-4 text-xs">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Pet Name *</label>
+              <input
+                type="text"
+                required
+                value={petForm.name}
+                onChange={(e) => setPetForm({ ...petForm, name: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Species *</label>
+              <select
+                value={petForm.species}
+                onChange={(e) => setPetForm({ ...petForm, species: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              >
+                <option value="Dog">Dog</option>
+                <option value="Cat">Cat</option>
+                <option value="Other">Other Animal</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Breed</label>
+              <input
+                type="text"
+                value={petForm.breed}
+                onChange={(e) => setPetForm({ ...petForm, breed: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Age (Years)</label>
+              <input
+                type="number"
+                min="0"
+                max="30"
+                step="0.5"
+                value={petForm.age}
+                onChange={(e) => setPetForm({ ...petForm, age: Number(e.target.value) })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Weight (kg)</label>
+              <input
+                type="number"
+                min="0.1"
+                max="100"
+                step="0.1"
+                value={petForm.weight}
+                onChange={(e) => setPetForm({ ...petForm, weight: Number(e.target.value) })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 uppercase mb-1">Care & Health Notes</label>
+            <textarea
+              rows={3}
+              value={petForm.notes}
+              onChange={(e) => setPetForm({ ...petForm, notes: e.target.value })}
+              className="w-full p-2.5 rounded-xl border border-slate-300 font-medium focus:border-teal-500 focus:outline-none"
+              placeholder="Vaccines, food preferences, medical conditions..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setEditingPet(null)}
+              className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-xl bg-teal-600 text-white font-bold hover:bg-teal-700 shadow-md"
+            >
+              Save Pet Details
+            </button>
+          </div>
+        </form>
+      </Modal>
+
       <ConfirmDialog
         isOpen={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDeleteConfirm}
         title="Delete Pet Owner Account"
-        message={`Are you sure you want to permanently delete ${deleteTarget?.name}? All session history linked to this owner will remain in archives, but the owner account will be permanently removed.`}
+        message={deleteTarget ? 'Are you sure you want to permanently delete ' + deleteTarget.name + '? All session history linked to this owner will remain in archives, but the owner account will be permanently removed.' : ''}
         confirmText="Permanent Delete"
         variant="danger"
       />

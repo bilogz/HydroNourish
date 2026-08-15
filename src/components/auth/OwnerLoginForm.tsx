@@ -117,7 +117,7 @@ export const OwnerLoginForm: React.FC<OwnerLoginFormProps> = ({
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="text-center space-y-2">
-        <h2 className="text-xl font-extrabold text-slate-900">Pet Owner & Patient Portal</h2>
+        <h2 className="text-xl font-extrabold text-slate-900">Pet Owner Portal</h2>
         <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
           Sign in to view your pet's real-time nutrition, hydration telemetry, and clinical updates.
         </p>

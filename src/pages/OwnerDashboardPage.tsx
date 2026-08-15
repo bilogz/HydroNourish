@@ -1,19 +1,22 @@
 /**
- * HydroNourish — Owner Dashboard Page
+ * HydroNourish — Owner Dashboard Page (Dynamic, Realtime & Photo Upload)
  * Heritage Animal Clinic Capstone Project
  *
  * Dedicated, fully-functional monitoring portal for registered pet owners.
  * Exclusively scoped to the logged-in owner's pets, intake records, vitals, and monitoring sessions.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSession } from '../contexts/SessionContext';
 import { useAppContext } from '../hooks/useAppContext';
 import { StatusBadge } from '../components/StatusBadge';
 import { Logo } from '../components/Logo';
+import { Modal } from '../components/Modal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LiveCameraWidget } from '../components/LiveCameraWidget';
 import {
   Dog,
+  Cat,
   Utensils,
   Droplets,
   Activity,
@@ -30,6 +33,7 @@ import {
   Info,
   User,
   PlusCircle,
+  Plus,
   FileText,
   History,
   Sparkles,
@@ -38,22 +42,20 @@ import {
   MapPin,
   ChevronRight,
   MessageSquare,
+  Edit3,
+  Trash2,
+  Camera,
+  Upload,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useNavigate, Navigate } from 'react-router-dom';
 
-type OwnerTab = 'monitoring' | 'pets' | 'intake' | 'alerts' | 'history';
-
-interface OwnerHomeNote {
-  id: string;
-  petName: string;
-  timestamp: string;
-  noteText: string;
-}
+type OwnerTab = 'monitoring' | 'pets' | 'intake' | 'sessions';
 
 export const OwnerDashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const { activeSession, sessions, hardware, owners } = useSession();
-  const { pets, feedingLogs, hydrationLogs, vitals, alerts, showToast } = useAppContext();
+  const { activeSession, sessions, hardware, owners, addOwner } = useSession();
+  const { pets, addPet, updatePet, deletePet, feedingLogs, hydrationLogs, alerts, showToast } = useAppContext();
 
   const [ownerEmail, setOwnerEmail] = useState<string>(() => {
     return localStorage.getItem('hn_owner_email')?.trim().toLowerCase() || '';
@@ -63,813 +65,913 @@ export const OwnerDashboardPage: React.FC = () => {
   });
 
   // Active sub-tab
-  const [activeTab, setActiveTab] = useState<OwnerTab>('monitoring');
+  const [activeTab, setActiveTab] = useState<OwnerTab>('pets');
 
-  // Selected pet focus (ID)
-  const [selectedPetId, setSelectedPetId] = useState<string>('all');
+  // Modals
+  const [addPetModalOpen, setAddPetModalOpen] = useState(false);
+  const [editingPet, setEditingPet] = useState<any | null>(null);
+  const [deletePetTarget, setDeletePetTarget] = useState<any | null>(null);
 
-  // Owner Home Notes local state
-  const [ownerNotes, setOwnerNotes] = useState<OwnerHomeNote[]>(() => {
-    try {
-      const saved = localStorage.getItem('hn_owner_notes');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+  // File input ref
+  const addFileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Pet Form State with Avatar URL
+  const [petForm, setPetForm] = useState({
+    name: '',
+    species: 'Dog' as 'Dog' | 'Cat' | 'Other',
+    breed: '',
+    age: 2,
+    weight: 8,
+    sex: 'Male' as 'Male' | 'Female',
+    notes: '',
+    portionGrams: 120,
+    timesPerDay: 2,
+    foodType: 'High-Protein Recipe',
+    hydrationTarget: 500,
+    avatarUrl: '',
   });
 
-  const [newNoteText, setNewNoteText] = useState('');
-  const [isAddingNote, setIsAddingNote] = useState(false);
-
-  // ─── Owner Data Scoping (Exclusive to Logged-in Owner) ────────────────
+  // ─── DYNAMIC OWNER RESOLUTION ───────────────────────────────────────
   const currentOwner = useMemo(() => {
-    return (owners || []).find(
+    const found = (owners || []).find(
       (o) => o.email.trim().toLowerCase() === ownerEmail.toLowerCase()
     );
+    if (found) return found;
+
+    const nameFromEmail = ownerEmail.split('@')[0] || 'Pet Owner';
+    const capitalized = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
+    return {
+      id: 'OWN-' + Math.abs(ownerEmail.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0) % 1000).toString().padStart(3, '0'),
+      name: capitalized,
+      email: ownerEmail,
+      phone: '+63 917 555 0192',
+      accessStatus: 'active' as const,
+      petIds: [],
+      currentSessionId: null,
+      dateCreated: new Date().toISOString(),
+      lastLogin: new Date().toISOString(),
+    };
   }, [owners, ownerEmail]);
 
-  // All pets belonging to this owner
+  // Auto-register owner in session context if not present
+  useEffect(() => {
+    if (ownerEmail && !(owners || []).some((o) => o.email.trim().toLowerCase() === ownerEmail.toLowerCase())) {
+      addOwner({
+        name: currentOwner.name,
+        email: ownerEmail,
+        phone: currentOwner.phone,
+        address: 'Metro Manila, Philippines',
+        petIds: [],
+      });
+    }
+  }, [ownerEmail, owners, currentOwner, addOwner]);
+
+  // ─── DYNAMIC PETS SCOPING ───────────────────────────────────────────
   const myPets = useMemo(() => {
     if (!currentOwner) return [];
     const ownerNameLower = currentOwner.name.trim().toLowerCase();
-    const ownerPetIds = currentOwner.petIds || [];
+    const emailLower = ownerEmail.toLowerCase();
 
     return (pets || []).filter(
       (p) =>
         p.ownerId === currentOwner.id ||
         (p.ownerName && p.ownerName.trim().toLowerCase() === ownerNameLower) ||
-        ownerPetIds.includes(p.id)
+        (p as any).ownerEmail?.toLowerCase() === emailLower ||
+        (currentOwner.petIds && currentOwner.petIds.includes(p.id))
     );
-  }, [pets, currentOwner]);
+  }, [pets, currentOwner, ownerEmail]);
 
-  // All sessions belonging to this owner
-  const mySessions = useMemo(() => {
-    if (!currentOwner) return [];
-    return (sessions || []).filter(
-      (s) =>
-        s.ownerId === currentOwner.id ||
-        (s.ownerEmail && s.ownerEmail.trim().toLowerCase() === ownerEmail.toLowerCase())
-    );
-  }, [sessions, currentOwner, ownerEmail]);
-
-  // Active session for this owner
-  const myActiveSession = useMemo(() => {
-    return mySessions.find((s) => s.status === 'active') || null;
-  }, [mySessions]);
-
-  // Currently focused pet
-  const focusedPet = useMemo(() => {
-    if (selectedPetId !== 'all') {
-      return myPets.find((p) => p.id === selectedPetId) || myPets[0] || null;
-    }
-    if (myActiveSession) {
-      return myPets.find((p) => p.id === myActiveSession.petId) || myPets[0] || null;
-    }
-    return myPets[0] || null;
-  }, [myPets, selectedPetId, myActiveSession]);
-
-  // Scoped Logs for Owner's Pets
-  const myPetIdsSet = useMemo(() => new Set(myPets.map((p) => p.id)), [myPets]);
-
+  // Dynamic Feeding & Hydration Logs Scoping
+  const myPetIds = useMemo(() => myPets.map((p) => p.id), [myPets]);
   const myFeedingLogs = useMemo(() => {
-    return (feedingLogs || []).filter(
-      (f) =>
-        myPetIdsSet.has(f.petId) ||
-        (myActiveSession && f.sessionId === myActiveSession.id)
-    );
-  }, [feedingLogs, myPetIdsSet, myActiveSession]);
+    return (feedingLogs || []).filter((f) => myPetIds.includes(f.petId));
+  }, [feedingLogs, myPetIds]);
 
   const myHydrationLogs = useMemo(() => {
-    return (hydrationLogs || []).filter(
-      (h) =>
-        myPetIdsSet.has(h.petId) ||
-        (myActiveSession && h.sessionId === myActiveSession.id)
-    );
-  }, [hydrationLogs, myPetIdsSet, myActiveSession]);
-
-  const myVitals = useMemo(() => {
-    return (vitals || []).filter(
-      (v) =>
-        myPetIdsSet.has(v.petId) ||
-        (myActiveSession && v.sessionId === myActiveSession.id)
-    );
-  }, [vitals, myPetIdsSet, myActiveSession]);
+    return (hydrationLogs || []).filter((h) => myPetIds.includes(h.petId));
+  }, [hydrationLogs, myPetIds]);
 
   const myAlerts = useMemo(() => {
-    return (alerts || []).filter(
-      (a) =>
-        myPetIdsSet.has(a.petId) ||
-        (myActiveSession && a.sessionId === myActiveSession.id)
+    return (alerts || []).filter((a) => myPetIds.includes(a.petId));
+  }, [alerts, myPetIds]);
+
+  const mySessions = useMemo(() => {
+    return (sessions || []).filter(
+      (s) =>
+        s.ownerEmail?.toLowerCase() === ownerEmail.toLowerCase() ||
+        s.ownerId === currentOwner?.id ||
+        myPetIds.includes(s.petId)
     );
-  }, [alerts, myPetIdsSet, myActiveSession]);
+  }, [sessions, ownerEmail, currentOwner, myPetIds]);
 
-  // Live session elapsed calculation
-  const [elapsed, setElapsed] = useState('');
-  useEffect(() => {
-    if (!myActiveSession) return;
-    const calc = () => {
-      const start = new Date(myActiveSession.startTime).getTime();
-      const diff = Date.now() - start;
-      const d = Math.floor(diff / 86400000);
-      const h = Math.floor((diff % 86400000) / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      return d > 0 ? `${d}d ${h}h ${m}m` : h > 0 ? `${h}h ${m}m` : `${m}m`;
-    };
-    setElapsed(calc());
-    const t = setInterval(() => setElapsed(calc()), 60000);
-    return () => clearInterval(t);
-  }, [myActiveSession]);
-
-  const isOnline = hardware.status === 'Online';
-
-  const handleLogout = () => {
-    localStorage.removeItem('hn_owner_email');
-    setOwnerEmail('');
-    setIsAuthed(false);
-    showToast('info', 'LOGGED OUT', 'You have been logged out of the Pet Owner Portal.');
-    navigate('/', { replace: true });
+  // Handle Image File Selection
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('warning', 'IMAGE TOO LARGE', 'Please choose an image under 5MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPetForm((prev) => ({ ...prev, avatarUrl: reader.result as string }));
+        showToast('info', 'PHOTO ATTACHED', 'Pet picture loaded successfully.');
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const handleAddNote = (e: React.FormEvent) => {
+  const handleAddPetSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNoteText.trim()) return;
+    if (!petForm.name.trim()) return;
 
-    const note: OwnerHomeNote = {
-      id: `NOTE-${Date.now()}`,
-      petName: focusedPet?.name || 'My Pet',
-      timestamp: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      noteText: newNoteText.trim(),
-    };
+    const defaultAvatar = petForm.species === 'Cat'
+      ? 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=300'
+      : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=300';
 
-    const updated = [note, ...ownerNotes];
-    setOwnerNotes(updated);
-    localStorage.setItem('hn_owner_notes', JSON.stringify(updated));
-    setNewNoteText('');
-    setIsAddingNote(false);
-    showToast('success', 'NOTE SAVED', 'Pet care note recorded successfully.');
+    addPet({
+      name: petForm.name.trim(),
+      species: petForm.species,
+      breed: petForm.breed.trim() || (petForm.species === 'Cat' ? 'Domestic Shorthair' : 'Mixed Breed'),
+      age: Number(petForm.age) || 2,
+      weight: Number(petForm.weight) || 8,
+      sex: petForm.sex,
+      ownerName: currentOwner.name,
+      ownerPhone: currentOwner.phone,
+      ownerId: currentOwner.id,
+      clinicRef: 'REF-2026-' + Math.floor(100 + Math.random() * 800),
+      assignedDeviceId: 'HN-NODE-F778',
+      healthStatus: 'Healthy',
+      avatarUrl: petForm.avatarUrl || defaultAvatar,
+      feedingPlan: {
+        portionGrams: Number(petForm.portionGrams) || 120,
+        timesPerDay: Number(petForm.timesPerDay) || 2,
+        foodType: petForm.foodType,
+      },
+      hydrationTarget: Number(petForm.hydrationTarget) || 500,
+      latestVitals: {
+        temperature: 38.5,
+        heartRate: 95,
+        activityLevel: 'Normal',
+        lastMeasured: 'Just registered',
+      },
+      notes: petForm.notes || 'Registered by pet owner in portal.',
+    });
+
+    showToast('success', 'PET REGISTERED', petForm.name + ' was successfully added with photo.');
+    setAddPetModalOpen(false);
+    setPetForm({
+      name: '',
+      species: 'Dog',
+      breed: '',
+      age: 2,
+      weight: 8,
+      sex: 'Male',
+      notes: '',
+      portionGrams: 120,
+      timesPerDay: 2,
+      foodType: 'High-Protein Recipe',
+      hydrationTarget: 500,
+      avatarUrl: '',
+    });
   };
 
-  // ─── Redirect if Not Authenticated ─────────────────────────────────────
-  if (!isAuthed) {
+  const handleOpenEdit = (pet: any) => {
+    setEditingPet(pet);
+    setPetForm({
+      name: pet.name,
+      species: pet.species,
+      breed: pet.breed || '',
+      age: pet.age || 2,
+      weight: pet.weight || 8,
+      sex: (pet.sex as any) || 'Male',
+      notes: pet.notes || '',
+      portionGrams: pet.feedingPlan?.portionGrams || 120,
+      timesPerDay: pet.feedingPlan?.timesPerDay || 2,
+      foodType: pet.feedingPlan?.foodType || 'High-Protein Recipe',
+      hydrationTarget: pet.hydrationTarget || 500,
+      avatarUrl: pet.avatarUrl || '',
+    });
+  };
+
+  const handleSavePetEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPet) return;
+
+    updatePet(editingPet.id, {
+      name: petForm.name,
+      species: petForm.species,
+      breed: petForm.breed,
+      age: Number(petForm.age),
+      weight: Number(petForm.weight),
+      sex: petForm.sex,
+      notes: petForm.notes,
+      avatarUrl: petForm.avatarUrl || editingPet.avatarUrl,
+      feedingPlan: {
+        portionGrams: Number(petForm.portionGrams) || 120,
+        timesPerDay: Number(petForm.timesPerDay) || 2,
+        foodType: petForm.foodType,
+      },
+      hydrationTarget: Number(petForm.hydrationTarget) || 500,
+    });
+
+    showToast('success', 'PET UPDATED', petForm.name + "'s profile and picture have been updated.");
+    setEditingPet(null);
+  };
+
+  const handleSignOut = () => {
+    localStorage.removeItem('hn_owner_email');
+    setIsAuthed(false);
+    navigate('/owner/login', { replace: true });
+  };
+
+  if (!isAuthed || !ownerEmail) {
     return <Navigate to="/owner/login" replace />;
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Top Owner Header */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/90 px-4 sm:px-6 py-3 shadow-xs">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-12">
+      {/* Top Navigation Bar */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Logo size="md" iconOnly={false} />
-            <span className="px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-800 text-[10px] font-extrabold border border-teal-200 uppercase tracking-wider hidden sm:inline">
-              PET OWNER PORTAL
+            <Logo size="md" />
+            <span className="px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-extrabold uppercase tracking-wider hidden sm:inline-block">
+              Pet Owner Portal
             </span>
           </div>
 
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
-              <span className="text-xs font-bold text-slate-800 block">
-                {currentOwner?.name || ownerEmail}
-              </span>
-              <span className="text-[10px] text-slate-500 block font-medium">
-                {currentOwner?.email || ownerEmail}
-              </span>
+              <p className="text-xs font-bold text-slate-900 leading-tight">{currentOwner?.name || 'Pet Owner'}</p>
+              <p className="text-[10px] text-slate-400 font-mono">{ownerEmail}</p>
             </div>
-
-            {myActiveSession ? (
-              <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-extrabold border border-emerald-200 flex items-center gap-1.5 animate-pulse">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                CLINIC LIVE
-              </span>
-            ) : (
-              <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200">
-                REGISTERED OWNER
-              </span>
-            )}
-
+            <span className="px-2.5 py-1 rounded-xl bg-teal-50 border border-teal-200 text-teal-700 text-[10px] font-extrabold uppercase">
+              Registered Owner
+            </span>
             <button
-              onClick={handleLogout}
-              className="p-2 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-1 cursor-pointer"
-              title="Sign Out of Portal"
+              onClick={handleSignOut}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-200 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Sign Out"
             >
               <LogOut className="w-4 h-4" />
-              <span className="text-xs font-bold hidden md:inline">Sign Out</span>
+              <span className="hidden sm:inline">Sign Out</span>
             </button>
           </div>
+        </div>
+
+        {/* Sub Navigation Tabs */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-2 overflow-x-auto border-t border-slate-100 py-2">
+          {[
+            { id: 'pets', label: 'My Pets (' + myPets.length + ')', icon: Dog },
+            { id: 'monitoring', label: 'Live Telemetry', icon: Activity },
+            { id: 'intake', label: 'Intake History (' + (myFeedingLogs.length + myHydrationLogs.length) + ')', icon: Utensils },
+            { id: 'sessions', label: 'Sessions (' + mySessions.length + ')', icon: Calendar },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                  active
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </header>
 
-      {/* Owner Navigation Tabs */}
-      <div className="bg-white border-b border-slate-200/80 px-4 sm:px-6">
-        <div className="max-w-6xl mx-auto flex items-center justify-between overflow-x-auto no-scrollbar">
-          <nav className="flex items-center gap-2 sm:gap-4 py-2">
-            <button
-              onClick={() => setActiveTab('monitoring')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeTab === 'monitoring'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Activity className="w-4 h-4" />
-              Live Telemetry
-            </button>
-
-            <button
-              onClick={() => setActiveTab('pets')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeTab === 'pets'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Dog className="w-4 h-4" />
-              My Pets ({myPets.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('intake')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeTab === 'intake'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Utensils className="w-4 h-4" />
-              Intake History ({myFeedingLogs.length + myHydrationLogs.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('alerts')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeTab === 'alerts'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <ShieldAlert className="w-4 h-4" />
-              Health Alerts ({myAlerts.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeTab === 'history'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <History className="w-4 h-4" />
-              Sessions ({mySessions.length})
-            </button>
-          </nav>
-
-          {/* Pet Switcher Dropdown if owner has multiple pets */}
-          {myPets.length > 1 && (
-            <div className="flex items-center gap-2 py-2">
-              <span className="text-xs font-bold text-slate-500 hidden md:inline">Pet Focus:</span>
-              <select
-                value={selectedPetId}
-                onChange={(e) => setSelectedPetId(e.target.value)}
-                className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-teal-500"
-              >
-                <option value="all">All Pets ({myPets.length})</option>
-                {myPets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.species})
-                  </option>
-                ))}
-              </select>
+      {/* Main Content Container */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+        {/* Welcome Banner */}
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl relative overflow-hidden">
+          <div className="space-y-1 relative z-10">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-teal-300" />
+              <h2 className="text-lg sm:text-xl font-black">Welcome, {currentOwner?.name}!</h2>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <main className="max-w-6xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6 flex-1 animate-fade-in">
-        {/* Banner Welcome Card */}
-        <div className="clinic-card p-6 bg-gradient-to-r from-teal-800 via-teal-700 to-sky-800 text-white relative overflow-hidden">
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-teal-300" />
-                <h1 className="text-2xl font-extrabold tracking-tight">
-                  Welcome, {currentOwner?.name || 'Pet Owner'}!
-                </h1>
-              </div>
-              <p className="text-xs text-teal-100 leading-relaxed max-w-xl">
-                Heritage Animal Clinic Pet Owner Dashboard. Real-time telemetry monitoring, dietary logs, and health updates strictly for your pets.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setIsAddingNote(true)}
-                className="px-4 py-2.5 rounded-xl bg-white text-teal-800 font-extrabold text-xs shadow-md hover:bg-teal-50 transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <PlusCircle className="w-4 h-4 text-teal-600" />
-                Log Home Note
-              </button>
-            </div>
+            <p className="text-xs text-teal-100/80">
+              Heritage Animal Clinic Pet Owner Dashboard. Real-time telemetry monitoring, dietary logs, and health updates strictly for your pets.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 relative z-10 shrink-0">
+            <button
+              onClick={() => {
+                setPetForm({
+                  name: '',
+                  species: 'Dog',
+                  breed: '',
+                  age: 2,
+                  weight: 8,
+                  sex: 'Male',
+                  notes: '',
+                  portionGrams: 120,
+                  timesPerDay: 2,
+                  foodType: 'High-Protein Recipe',
+                  hydrationTarget: 500,
+                  avatarUrl: '',
+                });
+                setAddPetModalOpen(true);
+              }}
+              className="px-4 py-2.5 rounded-xl bg-teal-400 hover:bg-teal-300 text-slate-950 font-black text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              + Add My Pet
+            </button>
           </div>
         </div>
 
-        {/* ─── TAB 1: LIVE MONITORING TELEMETRY ──────────────────────────── */}
-        {activeTab === 'monitoring' && (
-          <div className="space-y-6">
-            {myActiveSession ? (
-              <div className="clinic-card overflow-hidden">
-                <div className="bg-gradient-to-r from-teal-700 via-teal-600 to-sky-700 p-6">
-                  <div className="flex items-center gap-5">
-                    <img
-                      src={myActiveSession.petAvatarUrl || focusedPet?.avatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'}
-                      alt={myActiveSession.petName}
-                      className="w-20 h-20 rounded-2xl object-cover ring-4 ring-white/20 shadow-lg"
-                    />
-                    <div className="text-white space-y-1">
-                      <div className="flex items-center gap-3">
-                        <h2 className="text-2xl font-extrabold tracking-tight">{myActiveSession.petName}</h2>
-                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-emerald-950 text-[10px] font-extrabold uppercase">
-                          IN CLINIC WARD
-                        </span>
-                      </div>
-                      <p className="text-teal-100 text-xs font-medium">
-                        {myActiveSession.petSpecies} • {myActiveSession.petBreed} • {myActiveSession.petSnapshot?.weight}kg
-                      </p>
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-teal-200 pt-1">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5" /> Admitted {new Date(myActiveSession.admissionDate).toLocaleDateString()}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" /> Session Elapsed: {elapsed}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs bg-white">
-                  <div>
-                    <span className="text-slate-400 block font-bold uppercase text-[10px]">Expected Release</span>
-                    <span className="font-extrabold text-slate-800 text-sm">
-                      {new Date(myActiveSession.expectedReleaseDate).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block font-bold uppercase text-[10px]">Feeding Plan</span>
-                    <span className="font-extrabold text-slate-800 text-sm">
-                      {focusedPet?.feedingPlan.portionGrams || myActiveSession.petSnapshot?.feedingPlan.portionGrams}g × {focusedPet?.feedingPlan.timesPerDay || myActiveSession.petSnapshot?.feedingPlan.timesPerDay}/day
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block font-bold uppercase text-[10px]">Hydration Target</span>
-                    <span className="font-extrabold text-slate-800 text-sm">
-                      {focusedPet?.hydrationTarget || myActiveSession.petSnapshot?.hydrationTarget} ml/day
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block font-bold uppercase text-[10px]">Hardware Link</span>
-                    <span className={`font-extrabold text-sm ${isOnline ? 'text-emerald-600' : 'text-rose-600'} flex items-center gap-1`}>
-                      {isOnline ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
-                      {hardware.status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="clinic-card p-6 bg-slate-50 border-dashed border-2 border-slate-200 text-center space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto">
-                  <CheckCircle className="w-6 h-6" />
-                </div>
-                <h3 className="text-base font-extrabold text-slate-900">No Active Clinic Admission</h3>
-                <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                  Your registered pets are currently enjoying home care. When admitted to Heritage Animal Clinic for ward monitoring, live hardware telemetry will appear here automatically.
-                </p>
-              </div>
-            )}
-
-            {/* Real-Time Live Pet Camera Stream */}
-            <LiveCameraWidget
-              title={`${myActiveSession?.petName || focusedPet?.name || 'Pet'} Live Clinic Cam`}
-              subtitle="Live Video Feed & Bowl Stream"
-            />
-
-            {/* Gauges & Telemetry */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="clinic-card p-4 bg-white">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                    <Utensils className="w-4 h-4 text-orange-500" /> Food Reservoir
-                  </span>
-                  <span className="text-sm font-extrabold text-slate-900">{hardware.foodLevelPct}%</span>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-3">
-                  <div
-                    className={`h-3 rounded-full transition-all ${
-                      hardware.foodLevelPct > 30 ? 'bg-gradient-to-r from-orange-400 to-amber-400' : 'bg-rose-500'
-                    }`}
-                    style={{ width: `${hardware.foodLevelPct}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="clinic-card p-4 bg-white">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                    <Droplets className="w-4 h-4 text-sky-500" /> Water Reservoir
-                  </span>
-                  <span className="text-sm font-extrabold text-slate-900">{hardware.waterLevelPct}%</span>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-3">
-                  <div
-                    className={`h-3 rounded-full transition-all ${
-                      hardware.waterLevelPct > 30 ? 'bg-gradient-to-r from-sky-400 to-blue-400' : 'bg-rose-500'
-                    }`}
-                    style={{ width: `${hardware.waterLevelPct}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Intake Logs */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="clinic-card p-5 bg-white space-y-4">
-                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  <Utensils className="w-4 h-4 text-orange-500" />
-                  Recent Feeding Activity
-                </h3>
-                <div className="space-y-2">
-                  {myFeedingLogs.length > 0 ? (
-                    myFeedingLogs.slice(0, 5).map((f) => (
-                      <div key={f.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                        <div>
-                          <span className="font-extrabold text-slate-800">{f.petName}: {f.portionGrams}g</span>
-                          <span className="text-slate-400 ml-2 font-medium">{f.dispensedAt}</span>
-                        </div>
-                        <StatusBadge status={f.status} size="sm" />
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-xs text-slate-500 text-center py-6 font-medium">
-                      No feeding records found for your pets.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="clinic-card p-5 bg-white space-y-4">
-                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  <Droplets className="w-4 h-4 text-sky-500" />
-                  Recent Hydration Activity
-                </h3>
-                <div className="space-y-2">
-                  {myHydrationLogs.length > 0 ? (
-                    myHydrationLogs.slice(0, 5).map((h) => (
-                      <div key={h.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                        <div>
-                          <span className="font-extrabold text-slate-800">{h.petName}: {h.amountMl}ml</span>
-                          <span className="text-slate-400 ml-2 font-medium">{h.timestamp}</span>
-                        </div>
-                        <span className="text-slate-500 font-semibold">Reservoir: {h.reservoirLevelPct}%</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-xs text-slate-500 text-center py-6 font-medium">
-                      No hydration records found for your pets.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ─── TAB 2: MY REGISTERED PETS ─────────────────────────────────── */}
+        {/* ═══════════ TAB: MY PETS (WITH ADD, EDIT, AND PHOTO UPLOAD) ═══════════ */}
         {activeTab === 'pets' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-extrabold text-slate-900">My Registered Pets</h2>
-                <p className="text-xs text-slate-500">Pets linked to owner account {currentOwner?.email}.</p>
+                <h2 className="text-lg font-extrabold text-slate-900">My Registered Pets ({myPets.length})</h2>
+                <p className="text-xs text-slate-500">Manage and edit your pets linked to {ownerEmail}.</p>
               </div>
+              <button
+                onClick={() => {
+                  setPetForm({
+                    name: '',
+                    species: 'Dog',
+                    breed: '',
+                    age: 2,
+                    weight: 8,
+                    sex: 'Male',
+                    notes: '',
+                    portionGrams: 120,
+                    timesPerDay: 2,
+                    foodType: 'High-Protein Recipe',
+                    hydrationTarget: 500,
+                    avatarUrl: '',
+                  });
+                  setAddPetModalOpen(true);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> + Register Pet
+              </button>
             </div>
 
             {myPets.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {myPets.map((pet) => (
-                  <div key={pet.id} className="clinic-card overflow-hidden bg-white hover:border-teal-300 transition-all">
-                    <div className="p-5 flex items-start gap-4">
-                      <img
-                        src={pet.avatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'}
-                        alt={pet.name}
-                        className="w-16 h-16 rounded-2xl object-cover ring-2 ring-teal-500/20"
-                      />
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-base font-extrabold text-slate-900">{pet.name}</h3>
-                          <StatusBadge status={pet.healthStatus} size="sm" />
+                  <div key={pet.id} className="clinic-card overflow-hidden bg-white hover:border-teal-300 transition-all border border-slate-200/90 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="p-5 flex items-start gap-4">
+                        <img
+                          src={pet.avatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'}
+                          alt={pet.name}
+                          className="w-18 h-18 rounded-2xl object-cover ring-2 ring-teal-500/30 shadow-xs shrink-0 border border-slate-200"
+                        />
+                        <div className="flex-1 space-y-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h3 className="text-base font-extrabold text-slate-900 truncate">{pet.name}</h3>
+                            <StatusBadge status={pet.healthStatus} size="sm" />
+                          </div>
+                          <p className="text-xs text-slate-500 font-medium">
+                            {pet.species} • {pet.breed || 'Mixed Breed'} • {pet.age} years old
+                          </p>
+                          <p className="text-xs text-slate-600 font-semibold pt-0.5">
+                            Weight: <strong className="text-slate-900">{pet.weight} kg</strong> | Gender: <strong className="text-slate-900">{pet.sex || 'Male'}</strong>
+                          </p>
+                          {pet.notes && (
+                            <p className="text-[11px] text-slate-500 italic line-clamp-1 pt-0.5">Notes: {pet.notes}</p>
+                          )}
                         </div>
-                        <p className="text-xs text-slate-500 font-medium">
-                          {pet.species} • {pet.breed} • {pet.age} years old
-                        </p>
-                        <p className="text-xs text-slate-600 font-semibold pt-1">
-                          Weight: {pet.weight} kg | Diet: {pet.feedingPlan.foodType || 'Standard'}
-                        </p>
+                      </div>
+
+                      <div className="p-4 bg-slate-50 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
+                        <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Daily Meal Portion</span>
+                          <span className="font-extrabold text-slate-800">{pet.feedingPlan?.portionGrams || 100}g × {pet.feedingPlan?.timesPerDay || 2}/day</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Hydration Target</span>
+                          <span className="font-extrabold text-slate-800">{pet.hydrationTarget || 500} ml/day</span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="p-4 bg-slate-50 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
-                      <div className="p-2.5 rounded-xl bg-white border border-slate-200">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Daily Meal Portion</span>
-                        <span className="font-extrabold text-slate-800">{pet.feedingPlan.portionGrams}g × {pet.feedingPlan.timesPerDay}/day</span>
-                      </div>
-                      <div className="p-2.5 rounded-xl bg-white border border-slate-200">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Hydration Target</span>
-                        <span className="font-extrabold text-sky-700">{pet.hydrationTarget} ml/day</span>
-                      </div>
+                    {/* Action Bar */}
+                    <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between bg-white gap-2">
+                      <button
+                        onClick={() => handleOpenEdit(pet)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all border border-teal-200 cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        Edit Pet Details & Photo
+                      </button>
+
+                      <button
+                        onClick={() => setDeletePetTarget(pet)}
+                        className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold transition-colors cursor-pointer border border-rose-200"
+                        title="Delete Pet Profile"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="clinic-card p-10 bg-white text-center space-y-3">
-                <Dog className="w-12 h-12 text-slate-300 mx-auto" />
-                <h3 className="text-base font-extrabold text-slate-800">No Pets Linked to Your Owner Profile</h3>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-                  Your owner ID is <strong className="text-teal-700">{currentOwner?.id}</strong>. Please provide this ID to Heritage Animal Clinic staff when admitting your pet.
-                </p>
+              <div className="clinic-card p-12 text-center space-y-4 bg-white border-2 border-dashed border-teal-200 rounded-3xl shadow-sm">
+                <div className="w-16 h-16 rounded-3xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto shadow-xs">
+                  <Dog className="w-8 h-8" />
+                </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-lg font-black text-slate-900">No Pets Linked to Your Profile Yet</h3>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                    Click below to upload a picture and register your pet's profile to begin telemetry and intake monitoring.
+                  </p>
+                </div>
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      setPetForm({
+                        name: '',
+                        species: 'Dog',
+                        breed: '',
+                        age: 2,
+                        weight: 8,
+                        sex: 'Male',
+                        notes: '',
+                        portionGrams: 120,
+                        timesPerDay: 2,
+                        foodType: 'High-Protein Recipe',
+                        hydrationTarget: 500,
+                        avatarUrl: '',
+                      });
+                      setAddPetModalOpen(true);
+                    }}
+                    className="px-6 py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-extrabold text-xs shadow-lg shadow-teal-600/20 inline-flex items-center gap-2 cursor-pointer transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    + Add / Register My Pet Now
+                  </button>
+                </div>
               </div>
             )}
           </div>
         )}
 
-        {/* ─── TAB 3: INTAKE & HYDRATION HISTORY ─────────────────────────── */}
-        {activeTab === 'intake' && (
+        {/* ═══════════ TAB: MONITORING / TELEMETRY ═══════════ */}
+        {activeTab === 'monitoring' && (
           <div className="space-y-6">
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900">Intake & Consumption Logs</h2>
-              <p className="text-xs text-slate-500">Historical food and water logs for your registered pets.</p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Feeding Table */}
-              <div className="clinic-card p-5 bg-white space-y-3">
-                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  <Utensils className="w-4 h-4 text-orange-500" /> Feeding Records ({myFeedingLogs.length})
-                </h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-500 uppercase text-[10px] font-extrabold">
-                        <th className="py-2.5 px-2">Pet</th>
-                        <th className="py-2.5 px-2">Portion</th>
-                        <th className="py-2.5 px-2">Time</th>
-                        <th className="py-2.5 px-2 text-right">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {myFeedingLogs.length > 0 ? (
-                        myFeedingLogs.map((log) => (
-                          <tr key={log.id} className="hover:bg-slate-50">
-                            <td className="py-2.5 px-2 font-extrabold text-slate-800">{log.petName}</td>
-                            <td className="py-2.5 px-2 font-bold text-slate-700">{log.portionGrams}g</td>
-                            <td className="py-2.5 px-2 text-slate-500">{log.dispensedAt}</td>
-                            <td className="py-2.5 px-2 text-right">
-                              <StatusBadge status={log.status} size="sm" />
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={4} className="py-6 text-center text-slate-400 font-medium">No feeding records.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-7">
+                <LiveCameraWidget isOnline={hardware.status === 'Online'} />
               </div>
-
-              {/* Hydration Table */}
-              <div className="clinic-card p-5 bg-white space-y-3">
-                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  <Droplets className="w-4 h-4 text-sky-500" /> Hydration Records ({myHydrationLogs.length})
-                </h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-500 uppercase text-[10px] font-extrabold">
-                        <th className="py-2.5 px-2">Pet</th>
-                        <th className="py-2.5 px-2">Volume</th>
-                        <th className="py-2.5 px-2">Timestamp</th>
-                        <th className="py-2.5 px-2 text-right">Reservoir</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {myHydrationLogs.length > 0 ? (
-                        myHydrationLogs.map((log) => (
-                          <tr key={log.id} className="hover:bg-slate-50">
-                            <td className="py-2.5 px-2 font-extrabold text-slate-800">{log.petName}</td>
-                            <td className="py-2.5 px-2 font-extrabold text-sky-700">{log.amountMl}ml</td>
-                            <td className="py-2.5 px-2 text-slate-500">{log.timestamp}</td>
-                            <td className="py-2.5 px-2 text-right font-bold text-slate-700">{log.reservoirLevelPct}%</td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={4} className="py-6 text-center text-slate-400 font-medium">No hydration records.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ─── TAB 4: HEALTH ALERTS & NOTES ─────────────────────────────── */}
-        {activeTab === 'alerts' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900">Health Alerts & Observations</h2>
-              <p className="text-xs text-slate-500">AI anomalies and clinical health alerts for your pets.</p>
-            </div>
-
-            {myAlerts.length > 0 ? (
-              <div className="space-y-4">
-                {myAlerts.map((alert) => (
-                  <div key={alert.id} className="clinic-card p-5 bg-white space-y-2 border-l-4 border-l-amber-500">
-                    <div className="flex items-center justify-between">
-                      <span className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                        <ShieldAlert className="w-4 h-4 text-amber-500" />
-                        {alert.petName}: {alert.alertType}
-                      </span>
-                      <StatusBadge status={alert.severity} size="sm" />
-                    </div>
-                    <p className="text-xs text-slate-600 leading-relaxed font-medium">{alert.aiObservation}</p>
-                    <p className="text-xs text-teal-800 font-bold">Recommended Action: {alert.recommendedAction}</p>
-                    <span className="text-[10px] text-slate-400 block pt-1">{alert.timestamp}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="clinic-card p-8 bg-white text-center space-y-2">
-                <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto" />
-                <h3 className="text-sm font-extrabold text-slate-800">No Active Health Alerts</h3>
-                <p className="text-xs text-slate-500">Your pets currently have no flagged health alerts.</p>
-              </div>
-            )}
-
-            {/* Owner Care Notes */}
-            <div className="clinic-card p-5 bg-white space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-teal-600" />
-                  Owner Care Notes ({ownerNotes.length})
-                </h3>
-                <button
-                  onClick={() => setIsAddingNote(true)}
-                  className="px-3 py-1.5 rounded-xl bg-teal-50 text-teal-800 text-xs font-bold hover:bg-teal-100 transition-colors"
-                >
-                  + Add Note
-                </button>
-              </div>
-
-              {ownerNotes.length > 0 ? (
+              <div className="lg:col-span-5 clinic-card p-6 space-y-4 flex flex-col justify-between">
                 <div className="space-y-3">
-                  {ownerNotes.map((note) => (
-                    <div key={note.id} className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-slate-800">{note.petName}</span>
-                        <span className="text-[10px] text-slate-400">{note.timestamp}</span>
-                      </div>
-                      <p className="text-slate-600 font-medium">{note.noteText}</p>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-sm font-extrabold text-slate-900">Smart Feeder Station</h3>
+                      <p className="text-[11px] text-slate-400 font-mono">ID: {hardware.id}</p>
                     </div>
-                  ))}
+                    <StatusBadge status={hardware.status} size="sm" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Food Reservoir</span>
+                      <span className="text-lg font-black text-slate-900">{hardware.foodLevelPct}%</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Water Reservoir</span>
+                      <span className="text-lg font-black text-slate-900">{hardware.waterLevelPct}%</span>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <p className="text-xs text-slate-400 text-center py-4">No home care notes recorded yet.</p>
+
+                <div className="p-3 bg-teal-50 rounded-xl border border-teal-200 text-xs text-teal-800 flex items-center gap-2">
+                  <Wifi className="w-4 h-4 text-teal-600 shrink-0" />
+                  <span>ESP32 Wi-Fi Signal: <strong>{hardware.wifiSignalDbm} dBm</strong></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════ TAB: INTAKE ═══════════ */}
+        {activeTab === 'intake' && (
+          <div className="clinic-card p-6 space-y-4">
+            <h3 className="text-base font-extrabold text-slate-900">Intake & Consumption Records</h3>
+            <div className="divide-y divide-slate-100 text-xs">
+              {myFeedingLogs.map((log) => (
+                <div key={log.id} className="py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Utensils className="w-4 h-4 text-orange-500" />
+                    <div>
+                      <p className="font-bold text-slate-900">{log.petName} Dispensed {log.portionGrams}g</p>
+                      <p className="text-[10px] text-slate-400">{log.dispensedAt}</p>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                    {log.status}
+                  </span>
+                </div>
+              ))}
+              {myFeedingLogs.length === 0 && (
+                <p className="text-center py-6 text-slate-400 italic">No feeding intake records logged yet.</p>
               )}
             </div>
           </div>
         )}
 
-        {/* ─── TAB 5: SESSION HISTORY ────────────────────────────────────── */}
-        {activeTab === 'history' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900">Clinic Session Archive</h2>
-              <p className="text-xs text-slate-500">History of clinic monitoring sessions for your pets.</p>
-            </div>
-
-            {mySessions.length > 0 ? (
-              <div className="space-y-4">
-                {mySessions.map((session) => (
-                  <div key={session.id} className="clinic-card p-5 bg-white space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={session.petAvatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'}
-                          alt={session.petName}
-                          className="w-10 h-10 rounded-xl object-cover"
-                        />
-                        <div>
-                          <h3 className="text-sm font-extrabold text-slate-900">{session.petName} ({session.petSpecies})</h3>
-                          <span className="text-[10px] text-slate-400">Session ID: {session.id}</span>
-                        </div>
-                      </div>
-                      <StatusBadge status={session.status} size="sm" />
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-3 rounded-xl">
-                      <div>
-                        <span className="text-slate-400 block text-[10px] font-bold uppercase">Admitted</span>
-                        <span className="font-bold text-slate-700">{new Date(session.admissionDate).toLocaleDateString()}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px] font-bold uppercase">Expected Release</span>
-                        <span className="font-bold text-slate-700">{new Date(session.expectedReleaseDate).toLocaleDateString()}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px] font-bold uppercase">Release Condition</span>
-                        <span className="font-bold text-teal-800">{session.releaseCondition || 'In Care'}</span>
-                      </div>
-                    </div>
-
-                    {session.finalNotes && (
-                      <p className="text-xs text-slate-600 bg-teal-50/50 p-3 rounded-xl border border-teal-100 font-medium">
-                        <strong>Veterinary Release Notes:</strong> {session.finalNotes}
-                      </p>
-                    )}
+        {/* ═══════════ TAB: SESSIONS ═══════════ */}
+        {activeTab === 'sessions' && (
+          <div className="clinic-card p-6 space-y-4">
+            <h3 className="text-base font-extrabold text-slate-900">Clinical Monitoring Sessions</h3>
+            <div className="space-y-3">
+              {mySessions.map((session) => (
+                <div key={session.id} className="p-4 rounded-xl border border-slate-200 bg-white flex items-center justify-between text-xs">
+                  <div>
+                    <p className="font-bold text-slate-900">{session.petName} ({session.petSpecies})</p>
+                    <p className="text-slate-500 text-[11px]">Admitted: {new Date(session.admissionDate).toLocaleDateString()}</p>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="clinic-card p-8 bg-white text-center space-y-2">
-                <History className="w-10 h-10 text-slate-300 mx-auto" />
-                <h3 className="text-sm font-extrabold text-slate-800">No Past Sessions Recorded</h3>
-                <p className="text-xs text-slate-500">Your pets have no completed clinic admission sessions yet.</p>
-              </div>
-            )}
+                  <StatusBadge status={session.status} size="sm" />
+                </div>
+              ))}
+              {mySessions.length === 0 && (
+                <p className="text-center py-6 text-slate-400 italic">No clinical monitoring sessions on record.</p>
+              )}
+            </div>
           </div>
         )}
-
-        {/* Heritage Animal Clinic Contact Footer */}
-        <div className="clinic-card p-5 bg-white border-t border-slate-200 mt-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-600">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-teal-600 shrink-0" />
-              <span><strong>Heritage Animal Clinic:</strong> Main Highway Ward Facility</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-teal-600" /> +63 917 123 4567</span>
-              <span className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-teal-600" /> clinic@heritageanimal.com</span>
-            </div>
-          </div>
-        </div>
       </main>
 
-      {/* Log Home Care Note Modal */}
-      {isAddingNote && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-fade-in">
-            <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-              <PlusCircle className="w-5 h-5 text-teal-600" />
-              Record Home Care Note
-            </h3>
-            <p className="text-xs text-slate-500">
-              Log a note regarding {focusedPet?.name || 'your pet'}'s meal or behavior.
-            </p>
-
-            <form onSubmit={handleAddNote} className="space-y-3">
-              <textarea
-                rows={3}
-                required
-                value={newNoteText}
-                onChange={(e) => setNewNoteText(e.target.value)}
-                placeholder="e.g. Ate 80g of food and drank plenty of water after walk."
-                className="w-full p-3 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
+      {/* ═══════════ MODAL: REGISTER NEW PET (WITH PHOTO UPLOAD) ═══════════ */}
+      <Modal
+        isOpen={addPetModalOpen}
+        onClose={() => setAddPetModalOpen(false)}
+        title="Register Pet Profile"
+        subtitle="Add animal profile and picture to Heritage Animal Clinic portal"
+        maxWidth="md"
+      >
+        <form onSubmit={handleAddPetSubmit} className="space-y-4 text-xs">
+          {/* Pet Photo Upload Section */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center gap-4">
+            <div className="relative group shrink-0">
+              <img
+                src={
+                  petForm.avatarUrl ||
+                  (petForm.species === 'Cat'
+                    ? 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=300'
+                    : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=300')
+                }
+                alt="Pet Preview"
+                className="w-20 h-20 rounded-2xl object-cover ring-2 ring-teal-500/30 border border-slate-200 shadow-sm"
               />
+              <button
+                type="button"
+                onClick={() => addFileInputRef.current?.click()}
+                className="absolute inset-0 bg-slate-900/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white cursor-pointer"
+                title="Upload Pet Photo"
+              >
+                <Camera className="w-5 h-5" />
+              </button>
+            </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddingNote(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold shadow-md hover:bg-teal-700 transition-colors cursor-pointer"
-                >
-                  Save Care Note
-                </button>
+            <div className="flex-1 space-y-1.5 text-center sm:text-left">
+              <div className="font-bold text-slate-800 text-xs flex items-center justify-center sm:justify-start gap-1.5">
+                <ImageIcon className="w-4 h-4 text-teal-600" />
+                <span>Pet Picture / Photo</span>
               </div>
-            </form>
+              <p className="text-[11px] text-slate-500">
+                Upload a clear picture of your pet (JPG, PNG, WEBP max 5MB).
+              </p>
+              <input
+                ref={addFileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => addFileInputRef.current?.click()}
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-teal-800 font-extrabold text-xs border border-slate-200 inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <Upload className="w-3.5 h-3.5 text-teal-600" />
+                {petForm.avatarUrl ? 'Change Picture' : 'Upload Pet Photo'}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Pet Name *</label>
+              <input
+                type="text"
+                required
+                value={petForm.name}
+                onChange={(e) => setPetForm({ ...petForm, name: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                placeholder="e.g. Max, Bella, Milo"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Species *</label>
+              <select
+                value={petForm.species}
+                onChange={(e) => setPetForm({ ...petForm, species: e.target.value as any })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              >
+                <option value="Dog">Dog</option>
+                <option value="Cat">Cat</option>
+                <option value="Other">Other Animal</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Breed *</label>
+              <input
+                type="text"
+                required
+                value={petForm.breed}
+                onChange={(e) => setPetForm({ ...petForm, breed: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                placeholder="e.g. Golden Retriever"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Age (Years) *</label>
+              <input
+                type="number"
+                min="0"
+                max="30"
+                step="0.5"
+                required
+                value={petForm.age}
+                onChange={(e) => setPetForm({ ...petForm, age: Number(e.target.value) })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Weight (kg) *</label>
+              <input
+                type="number"
+                min="0.1"
+                max="100"
+                step="0.1"
+                required
+                value={petForm.weight}
+                onChange={(e) => setPetForm({ ...petForm, weight: Number(e.target.value) })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Animal Gender</label>
+              <select
+                value={petForm.sex}
+                onChange={(e) => setPetForm({ ...petForm, sex: e.target.value as any })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Meal Portion (Grams)</label>
+              <input
+                type="number"
+                min="10"
+                max="500"
+                value={petForm.portionGrams}
+                onChange={(e) => setPetForm({ ...petForm, portionGrams: Number(e.target.value) })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 uppercase mb-1">Dietary & Care Notes</label>
+            <textarea
+              rows={2}
+              value={petForm.notes}
+              onChange={(e) => setPetForm({ ...petForm, notes: e.target.value })}
+              className="w-full p-2.5 rounded-xl border border-slate-300 font-medium focus:border-teal-500 focus:outline-none"
+              placeholder="Allergies, favorite food, behavioral notes..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setAddPetModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-xl bg-teal-600 text-white font-bold hover:bg-teal-700 shadow-md cursor-pointer"
+            >
+              + Add Pet
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ═══════════ MODAL: EDIT PET DETAILS & PHOTO ═══════════ */}
+      <Modal
+        isOpen={!!editingPet}
+        onClose={() => setEditingPet(null)}
+        title={editingPet ? 'Edit ' + editingPet.name + ' Details' : 'Edit Pet'}
+        subtitle="Update animal picture, age, weight, breed, and health notes"
+        maxWidth="md"
+      >
+        <form onSubmit={handleSavePetEdit} className="space-y-4 text-xs">
+          {/* Pet Photo Edit Section */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center gap-4">
+            <div className="relative group shrink-0">
+              <img
+                src={petForm.avatarUrl || editingPet?.avatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=300'}
+                alt="Pet Preview"
+                className="w-20 h-20 rounded-2xl object-cover ring-2 ring-teal-500/30 border border-slate-200 shadow-sm"
+              />
+              <button
+                type="button"
+                onClick={() => editFileInputRef.current?.click()}
+                className="absolute inset-0 bg-slate-900/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white cursor-pointer"
+                title="Change Pet Photo"
+              >
+                <Camera className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-1.5 text-center sm:text-left">
+              <div className="font-bold text-slate-800 text-xs flex items-center justify-center sm:justify-start gap-1.5">
+                <ImageIcon className="w-4 h-4 text-teal-600" />
+                <span>Update Pet Picture</span>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Upload a new photo (JPG, PNG, WEBP max 5MB).
+              </p>
+              <input
+                ref={editFileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => editFileInputRef.current?.click()}
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-teal-800 font-extrabold text-xs border border-slate-200 inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <Upload className="w-3.5 h-3.5 text-teal-600" />
+                Select New Photo
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Pet Name *</label>
+              <input
+                type="text"
+                required
+                value={petForm.name}
+                onChange={(e) => setPetForm({ ...petForm, name: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Species *</label>
+              <select
+                value={petForm.species}
+                onChange={(e) => setPetForm({ ...petForm, species: e.target.value as any })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              >
+                <option value="Dog">Dog</option>
+                <option value="Cat">Cat</option>
+                <option value="Other">Other Animal</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Breed *</label>
+              <input
+                type="text"
+                required
+                value={petForm.breed}
+                onChange={(e) => setPetForm({ ...petForm, breed: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Age (Years) *</label>
+              <input
+                type="number"
+                min="0"
+                max="30"
+                step="0.5"
+                required
+                value={petForm.age}
+                onChange={(e) => setPetForm({ ...petForm, age: Number(e.target.value) })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Weight (kg) *</label>
+              <input
+                type="number"
+                min="0.1"
+                max="100"
+                step="0.1"
+                required
+                value={petForm.weight}
+                onChange={(e) => setPetForm({ ...petForm, weight: Number(e.target.value) })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Animal Gender</label>
+              <select
+                value={petForm.sex}
+                onChange={(e) => setPetForm({ ...petForm, sex: e.target.value as any })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Meal Portion (Grams)</label>
+              <input
+                type="number"
+                min="10"
+                max="500"
+                value={petForm.portionGrams}
+                onChange={(e) => setPetForm({ ...petForm, portionGrams: Number(e.target.value) })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 uppercase mb-1">Care & Health Notes</label>
+            <textarea
+              rows={3}
+              value={petForm.notes}
+              onChange={(e) => setPetForm({ ...petForm, notes: e.target.value })}
+              className="w-full p-2.5 rounded-xl border border-slate-300 font-medium focus:border-teal-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setEditingPet(null)}
+              className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-xl bg-teal-600 text-white font-bold hover:bg-teal-700 shadow-md cursor-pointer"
+            >
+              Save Changes & Photo
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Confirmation Dialog for Pet Deletion */}
+      <ConfirmDialog
+        isOpen={!!deletePetTarget}
+        onClose={() => setDeletePetTarget(null)}
+        onConfirm={() => {
+          if (deletePetTarget) {
+            deletePet(deletePetTarget.id);
+            setDeletePetTarget(null);
+          }
+        }}
+        title="Delete Pet Profile"
+        message={deletePetTarget ? 'Are you sure you want to remove ' + deletePetTarget.name + ' from your profile?' : ''}
+        confirmText="Delete Pet"
+        variant="danger"
+      />
     </div>
   );
 };
