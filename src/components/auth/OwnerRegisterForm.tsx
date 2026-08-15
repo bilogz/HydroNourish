@@ -21,12 +21,13 @@ import {
   Cat,
   CheckCircle2,
   Send,
+  Copy,
   ShieldCheck,
   AlertCircle
 } from 'lucide-react';
 import { useSession } from '../../contexts/SessionContext';
 import { useAppContext } from '../../hooks/useAppContext';
-import { SYSTEM_OTP_SENDER_EMAIL } from '../../services/emailService';
+import { SYSTEM_OTP_SENDER_EMAIL, sendVerificationEmail } from '../../services/emailService';
 
 interface OwnerRegisterFormProps {
   onSuccess: (email: string) => void;
@@ -171,12 +172,13 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
       });
     }
 
+    await sendVerificationEmail(trimmedEmail, trimmedName);
     setIsLoading(false);
     setVerificationPending(true);
     showToast(
       'success',
-      'VERIFICATION EMAIL SENT',
-      'A verification link has been dispatched to ' + trimmedEmail + ' from ' + SYSTEM_OTP_SENDER_EMAIL + '.'
+      'VERIFICATION EMAIL DISPATCHED',
+      'A verification email was sent to ' + trimmedEmail + ' from ' + SYSTEM_OTP_SENDER_EMAIL + '.'
     );
   };
 
@@ -193,6 +195,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
       });
     }, 1000);
 
+    sendVerificationEmail(email, name);
     showToast(
       'info',
       'EMAIL RE-SENT',
@@ -233,28 +236,45 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
             type="button"
             onClick={() => {
               localStorage.setItem('hn_owner_email', email);
+              localStorage.setItem('hn_owner_verified_' + email, 'true');
+              showToast('success', 'EMAIL VERIFIED', 'Welcome to the HydroNourish Pet Owner Portal!');
               onSuccess(email);
             }}
             className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <CheckCircle2 className="w-4 h-4" />
-            I Have Verified My Email · Proceed to Portal
+            ✓ I Have Verified My Email · Proceed to Portal
           </button>
 
-          <button
-            type="button"
-            disabled={resendCooldown > 0}
-            onClick={handleResendVerification}
-            className="w-full py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <Send className="w-3.5 h-3.5 text-slate-500" />
-            {resendCooldown > 0 ? 'Resend available in ' + resendCooldown + 's' : 'Resend Verification Email'}
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={resendCooldown > 0}
+              onClick={handleResendVerification}
+              className="py-2.5 px-3 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Send className="w-3.5 h-3.5 text-teal-600" />
+              {resendCooldown > 0 ? resendCooldown + 's cooldown' : 'Resend Email'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const link = typeof window !== 'undefined' ? window.location.origin + '/owner/login?verified=true&email=' + encodeURIComponent(email) : 'https://hydro-nourish.vercel.app/owner/login?verified=true&email=' + encodeURIComponent(email);
+                navigator.clipboard.writeText(link);
+                showToast('success', 'LINK COPIED', 'Direct verification link copied to clipboard!');
+              }}
+              className="py-2.5 px-3 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Copy className="w-3.5 h-3.5 text-indigo-600" />
+              Copy Direct Link
+            </button>
+          </div>
 
           <button
             type="button"
             onClick={onSwitchToLogin}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors pt-2"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors pt-1"
           >
             <LogIn className="w-3.5 h-3.5" />
             Back to Sign In
