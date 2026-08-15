@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 
 export const DevicesPage: React.FC = () => {
-  const { devices, pets, addDevice, removeDevice, showToast, dispenseDirect, dispenseWaterDirect } = useAppContext();
+  const { devices, pets, addDevice, updatePet, removeDevice, showToast, dispenseDirect, dispenseWaterDirect } = useAppContext();
 
   const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -105,12 +105,15 @@ export const DevicesPage: React.FC = () => {
 
   const handleConnectSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const pet = pets.find(p => p.id === formData.petId) || pets[0];
+    const pet = pets.find(p => p.id === formData.petId);
+    const macClean = formData.macAddress.replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase() || 'F778';
+    const deviceId = `HN-NODE-${macClean}`;
+
     addDevice({
-      deviceName: `HydroNourish Node ${formData.macAddress.slice(-5)}`,
-      assignedPetId: pet.id,
-      assignedPetName: pet.name,
-      hardwareStatus: 'available',
+      deviceName: pet ? `HydroNourish Station (${pet.name})` : `HydroNourish Smart Node ${macClean}`,
+      assignedPetId: pet ? pet.id : '',
+      assignedPetName: pet ? pet.name : 'Standby / Vacant',
+      hardwareStatus: pet ? 'occupied' : 'available',
       wifiSignalDbm: formData.wifiSignalDbm,
       foodLevelPct: formData.foodLevelPct,
       waterLevelPct: formData.waterLevelPct,
@@ -119,6 +122,14 @@ export const DevicesPage: React.FC = () => {
       firmwareVersion: formData.firmwareVersion,
       macAddress: formData.macAddress
     });
+
+    if (pet) {
+      updatePet(pet.id, { assignedDeviceId: deviceId });
+      showToast('success', 'Node Paired & Assigned', `Node ${deviceId} successfully linked to ${pet.name}.`);
+    } else {
+      showToast('success', 'Node Paired (Standby)', `Node ${deviceId} registered in Standby mode.`);
+    }
+
     setConnectModalOpen(false);
   };
 
@@ -783,18 +794,28 @@ export const DevicesPage: React.FC = () => {
       >
         <form onSubmit={handleConnectSubmit} className="space-y-4 text-xs">
           <div>
-            <label className="block font-bold text-slate-700 uppercase mb-1">Assign to Patient *</label>
-            <select
-              value={formData.petId}
-              onChange={e => setFormData({ ...formData, petId: e.target.value })}
-              className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold"
-            >
-              {pets.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.species} - {p.id})
-                </option>
-              ))}
-            </select>
+            <label className="block font-bold text-slate-700 uppercase mb-1">Assign to Patient Animal</label>
+            {pets.length > 0 ? (
+              <select
+                value={formData.petId}
+                onChange={e => setFormData({ ...formData, petId: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none bg-white text-slate-800"
+              >
+                <option value="">Select a registered patient to assign (or Leave Standby)...</option>
+                {pets.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.species} • {p.breed || 'Mixed'} — Owner: {p.ownerName || 'Clinic Patient'})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 space-y-1">
+                <p className="font-bold">No registered pets in database</p>
+                <p className="text-[11px] text-amber-700 leading-tight">
+                  This ESP32 node will be registered in Standby / Vacant mode until a patient is assigned.
+                </p>
+              </div>
+            )}
           </div>
 
           <div>
@@ -804,7 +825,8 @@ export const DevicesPage: React.FC = () => {
               required
               value={formData.macAddress}
               onChange={e => setFormData({ ...formData, macAddress: e.target.value })}
-              className="w-full p-2.5 rounded-xl border border-slate-300 font-mono"
+              className="w-full p-2.5 rounded-xl border border-slate-300 font-mono font-bold focus:border-teal-500 focus:outline-none"
+              placeholder="1C:C3:AB:F9:F7:78"
             />
           </div>
 
@@ -812,13 +834,13 @@ export const DevicesPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setConnectModalOpen(false)}
-              className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700 hover:bg-slate-50"
+              className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold shadow-sm"
+              className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold shadow-sm cursor-pointer"
             >
               Register & Pair Node
             </button>
