@@ -192,6 +192,7 @@ export async function insertScheduleToSupabase(schedule: FeedingSchedule): Promi
       id: schedule.id,
       pet_id: schedule.petId || 'PET-001',
       pet_name: schedule.petName || 'Max',
+      food_type: schedule.foodType || 'Standard Diet',
       portion_grams: schedule.portionGrams || 75,
       scheduled_time: schedule.scheduledTime || 'Instant Manual',
       dispense_status: 'Pending',
