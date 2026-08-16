@@ -388,9 +388,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
               const localThread = local.messagesThread || [];
 
               let mergedThread = remoteThread;
-              if (localThread.length > remoteThread.length) {
-                mergedThread = localThread;
-              } else if (remoteThread.length > 0 && localThread.length > 0) {
+              if (localThread.length > 0 && remoteThread.length > 0) {
                 const seenIds = new Set<string>();
                 const combined: ChatMessageItem[] = [];
                 for (const m of [...localThread, ...remoteThread]) {
@@ -399,7 +397,10 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
                     combined.push(m);
                   }
                 }
-                mergedThread = combined.length >= remoteThread.length ? combined : remoteThread;
+                combined.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                mergedThread = combined;
+              } else if (localThread.length > 0) {
+                mergedThread = localThread;
               }
 
               return {
@@ -484,9 +485,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
             const localThread = local.messagesThread || [];
 
             let mergedThread = remoteThread;
-            if (localThread.length > remoteThread.length) {
-              mergedThread = localThread;
-            } else if (remoteThread.length > 0 && localThread.length > 0) {
+            if (localThread.length > 0 && remoteThread.length > 0) {
               const seenIds = new Set<string>();
               const combined: ChatMessageItem[] = [];
               for (const m of [...localThread, ...remoteThread]) {
@@ -495,7 +494,10 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
                   combined.push(m);
                 }
               }
-              mergedThread = combined.length >= remoteThread.length ? combined : remoteThread;
+              combined.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+              mergedThread = combined;
+            } else if (localThread.length > 0) {
+              mergedThread = localThread;
             }
 
             return {
