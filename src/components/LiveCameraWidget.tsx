@@ -194,14 +194,27 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     }
   };
 
+  // ── Hardware Flashlight Control (GPIO 4) ───────────────────────────────────
   const toggleFlash = async () => {
     const nextState = !flashOn;
     setFlashOn(nextState);
-    try {
-      await fetch(`http://${cleanIp}/flash?state=${nextState ? 1 : 0}`, { mode: 'no-cors' });
-    } catch {
-      // no-cors fetch
+
+    const endpoints = [
+      `http://${cleanIp}/flash?state=${nextState ? 1 : 0}`,
+      `http://${cleanIp}:81/flash?state=${nextState ? 1 : 0}`,
+      `http://hydronourish-cam.local/flash?state=${nextState ? 1 : 0}`,
+      `http://192.168.4.1/flash?state=${nextState ? 1 : 0}`
+    ];
+
+    for (const url of endpoints) {
+      fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
     }
+
+    showToast(
+      nextState ? 'info' : 'success',
+      `Flashlight ${nextState ? 'Turned ON' : 'Turned OFF'}`,
+      `ESP32-CAM High-Power White LED (GPIO 4) is now ${nextState ? 'ACTIVE' : 'OFF'}.`
+    );
   };
 
   const handleSnapshot = () => {
@@ -396,14 +409,14 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           <button
             onClick={toggleFlash}
             title="Toggle ESP32-CAM Flashlight LED (GPIO 4)"
-            className={`p-2 rounded-lg border transition-all text-xs flex items-center gap-1 cursor-pointer ${
+            className={`p-2 rounded-lg border transition-all text-xs flex items-center gap-1.5 cursor-pointer font-bold ${
               flashOn
-                ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-lg shadow-amber-500/20'
+                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg shadow-amber-500/40 ring-2 ring-amber-400/50'
                 : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-amber-400'
             }`}
           >
-            <Zap className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{flashOn ? 'Flash ON' : 'Flash'}</span>
+            <Zap className={`w-3.5 h-3.5 ${flashOn ? 'fill-slate-950 text-slate-950 animate-bounce' : ''}`} />
+            <span>{flashOn ? 'Flash ON' : 'Flash'}</span>
           </button>
 
           {/* High-Resolution Capture */}
