@@ -99,6 +99,14 @@ export const App: React.FC = () => {
                 }
               />
               <Route
+                path="/app/pet-owners"
+                element={
+                  <AdminRoute>
+                    <PetOwnersPage />
+                  </AdminRoute>
+                }
+              />
+              <Route
                 path="/app/feeding"
                 element={
                   <AdminRoute>

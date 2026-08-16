@@ -171,7 +171,7 @@ export const PetOwnersPage: React.FC = () => {
       healthStatus: 'Healthy',
       avatarUrl: (petForm as any).avatarUrl || (petForm.species === 'Cat'
         ? 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=300'
-        : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=300',
+        : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=300'),
       feedingPlan: {
         portionGrams: Number(petForm.portionGrams),
         timesPerDay: Number(petForm.timesPerDay),
