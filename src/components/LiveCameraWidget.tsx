@@ -2,9 +2,9 @@
  * ============================================================================
  *  HydroNourish LiveCameraWidget - AI Vision Feed & Hardware Control Node
  * ============================================================================
- *  - High-Definition MJPEG Stream Receiver (Dual-Port 80 / 81 Fallback)
+ *  - High-Definition MJPEG Stream Receiver (Dedicated Port 81 Stream)
  *  - Real-Time Optical AI HUD Tracking Reticle & Diagnostics
- *  - Hardware Controls: Flashlight (GPIO 4), High-Res Photo Capture
+ *  - Hardware Controls: Flashlight (GPIO 4 with Mixed-Content Bypass), Photo
  *  - Built-in Live Wi-Fi Scanner & Universal Network Pairing Modal
  * ============================================================================
  */
@@ -63,7 +63,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
 }) => {
   const { devices, showToast } = useAppContext();
 
-  // Try auto-discovering camera IP from Supabase device telemetry
+  // Auto-discover camera IP from Supabase device telemetry
   const discoveredIp = React.useMemo(() => {
     if (!devices || devices.length === 0) return null;
     for (const d of devices) {
@@ -150,10 +150,10 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   // Clean IP format
   const cleanIp = cameraIp.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
 
-  // Multi-Port Fallback URIs
+  // Multi-Port Fallback URIs: Port 81 (Dedicated Stream) -> Port 80 -> mDNS
   const streamCandidates = [
-    `http://${cleanIp}/stream?t=${streamKey}`,
     `http://${cleanIp}:81/stream?t=${streamKey}`,
+    `http://${cleanIp}/stream?t=${streamKey}`,
     `http://hydronourish-cam.local/stream?t=${streamKey}`
   ];
 
@@ -194,11 +194,16 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     }
   };
 
-  // ── Hardware Flashlight Control (GPIO 4) ───────────────────────────────────
-  const toggleFlash = async () => {
+  // ── Hardware Flashlight Control (GPIO 4 with HTTPS Bypass) ─────────────────
+  const toggleFlash = () => {
     const nextState = !flashOn;
     setFlashOn(nextState);
 
+    // 1. Passive Image Ping (Bypasses HTTPS Mixed Content block in Chrome/Brave/Edge)
+    const imgPing = new Image();
+    imgPing.src = `http://${cleanIp}/flash?state=${nextState ? 1 : 0}&_t=${Date.now()}`;
+
+    // 2. Redundant dispatch across candidate endpoints
     const endpoints = [
       `http://${cleanIp}/flash?state=${nextState ? 1 : 0}`,
       `http://${cleanIp}:81/flash?state=${nextState ? 1 : 0}`,
@@ -207,7 +212,9 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     ];
 
     for (const url of endpoints) {
-      fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+      try {
+        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+      } catch {}
     }
 
     showToast(
@@ -354,7 +361,6 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             </div>
             <p className="text-[11px] text-slate-400 font-mono">
               <span className="text-teal-400 font-bold">IP: {cleanIp}</span>
-              {streamPortIndex === 1 && <span className="text-amber-400 ml-1">(Port 81)</span>}
               {' '}• {subtitle}
             </p>
           </div>
