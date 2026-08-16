@@ -93,6 +93,7 @@ interface AppContextType {
   dispenseDirect: (deviceId: string, grams?: number, foodType?: string) => void;
   dispenseWaterDirect: (deviceId: string, amountMl?: number) => void;
   stopPumpDirect: (deviceId: string) => Promise<void>;
+  togglePumpMasterDirect: (deviceId: string) => Promise<void>;
   deactivatePumpDirect: (deviceId: string, deactivate?: boolean) => Promise<void>;
 
   refillWater: (deviceId: string) => void;
@@ -503,6 +504,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await insertScheduleToSupabase(newSch);
   };
 
+  const togglePumpMasterDirect = async (deviceId: string) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const isCurrentlyDeactivated = Boolean(
+      dev?.firmwareVersion?.includes('PUMP:DISABLED') ||
+      dev?.firmwareVersion?.includes('PUMP:LOCKED') ||
+      dev?.firmwareVersion?.includes('PUMP:OFF')
+    );
+    const nextAction = isCurrentlyDeactivated ? 'Activate Pump' : 'Deactivate Pump';
+    const petName = dev?.assignedPetName || 'Max';
+    const petId = dev?.assignedPetId || 'PET-001';
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
+
+    // 1. Direct LAN call (Instant 10ms execution if on same Wi-Fi)
+    try {
+      const endpoints = [
+        `http://${cleanIp}/api/pump/toggle-master`,
+        `http://${cleanIp}/api/pump/${isCurrentlyDeactivated ? 'activate' : 'deactivate'}`,
+        `http://192.168.100.159/api/pump/toggle-master`,
+        `http://hydronourish.local/api/pump/toggle-master`
+      ];
+      endpoints.forEach((url) => {
+        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+        const img = new Image();
+        img.src = `${url}?_t=${Date.now()}`;
+      });
+    } catch {}
+
+    // Optimistic device state update
+    setDevices((prev) =>
+      prev.map((d) => {
+        if (d.id !== deviceId) return d;
+        const currentFw = d.firmwareVersion || '';
+        let newFw = currentFw;
+        if (isCurrentlyDeactivated) {
+          newFw = currentFw.replace('PUMP:DISABLED', 'PUMP:ACTIVE').replace('PUMP:LOCKED', 'PUMP:ACTIVE').replace('PUMP:OFF', 'PUMP:ACTIVE');
+        } else {
+          newFw = currentFw.includes('PUMP:ACTIVE') ? currentFw.replace('PUMP:ACTIVE', 'PUMP:DISABLED') : `${currentFw}|PUMP:DISABLED`;
+        }
+        return { ...d, firmwareVersion: newFw };
+      })
+    );
+
+    // 2. Supabase Cloud Remote Command
+    const newSch: FeedingSchedule = {
+      id: `SCH-LOCK-${Date.now()}`,
+      deviceId: deviceId,
+      foodType: nextAction,
+      portionGrams: 0,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      petId: petId,
+      petName: petName,
+    };
+
+    setSchedules((prev) => [newSch, ...prev]);
+    showToast(
+      isCurrentlyDeactivated ? 'success' : 'alert',
+      isCurrentlyDeactivated ? '🔓 Water Pump ACTIVATED' : '🔒 Water Pump DEACTIVATED',
+      isCurrentlyDeactivated
+        ? 'Water pump is now enabled and ready for automatic / manual pumping.'
+        : 'Water pump is now locked OFF (Master Deactivated).'
+    );
+
+    await insertScheduleToSupabase(newSch);
+  };
+
   const deactivatePumpDirect = async (deviceId: string, deactivate: boolean = true) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
@@ -700,6 +768,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispenseDirect,
         dispenseWaterDirect,
         stopPumpDirect,
+        togglePumpMasterDirect,
         deactivatePumpDirect,
         refillWater,
         acknowledgeAlert,

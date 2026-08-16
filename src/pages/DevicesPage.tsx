@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 
 export const DevicesPage: React.FC = () => {
-  const { devices, pets, addDevice, updatePet, removeDevice, showToast, dispenseDirect, dispenseWaterDirect, stopPumpDirect, deactivatePumpDirect } = useAppContext();
+  const { devices, pets, addDevice, updatePet, removeDevice, showToast, dispenseDirect, dispenseWaterDirect, stopPumpDirect, togglePumpMasterDirect, deactivatePumpDirect } = useAppContext();
 
   const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -348,6 +348,11 @@ export const DevicesPage: React.FC = () => {
 
             const assignedPet = pets.find(p => p.id === featuredDevice.assignedPetId || p.name === featuredDevice.assignedPetName);
             const autoCamIp = featuredDevice.firmwareVersion?.match(/CAM:([0-9.]+)/)?.[1];
+            const isPumpDeactivated = Boolean(
+              featuredDevice.firmwareVersion?.includes('PUMP:DISABLED') ||
+              featuredDevice.firmwareVersion?.includes('PUMP:LOCKED') ||
+              featuredDevice.firmwareVersion?.includes('PUMP:OFF')
+            );
 
             return (
               <div className="clinic-card overflow-hidden bg-white border border-slate-200 shadow-xl rounded-2xl">
@@ -488,46 +493,75 @@ export const DevicesPage: React.FC = () => {
                     </div>
 
                     {/* Quick Dispense & Action Controls */}
-                    <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs gap-2">
-                      <button
-                        onClick={() => dispenseDirect(featuredDevice.id, 75)}
-                        disabled={!isOnline}
-                        className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-sm ${
-                          isOnline
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95'
-                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                        }`}
-                        title={isOnline ? 'Automated Smart Dispense (90° Gate Cycle)' : 'Node is offline'}
-                      >
-                        <Utensils className="w-4 h-4" />
-                        Feed
-                      </button>
-                      <button
-                        onClick={() => dispenseWaterDirect(featuredDevice.id, 250)}
-                        disabled={!isOnline}
-                        className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-sm ${
-                          isOnline
-                            ? 'bg-sky-600 hover:bg-sky-700 text-white cursor-pointer active:scale-95'
-                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                        }`}
-                        title={isOnline ? 'Automated Water Pump (250ml)' : 'Node is offline'}
-                      >
-                        <Droplets className="w-4 h-4" />
-                        Pump Water
-                      </button>
-                      <button
-                        onClick={() => stopPumpDirect(featuredDevice.id)}
-                        disabled={!isOnline}
-                        className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-sm ${
-                          isOnline
-                            ? 'bg-rose-600 hover:bg-rose-700 text-white cursor-pointer active:scale-95 shadow-rose-500/20'
-                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                        }`}
-                        title={isOnline ? 'Manual Emergency Stop: Turn Off Water Pump (Deactivate)' : 'Node is offline'}
-                      >
-                        <Square className="w-4 h-4 fill-white" />
-                        Stop Pump
-                      </button>
+                        <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs gap-2">
+                          <button
+                            onClick={() => dispenseDirect(featuredDevice.id, 75)}
+                            disabled={!isOnline}
+                            className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                              isOnline
+                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95'
+                                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                            }`}
+                            title={isOnline ? 'Automated Smart Dispense (90° Gate Cycle)' : 'Node is offline'}
+                          >
+                            <Utensils className="w-4 h-4" />
+                            Feed
+                          </button>
+
+                          {/* Water Pump Button (Disabled with Lock indicator when pump is deactivated) */}
+                          <button
+                            onClick={() => dispenseWaterDirect(featuredDevice.id, 250)}
+                            disabled={!isOnline || isPumpDeactivated}
+                            className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                              !isOnline
+                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                : isPumpDeactivated
+                                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                                : 'bg-sky-600 hover:bg-sky-700 text-white cursor-pointer active:scale-95 shadow-sky-500/20'
+                            }`}
+                            title={
+                              !isOnline
+                                ? 'Node is offline'
+                                : isPumpDeactivated
+                                ? '🔒 Water pump is currently locked & deactivated. Click Activate Pump first.'
+                                : 'Automated Water Pump (250ml)'
+                            }
+                          >
+                            {isPumpDeactivated ? <Lock className="w-4 h-4 text-amber-500" /> : <Droplets className="w-4 h-4" />}
+                            {isPumpDeactivated ? 'Pump Locked' : 'Pump Water'}
+                          </button>
+
+                          {/* Stateful Activate / Deactivate Toggle Button */}
+                          <button
+                            onClick={() => togglePumpMasterDirect(featuredDevice.id)}
+                            disabled={!isOnline}
+                            className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                              !isOnline
+                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                : isPumpDeactivated
+                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95 shadow-emerald-500/20'
+                                : 'bg-rose-600 hover:bg-rose-700 text-white cursor-pointer active:scale-95 shadow-rose-500/20'
+                            }`}
+                            title={
+                              !isOnline
+                                ? 'Node is offline'
+                                : isPumpDeactivated
+                                ? 'Click to re-activate and unlock the water pump'
+                                : 'Click to completely lock and deactivate the water pump'
+                            }
+                          >
+                            {isPumpDeactivated ? (
+                              <>
+                                <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+                                Activate Pump
+                              </>
+                            ) : (
+                              <>
+                                <Square className="w-4 h-4 fill-white" />
+                                Deactivate Pump
+                              </>
+                            )}
+                          </button>
                       <button
                         onClick={() => setCustomManualModalOpen(true)}
                         disabled={!isOnline}
