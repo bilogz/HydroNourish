@@ -128,6 +128,51 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Universal Non-Destructive Thread Merger
+export const mergeChatThreads = (
+  existingThread?: ChatMessageItem[],
+  incomingThread?: ChatMessageItem[]
+): ChatMessageItem[] => {
+  const seenIds = new Set<string>();
+  const seenFingerprints = new Set<string>();
+  const combined: ChatMessageItem[] = [];
+
+  const list = [...(existingThread || []), ...(incomingThread || [])];
+
+  for (const m of list) {
+    if (!m || typeof m.message !== 'string') continue;
+    const msgText = m.message.trim();
+    if (!msgText) continue;
+
+    const id = m.id || `msg-${m.sender}-${m.timestamp}-${msgText.slice(0, 15)}`;
+    const fingerprint = `${m.sender}:${msgText}`;
+
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
+
+    // Filter exact duplicate messages within a 2-second window
+    if (seenFingerprints.has(fingerprint)) {
+      const existing = combined.find((c) => c.sender === m.sender && c.message.trim() === msgText);
+      if (existing) {
+        const timeDiff = Math.abs(new Date(m.timestamp).getTime() - new Date(existing.timestamp).getTime());
+        if (timeDiff < 2500) continue;
+      }
+    }
+    seenFingerprints.add(fingerprint);
+
+    combined.push({
+      id,
+      sender: m.sender,
+      senderName: m.senderName,
+      message: msgText,
+      timestamp: m.timestamp || new Date().toISOString(),
+    });
+  }
+
+  combined.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  return combined;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [pets, setPets] = useState<Pet[]>(() => {
     try {
@@ -384,28 +429,10 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
               const local = prev.find((p) => p.id === remote.id);
               if (!local) return remote;
 
-              const remoteThread = remote.messagesThread || [];
-              const localThread = local.messagesThread || [];
-
-              let mergedThread = remoteThread;
-              if (localThread.length > 0 && remoteThread.length > 0) {
-                const seenIds = new Set<string>();
-                const combined: ChatMessageItem[] = [];
-                for (const m of [...localThread, ...remoteThread]) {
-                  if (m && m.id && !seenIds.has(m.id)) {
-                    seenIds.add(m.id);
-                    combined.push(m);
-                  }
-                }
-                combined.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-                mergedThread = combined;
-              } else if (localThread.length > 0) {
-                mergedThread = localThread;
-              }
-
+              const mergedThread = mergeChatThreads(local.messagesThread, remote.messagesThread);
               return {
                 ...remote,
-                messagesThread: mergedThread.length > 0 ? mergedThread : remote.messagesThread,
+                messagesThread: mergedThread,
               };
             });
           });
@@ -430,7 +457,17 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
           } else if (event.data?.type === 'UPDATE_INQUIRY' && event.data?.id) {
             const { id, updates } = event.data;
             setInquiries((prev) =>
-              prev.map((inq) => (inq.id === id ? { ...inq, ...updates } : inq))
+              prev.map((inq) => {
+                if (inq.id !== id) return inq;
+                const mergedThread = updates.messagesThread
+                  ? mergeChatThreads(inq.messagesThread, updates.messagesThread)
+                  : inq.messagesThread;
+                return {
+                  ...inq,
+                  ...updates,
+                  messagesThread: mergedThread,
+                };
+              })
             );
           }
         };
@@ -457,7 +494,17 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
           if (parsed?.id && parsed?.updates) {
             const { id, updates } = parsed;
             setInquiries((prev) =>
-              prev.map((inq) => (inq.id === id ? { ...inq, ...updates } : inq))
+              prev.map((inq) => {
+                if (inq.id !== id) return inq;
+                const mergedThread = updates.messagesThread
+                  ? mergeChatThreads(inq.messagesThread, updates.messagesThread)
+                  : inq.messagesThread;
+                return {
+                  ...inq,
+                  ...updates,
+                  messagesThread: mergedThread,
+                };
+              })
             );
           }
         } catch {}
@@ -1018,21 +1065,20 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       prev.map((inq) => {
         if (inq.id !== id) return inq;
 
-        let currentThread: ChatMessageItem[] = [];
+        // Collect all previous messages safely
+        let baseThread: ChatMessageItem[] = [];
         if (inq.messagesThread && inq.messagesThread.length > 0) {
-          currentThread = [...inq.messagesThread];
+          baseThread = inq.messagesThread;
         } else if (inq.replyMessage && inq.replyMessage.trim().startsWith('[') && inq.replyMessage.trim().endsWith(']')) {
           try {
-            const p = JSON.parse(inq.replyMessage);
-            if (Array.isArray(p) && p.length > 0) {
-              currentThread = [...p];
-            }
+            const p = JSON.parse(inq.replyMessage.trim());
+            if (Array.isArray(p)) baseThread = p;
           } catch {}
         }
 
-        if (currentThread.length === 0) {
+        if (baseThread.length === 0) {
           if (inq.message) {
-            currentThread.push({
+            baseThread.push({
               id: `msg-1-${inq.id}`,
               sender: 'owner',
               senderName: inq.name || 'Client',
@@ -1041,7 +1087,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
             });
           }
           if (inq.replyMessage && !inq.replyMessage.trim().startsWith('[')) {
-            currentThread.push({
+            baseThread.push({
               id: `msg-2-${inq.id}`,
               sender: 'admin',
               senderName: senderName,
@@ -1051,33 +1097,39 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
           }
         }
 
-        if (replyMessage) {
-          currentThread.push({
-            id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        const newMsgList: ChatMessageItem[] = [];
+        if (replyMessage && replyMessage.trim()) {
+          newMsgList.push({
+            id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
             sender: 'admin',
             senderName: senderName,
-            message: replyMessage,
+            message: replyMessage.trim(),
             timestamp: new Date().toISOString(),
           });
         }
 
-        finalThread = currentThread;
+        const updatedThread = mergeChatThreads(baseThread, newMsgList);
+        finalThread = updatedThread;
 
-        const updates: Partial<ContactInquiry> = {
+        try {
+          localStorage.setItem(`hn_thread_${id}`, JSON.stringify(updatedThread));
+        } catch {}
+
+        return {
+          ...inq,
           status,
           ...(status === 'replied' && replyMessage
-            ? { repliedAt: new Date().toISOString(), replyMessage: replyMessage, messagesThread: currentThread }
-            : { messagesThread: currentThread }),
+            ? { repliedAt: new Date().toISOString(), replyMessage: replyMessage.trim() }
+            : {}),
+          messagesThread: updatedThread,
         };
-
-        return { ...inq, ...updates };
       })
     );
 
     const updates: Partial<ContactInquiry> = {
       status,
       ...(status === 'replied' && replyMessage
-        ? { repliedAt: new Date().toISOString(), replyMessage: replyMessage, messagesThread: finalThread }
+        ? { repliedAt: new Date().toISOString(), replyMessage: replyMessage.trim(), messagesThread: finalThread }
         : { messagesThread: finalThread }),
     };
 
@@ -1105,21 +1157,19 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       prev.map((inq) => {
         if (inq.id !== inquiryId) return inq;
 
-        let currentThread: ChatMessageItem[] = [];
+        let baseThread: ChatMessageItem[] = [];
         if (inq.messagesThread && inq.messagesThread.length > 0) {
-          currentThread = [...inq.messagesThread];
+          baseThread = inq.messagesThread;
         } else if (inq.replyMessage && inq.replyMessage.trim().startsWith('[') && inq.replyMessage.trim().endsWith(']')) {
           try {
-            const p = JSON.parse(inq.replyMessage);
-            if (Array.isArray(p) && p.length > 0) {
-              currentThread = [...p];
-            }
+            const p = JSON.parse(inq.replyMessage.trim());
+            if (Array.isArray(p)) baseThread = p;
           } catch {}
         }
 
-        if (currentThread.length === 0) {
+        if (baseThread.length === 0) {
           if (inq.message) {
-            currentThread.push({
+            baseThread.push({
               id: `msg-1-${inq.id}`,
               sender: 'owner',
               senderName: inq.name || 'Pet Owner',
@@ -1128,7 +1178,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
             });
           }
           if (inq.replyMessage && !inq.replyMessage.trim().startsWith('[')) {
-            currentThread.push({
+            baseThread.push({
               id: `msg-2-${inq.id}`,
               sender: 'admin',
               senderName: 'Heritage Animal Clinic Staff',
@@ -1138,20 +1188,25 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
           }
         }
 
-        const newMsg: ChatMessageItem = {
-          id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          sender: 'owner',
-          senderName: senderName || inq.name || 'Pet Owner',
-          message: messageText.trim(),
-          timestamp: new Date().toISOString(),
-        };
+        const newMsgList: ChatMessageItem[] = [
+          {
+            id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            sender: 'owner',
+            senderName: senderName || inq.name || 'Pet Owner',
+            message: messageText.trim(),
+            timestamp: new Date().toISOString(),
+          },
+        ];
 
-        const updatedThread = [...currentThread, newMsg];
+        const updatedThread = mergeChatThreads(baseThread, newMsgList);
         finalThread = updatedThread;
+
+        try {
+          localStorage.setItem(`hn_thread_${inquiryId}`, JSON.stringify(updatedThread));
+        } catch {}
 
         return {
           ...inq,
-          message: messageText.trim(),
           status: 'unread',
           messagesThread: updatedThread,
         };
@@ -1159,7 +1214,6 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     );
 
     const updates: Partial<ContactInquiry> = {
-      message: messageText.trim(),
       status: 'unread',
       messagesThread: finalThread,
     };
