@@ -379,7 +379,34 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
               playNotificationChime();
               showToast('info', '📬 New Contact Inquiry', `${brandNew[0].name}: "${brandNew[0].subject}"`);
             }
-            return data;
+
+            return data.map((remote) => {
+              const local = prev.find((p) => p.id === remote.id);
+              if (!local) return remote;
+
+              const remoteThread = remote.messagesThread || [];
+              const localThread = local.messagesThread || [];
+
+              let mergedThread = remoteThread;
+              if (localThread.length > remoteThread.length) {
+                mergedThread = localThread;
+              } else if (remoteThread.length > 0 && localThread.length > 0) {
+                const seenIds = new Set<string>();
+                const combined: ChatMessageItem[] = [];
+                for (const m of [...localThread, ...remoteThread]) {
+                  if (m && m.id && !seenIds.has(m.id)) {
+                    seenIds.add(m.id);
+                    combined.push(m);
+                  }
+                }
+                mergedThread = combined.length >= remoteThread.length ? combined : remoteThread;
+              }
+
+              return {
+                ...remote,
+                messagesThread: mergedThread.length > 0 ? mergedThread : remote.messagesThread,
+              };
+            });
           });
         }
       }
@@ -447,13 +474,35 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
           if (brandNew.length > 0) {
             playNotificationChime();
             showToast('info', '📬 New Contact Inquiry', `${brandNew[0].name}: "${brandNew[0].subject}"`);
-            return remoteInquiries;
           }
-          const hasStatusDiff = remoteInquiries.some((r) => {
-            const match = prev.find((p) => p.id === r.id);
-            return !match || match.status !== r.status;
+
+          return remoteInquiries.map((remote) => {
+            const local = prev.find((p) => p.id === remote.id);
+            if (!local) return remote;
+
+            const remoteThread = remote.messagesThread || [];
+            const localThread = local.messagesThread || [];
+
+            let mergedThread = remoteThread;
+            if (localThread.length > remoteThread.length) {
+              mergedThread = localThread;
+            } else if (remoteThread.length > 0 && localThread.length > 0) {
+              const seenIds = new Set<string>();
+              const combined: ChatMessageItem[] = [];
+              for (const m of [...localThread, ...remoteThread]) {
+                if (m && m.id && !seenIds.has(m.id)) {
+                  seenIds.add(m.id);
+                  combined.push(m);
+                }
+              }
+              mergedThread = combined.length >= remoteThread.length ? combined : remoteThread;
+            }
+
+            return {
+              ...remote,
+              messagesThread: mergedThread.length > 0 ? mergedThread : remote.messagesThread,
+            };
           });
-          return hasStatusDiff ? remoteInquiries : prev;
         });
       }
     }, 2000);

@@ -843,15 +843,18 @@ export async function fetchContactInquiriesFromSupabase(): Promise<ContactInquir
       let messagesThread: any[] | undefined = undefined;
       let replyMessage = item.reply_message || undefined;
 
-      if (item.reply_message && item.reply_message.trim().startsWith('[{"')) {
-        try {
-          const parsed = JSON.parse(item.reply_message);
-          if (Array.isArray(parsed)) {
-            messagesThread = parsed;
-            const lastAdminReply = [...parsed].reverse().find((m) => m.sender === 'admin');
-            replyMessage = lastAdminReply ? lastAdminReply.message : replyMessage;
-          }
-        } catch {}
+      if (item.reply_message) {
+        const trimmed = item.reply_message.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              messagesThread = parsed;
+              const lastAdminReply = [...parsed].reverse().find((m) => m.sender === 'admin');
+              replyMessage = lastAdminReply ? lastAdminReply.message : replyMessage;
+            }
+          } catch {}
+        }
       }
 
       if (!messagesThread) {
@@ -865,7 +868,7 @@ export async function fetchContactInquiriesFromSupabase(): Promise<ContactInquir
             timestamp: item.created_at || new Date().toISOString(),
           });
         }
-        if (replyMessage && !replyMessage.trim().startsWith('[{"')) {
+        if (replyMessage && !replyMessage.trim().startsWith('[')) {
           messagesThread.push({
             id: `msg-2-${item.id}`,
             sender: 'admin',
