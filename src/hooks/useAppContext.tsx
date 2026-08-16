@@ -92,6 +92,8 @@ interface AppContextType {
   dispenseNow: (scheduleId: string) => void;
   dispenseDirect: (deviceId: string, grams?: number, foodType?: string) => void;
   dispenseWaterDirect: (deviceId: string, amountMl?: number) => void;
+  stopPumpDirect: (deviceId: string) => Promise<void>;
+  deactivatePumpDirect: (deviceId: string, deactivate?: boolean) => Promise<void>;
 
   refillWater: (deviceId: string) => void;
 
@@ -461,6 +463,88 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await insertHydrationLogToSupabase(newLog);
   };
 
+  const stopPumpDirect = async (deviceId: string) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const petName = dev?.assignedPetName || 'Max';
+    const petId = dev?.assignedPetId || 'PET-001';
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
+
+    // 1. Fast Local LAN Call (Dual HTTP / mDNS endpoints with catch to avoid unhandled errors)
+    try {
+      const endpoints = [
+        `http://${cleanIp}/api/pump/stop`,
+        `http://${cleanIp}/api/pump/off`,
+        `http://192.168.100.159/api/pump/stop`,
+        `http://hydronourish.local/api/pump/stop`
+      ];
+      endpoints.forEach((url) => {
+        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+        const img = new Image();
+        img.src = `${url}?_t=${Date.now()}`;
+      });
+    } catch {}
+
+    // 2. Supabase Cloud Remote Command
+    const newSch: FeedingSchedule = {
+      id: `SCH-STOP-${Date.now()}`,
+      deviceId: deviceId,
+      foodType: 'Stop Water',
+      portionGrams: 0,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      petId: petId,
+      petName: petName,
+    };
+
+    setSchedules((prev) => [newSch, ...prev]);
+    showToast('info', 'Water Pump Stopped', `Deactivated water pump relay on node ${deviceId}.`);
+
+    await insertScheduleToSupabase(newSch);
+  };
+
+  const deactivatePumpDirect = async (deviceId: string, deactivate: boolean = true) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const petName = dev?.assignedPetName || 'Max';
+    const petId = dev?.assignedPetId || 'PET-001';
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
+
+    try {
+      const path = deactivate ? '/api/pump/deactivate' : '/api/pump/activate';
+      const endpoints = [
+        `http://${cleanIp}${path}`,
+        `http://192.168.100.159${path}`,
+        `http://hydronourish.local${path}`
+      ];
+      endpoints.forEach((url) => {
+        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+        const img = new Image();
+        img.src = `${url}?_t=${Date.now()}`;
+      });
+    } catch {}
+
+    const newSch: FeedingSchedule = {
+      id: `SCH-${deactivate ? 'DEACT' : 'ACT'}-${Date.now()}`,
+      deviceId: deviceId,
+      foodType: deactivate ? 'Deactivate Pump' : 'Activate Pump',
+      portionGrams: 0,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      petId: petId,
+      petName: petName,
+    };
+
+    setSchedules((prev) => [newSch, ...prev]);
+    showToast(
+      deactivate ? 'alert' : 'success',
+      deactivate ? 'Water Pump Locked OFF' : 'Water Pump Activated',
+      `Master safety lock ${deactivate ? 'engaged' : 'released'} for ${deviceId}.`
+    );
+
+    await insertScheduleToSupabase(newSch);
+  };
+
   // ─── Hydration Handlers ──────────────────────────────────────────────
   const refillWater = async (deviceId: string) => {
     setDevices((prev) =>
@@ -615,6 +699,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispenseNow,
         dispenseDirect,
         dispenseWaterDirect,
+        stopPumpDirect,
+        deactivatePumpDirect,
         refillWater,
         acknowledgeAlert,
         resolveAlert,

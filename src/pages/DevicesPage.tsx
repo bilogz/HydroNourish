@@ -30,11 +30,14 @@ import {
   CheckCircle2,
   Usb,
   ExternalLink,
-  Check
+  Check,
+  Square,
+  PowerOff,
+  ShieldAlert
 } from 'lucide-react';
 
 export const DevicesPage: React.FC = () => {
-  const { devices, pets, addDevice, updatePet, removeDevice, showToast, dispenseDirect, dispenseWaterDirect } = useAppContext();
+  const { devices, pets, addDevice, updatePet, removeDevice, showToast, dispenseDirect, dispenseWaterDirect, stopPumpDirect, deactivatePumpDirect } = useAppContext();
 
   const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -511,6 +514,19 @@ export const DevicesPage: React.FC = () => {
                       >
                         <Droplets className="w-4 h-4" />
                         Pump Water
+                      </button>
+                      <button
+                        onClick={() => stopPumpDirect(featuredDevice.id)}
+                        disabled={!isOnline}
+                        className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                          isOnline
+                            ? 'bg-rose-600 hover:bg-rose-700 text-white cursor-pointer active:scale-95 shadow-rose-500/20'
+                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        }`}
+                        title={isOnline ? 'Manual Emergency Stop: Turn Off Water Pump (Deactivate)' : 'Node is offline'}
+                      >
+                        <Square className="w-4 h-4 fill-white" />
+                        Stop Pump
                       </button>
                       <button
                         onClick={() => setCustomManualModalOpen(true)}

@@ -35,7 +35,7 @@ import { formatHydration } from '../utils/formatters';
 const PAGE_SIZE = 10;
 
 export const HydrationPage: React.FC = () => {
-  const { devices, pets, hydrationLogs, refillWater, dispenseWaterDirect, showToast } = useAppContext();
+  const { devices, pets, hydrationLogs, refillWater, dispenseWaterDirect, stopPumpDirect, showToast } = useAppContext();
 
   const [confirmRefillOpen, setConfirmRefillOpen] = useState(false);
   const [customWaterModalOpen, setCustomWaterModalOpen] = useState(false);
@@ -288,20 +288,32 @@ export const HydrationPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => setCustomWaterModalOpen(true)}
-                className="py-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                className="py-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                title="Custom Water Level Override"
               >
                 <Sliders className="w-4 h-4 text-sky-400" />
-                Custom Water Pump
+                <span className="hidden sm:inline">Custom</span> Pump
               </button>
               <button
                 onClick={handleOpenRefillModal}
-                className="py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                className="py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                title="Refill reservoir to 100%"
               >
                 <RefreshCw className="w-4 h-4" />
-                Refill to 100%
+                Refill 100%
+              </button>
+              <button
+                onClick={async () => {
+                  if (selectedDevice) await stopPumpDirect(selectedDevice.id);
+                }}
+                className="py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                title="Emergency Deactivate / Stop Water Pump"
+              >
+                <Square className="w-4 h-4 fill-white" />
+                Stop Pump
               </button>
             </div>
           </div>
