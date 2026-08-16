@@ -529,6 +529,7 @@ export async function updateDeviceInSupabase(id: string, updated: Partial<Device
     if (updated.foodLevelPct !== undefined) payload.food_level_pct = updated.foodLevelPct;
     if (updated.waterLevelPct !== undefined) payload.water_level_pct = updated.waterLevelPct;
     if (updated.batteryPct !== undefined) payload.battery_pct = updated.batteryPct;
+    if (updated.firmwareVersion !== undefined) payload.firmware_version = updated.firmwareVersion;
     if (updated.lastTransmission !== undefined) payload.last_transmission = updated.lastTransmission;
 
     const { error } = await supabase.from('devices').update(payload).eq('id', id);

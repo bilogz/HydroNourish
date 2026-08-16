@@ -349,6 +349,7 @@ export const DevicesPage: React.FC = () => {
             const assignedPet = pets.find(p => p.id === featuredDevice.assignedPetId || p.name === featuredDevice.assignedPetName);
             const autoCamIp = featuredDevice.firmwareVersion?.match(/CAM:([0-9.]+)/)?.[1];
             const isPumpDeactivated = Boolean(
+              (typeof window !== 'undefined' && localStorage.getItem(`hn_pump_deactivated_${featuredDevice.id}`) === 'true') ||
               featuredDevice.firmwareVersion?.includes('PUMP:DISABLED') ||
               featuredDevice.firmwareVersion?.includes('PUMP:LOCKED') ||
               featuredDevice.firmwareVersion?.includes('PUMP:OFF')

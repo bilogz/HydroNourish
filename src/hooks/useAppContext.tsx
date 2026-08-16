@@ -506,50 +506,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const togglePumpMasterDirect = async (deviceId: string) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const isCurrentlyDeactivated = Boolean(
+    
+    // Check both persistent local storage flag AND firmwareVersion string
+    const localDeact = typeof window !== 'undefined' && localStorage.getItem(`hn_pump_deactivated_${deviceId}`) === 'true';
+    const fwDeact = Boolean(
       dev?.firmwareVersion?.includes('PUMP:DISABLED') ||
       dev?.firmwareVersion?.includes('PUMP:LOCKED') ||
       dev?.firmwareVersion?.includes('PUMP:OFF')
     );
-    const nextAction = isCurrentlyDeactivated ? 'Activate Pump' : 'Deactivate Pump';
+    const isCurrentlyDeactivated = localDeact || fwDeact;
+    const makeDeactivated = !isCurrentlyDeactivated;
+
+    // Explicitly lock state in localStorage so UI never bounces
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`hn_pump_deactivated_${deviceId}`, makeDeactivated ? 'true' : 'false');
+    }
+
+    const nextAction = makeDeactivated ? 'Deactivate Pump' : 'Activate Pump';
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
     const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
 
-    // 1. Direct LAN call (Instant 10ms execution if on same Wi-Fi)
+    // 1. Direct LAN call with IDEMPOTENT endpoints (strictly deactivate or activate, NEVER toggle)
     try {
+      const path = makeDeactivated ? '/api/pump/deactivate' : '/api/pump/activate';
       const endpoints = [
-        `http://${cleanIp}/api/pump/toggle-master`,
-        `http://${cleanIp}/api/pump/${isCurrentlyDeactivated ? 'activate' : 'deactivate'}`,
-        `http://192.168.100.159/api/pump/toggle-master`,
-        `http://hydronourish.local/api/pump/toggle-master`
+        `http://${cleanIp}${path}`,
+        `http://192.168.100.159${path}`,
+        `http://hydronourish.local${path}`
       ];
       endpoints.forEach((url) => {
         fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
         fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-        const img = new Image();
-        img.src = `${url}?_t=${Date.now()}`;
       });
     } catch {}
 
-    // Optimistic device state update
+    // 2. Immediate Optimistic update on frontend
+    let newFw = dev?.firmwareVersion || 'v2.5.0-ESP32';
+    if (makeDeactivated) {
+      newFw = newFw.includes('PUMP:ACTIVE') ? newFw.replace('PUMP:ACTIVE', 'PUMP:DISABLED') : `${newFw}|PUMP:DISABLED`;
+    } else {
+      newFw = newFw.replace('PUMP:DISABLED', 'PUMP:ACTIVE').replace('PUMP:LOCKED', 'PUMP:ACTIVE').replace('PUMP:OFF', 'PUMP:ACTIVE');
+    }
+
     setDevices((prev) =>
-      prev.map((d) => {
-        if (d.id !== deviceId) return d;
-        const currentFw = d.firmwareVersion || '';
-        let newFw = currentFw;
-        if (isCurrentlyDeactivated) {
-          newFw = currentFw.replace('PUMP:DISABLED', 'PUMP:ACTIVE').replace('PUMP:LOCKED', 'PUMP:ACTIVE').replace('PUMP:OFF', 'PUMP:ACTIVE');
-        } else {
-          newFw = currentFw.includes('PUMP:ACTIVE') ? currentFw.replace('PUMP:ACTIVE', 'PUMP:DISABLED') : `${currentFw}|PUMP:DISABLED`;
-        }
-        return { ...d, firmwareVersion: newFw };
-      })
+      prev.map((d) => (d.id === deviceId ? { ...d, firmwareVersion: newFw } : d))
     );
 
-    // 2. Supabase Cloud Remote Command
+    // 3. Supabase Cloud Remote Command & Device Metadata Sync
     const newSch: FeedingSchedule = {
-      id: `SCH-LOCK-${Date.now()}`,
+      id: `SCH-${makeDeactivated ? 'DEACT' : 'ACT'}-${Date.now()}`,
       deviceId: deviceId,
       foodType: nextAction,
       portionGrams: 0,
@@ -561,13 +567,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setSchedules((prev) => [newSch, ...prev]);
     showToast(
-      isCurrentlyDeactivated ? 'success' : 'alert',
-      isCurrentlyDeactivated ? '🔓 Water Pump ACTIVATED' : '🔒 Water Pump DEACTIVATED',
-      isCurrentlyDeactivated
-        ? 'Water pump is now enabled and ready for automatic / manual pumping.'
-        : 'Water pump is now locked OFF (Master Deactivated).'
+      makeDeactivated ? 'alert' : 'success',
+      makeDeactivated ? '🔒 Water Pump DEACTIVATED' : '🔓 Water Pump ACTIVATED',
+      makeDeactivated
+        ? 'Water pump is completely locked OFF. It will stay deactivated until you click Activate.'
+        : 'Water pump is now ACTIVATED and ready for normal operation.'
     );
 
+    await updateDeviceInSupabase(deviceId, { firmwareVersion: newFw });
     await insertScheduleToSupabase(newSch);
   };
 
