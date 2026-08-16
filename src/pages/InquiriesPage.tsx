@@ -410,14 +410,39 @@ export const InquiriesPage: React.FC = () => {
 
                   {/* Subject & Snippet */}
                   <div className="pt-3 space-y-1.5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[11px] font-extrabold uppercase tracking-wider text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-md border border-teal-100">
                         {inquiry.subject || 'General Inquiry'}
                       </span>
+                      {inquiry.subject?.includes('[') && inquiry.subject?.includes(']') && (
+                        <span className="text-[10px] font-extrabold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 inline-flex items-center gap-1">
+                          🐾 Registered Pet Owner Message
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
                       {inquiry.message}
                     </p>
+
+                    {/* Sent Reply Preview if Replied */}
+                    {inquiry.replyMessage && (
+                      <div className="mt-2.5 p-3 rounded-xl bg-emerald-50/90 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+                        <div className="flex items-center justify-between font-extrabold text-[11px] text-emerald-800">
+                          <span className="flex items-center gap-1.5">
+                            <Reply className="w-3.5 h-3.5 text-emerald-600" />
+                            Clinic Staff Reply Sent via Website:
+                          </span>
+                          {inquiry.repliedAt && (
+                            <span className="text-[10px] text-emerald-600 font-normal">
+                              {formatTimestamp(inquiry.repliedAt)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-emerald-800 leading-relaxed font-sans line-clamp-2 italic">
+                          "{inquiry.replyMessage}"
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions footer */}
@@ -559,7 +584,7 @@ export const InquiriesPage: React.FC = () => {
                 <div className="space-y-3 pt-2 border-t border-slate-100">
                   <div className="flex items-center justify-between">
                     <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
-                      Clinic Response &amp; Follow-up Notes
+                      Clinic Response (Transmitted Live to Client / Pet Owner)
                     </label>
                     {selectedInquiry.repliedAt && (
                       <span className="text-[10px] text-emerald-600 font-bold">
@@ -568,32 +593,54 @@ export const InquiriesPage: React.FC = () => {
                     )}
                   </div>
 
+                  {/* Quick Response Templates */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Quick Reply Templates:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { label: 'Telemtry Normal', text: 'Hello! We have reviewed your inquiry. Your pet’s diet and telemetry look stable. Please continue regular feeding routine.' },
+                        { label: 'Prescription Ready', text: 'Hi! The requested medication / supplement prescription has been prepared and is ready for pickup at our front desk.' },
+                        { label: 'Schedule Checkup', text: 'Hello! Based on the symptoms described, we recommend bringing your pet in for an in-person physical checkup.' },
+                        { label: 'Hydration Guidance', text: 'Thank you for reaching out! Please ensure your pet meets the daily hydration target and observe for 24 hours.' },
+                      ].map((t) => (
+                        <button
+                          key={t.label}
+                          type="button"
+                          onClick={() => setReplyText(t.text)}
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-teal-50 hover:text-teal-800 text-slate-600 text-[11px] font-semibold transition-colors border border-slate-200"
+                        >
+                          + {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <textarea
                     rows={4}
-                    placeholder="Write clinical reply notes, follow-up schedule, or staff resolution details..."
+                    placeholder="Write clinical reply notes, follow-up instructions, or answers to the pet owner..."
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    className="w-full p-3.5 rounded-2xl border border-slate-300 focus:border-teal-500 focus:outline-none text-xs"
+                    className="w-full p-3.5 rounded-2xl border border-slate-300 focus:border-teal-500 focus:outline-none text-xs leading-relaxed"
                   />
 
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <button
                       type="button"
                       onClick={() => handleLaunchEmailClient(selectedInquiry)}
-                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 text-xs flex items-center gap-1.5 transition-colors"
+                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
                       <ExternalLink className="w-4 h-4 text-slate-500" />
-                      Open in Email App
+                      Email App Client
                     </button>
 
                     <button
                       type="button"
                       disabled={isSendingReply}
                       onClick={handleSendReply}
-                      className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                     >
                       <Send className={`w-4 h-4 ${isSendingReply ? 'animate-spin' : ''}`} />
-                      {isSendingReply ? 'Saving...' : 'Save & Mark as Replied'}
+                      {isSendingReply ? 'Transmitting Reply...' : 'Send Reply via Website & Portal'}
                     </button>
                   </div>
                 </div>

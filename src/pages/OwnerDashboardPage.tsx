@@ -53,16 +53,21 @@ import {
   Mail,
   MapPin,
   RefreshCw,
+  MessageSquare,
+  Send,
+  Inbox,
+  Reply,
+  MessageCircle,
 } from 'lucide-react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { compressImageFile } from '../utils/imageCompressor';
 
-type OwnerTab = 'monitoring' | 'pets' | 'intake' | 'sessions';
+type OwnerTab = 'monitoring' | 'pets' | 'intake' | 'sessions' | 'messages';
 
 export const OwnerDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { activeSession, sessions, hardware, owners, addOwner, updateOwner } = useSession();
-  const { pets, addPet, updatePet, deletePet, feedingLogs, hydrationLogs, alerts, showToast } = useAppContext();
+  const { pets, addPet, updatePet, deletePet, feedingLogs, hydrationLogs, alerts, inquiries, addInquiry, showToast } = useAppContext();
 
   const [ownerEmail, setOwnerEmail] = useState<string>(() => {
     return localStorage.getItem('hn_owner_email')?.trim().toLowerCase() || '';
@@ -229,6 +234,52 @@ export const OwnerDashboardPage: React.FC = () => {
         myPetIds.includes(s.petId)
     );
   }, [sessions, ownerEmail, currentOwner, myPetIds]);
+
+  // Scoped inquiries/messages sent by this owner
+  const myInquiries = useMemo(() => {
+    if (!ownerEmail) return [];
+    const emailClean = ownerEmail.trim().toLowerCase();
+    return (inquiries || []).filter((inq) => {
+      if (!inq) return false;
+      const inqEmail = inq.email?.trim().toLowerCase();
+      return inqEmail === emailClean || (inqEmail && (inqEmail.includes(emailClean) || emailClean.includes(inqEmail)));
+    });
+  }, [inquiries, ownerEmail]);
+
+  // Message Clinic State
+  const [messageSubject, setMessageSubject] = useState('General Veterinary Consultation');
+  const [messagePetId, setMessagePetId] = useState('');
+  const [messageText, setMessageText] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+
+  const handleSendMessageToClinic = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!messageText.trim()) {
+      showToast('warning', 'Message Required', 'Please enter your message or question for the clinic staff.');
+      return;
+    }
+
+    const selectedPet = myPets.find((p) => p.id === messagePetId);
+    const petTag = selectedPet ? `[${selectedPet.name} (${selectedPet.species})] ` : `[${myPets[0]?.name || 'Registered Patient'}] `;
+    const finalSubject = `${petTag}${messageSubject.trim() || 'Health Inquiry'}`;
+
+    try {
+      setIsSendingMessage(true);
+      await addInquiry({
+        name: currentOwner.name,
+        email: ownerEmail,
+        phone: currentOwner.phone,
+        subject: finalSubject,
+        message: messageText.trim(),
+      });
+      setMessageText('');
+      showToast('success', 'Message Sent to Clinic', 'Your inquiry has been received by veterinary staff. Replies will show below in real-time.');
+    } catch {
+      showToast('error', 'Message Failed', 'Could not send message. Please try again.');
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
 
   // Handle Image File Selection
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -397,6 +448,7 @@ export const OwnerDashboardPage: React.FC = () => {
             { id: 'monitoring', label: 'Live Telemetry', icon: Activity },
             { id: 'intake', label: 'Intake History (' + (myFeedingLogs.length + myHydrationLogs.length) + ')', icon: Utensils },
             { id: 'sessions', label: 'Sessions (' + mySessions.length + ')', icon: Calendar },
+            { id: 'messages', label: 'Message Clinic (' + myInquiries.length + ')', icon: MessageSquare },
           ].map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -432,6 +484,13 @@ export const OwnerDashboardPage: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-2 relative z-10 shrink-0">
+            <button
+              onClick={() => setActiveTab('messages')}
+              className="px-4 py-2.5 rounded-xl bg-teal-500/30 hover:bg-teal-500/40 text-teal-200 border border-teal-400/40 font-extrabold text-xs transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4 text-teal-300" />
+              Message Clinic Staff
+            </button>
             <button
               onClick={() => {
                 setPetForm({
@@ -673,6 +732,172 @@ export const OwnerDashboardPage: React.FC = () => {
               {mySessions.length === 0 && (
                 <p className="text-center py-6 text-slate-400 italic">No clinical monitoring sessions on record.</p>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════ TAB: MESSAGES & INQUIRIES TO CLINIC ═══════════ */}
+        {activeTab === 'messages' && (
+          <div className="space-y-6">
+            {/* Compose Message to Clinic Form */}
+            <div className="clinic-card p-6 border border-teal-200 bg-white shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-teal-600" />
+                    Message Heritage Animal Clinic Team
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Send direct questions, medication updates, feeding concerns, or consultation requests to the veterinarians.
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200 shrink-0">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Realtime Dispatch
+                </span>
+              </div>
+
+              <form onSubmit={handleSendMessageToClinic} className="space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">Select Patient Pet *</label>
+                    <select
+                      value={messagePetId}
+                      onChange={(e) => setMessagePetId(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-slate-300 font-bold focus:border-teal-500 focus:outline-none"
+                    >
+                      <option value="">General Inquiry (All / Any Pet)</option>
+                      {myPets.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.species} • {p.breed || 'Mixed'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">Inquiry Topic / Category *</label>
+                    <select
+                      value={messageSubject}
+                      onChange={(e) => setMessageSubject(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-slate-300 font-bold focus:border-teal-500 focus:outline-none"
+                    >
+                      <option value="General Veterinary Consultation">General Veterinary Consultation</option>
+                      <option value="Feeding & Dietary Concern">Feeding & Dietary Concern</option>
+                      <option value="Water Intake & Hydration Question">Water Intake & Hydration Question</option>
+                      <option value="Vital Signs & Health Behavior">Vital Signs & Health Behavior</option>
+                      <option value="Medication Schedule & Prescriptions">Medication Schedule & Prescriptions</option>
+                      <option value="Clinic Checkup / Appointment Request">Clinic Checkup / Appointment Request</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 uppercase mb-1">
+                    Your Message / Question for Veterinary Staff *
+                  </label>
+                  <textarea
+                    rows={4}
+                    required
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    className="w-full p-3 rounded-xl border border-slate-300 font-medium focus:border-teal-500 focus:outline-none leading-relaxed"
+                    placeholder="Describe any symptoms, dietary changes, questions about telemetry data, or instructions for the clinic staff..."
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                  <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-slate-400" />
+                    Sending as: <strong>{currentOwner.name}</strong> ({ownerEmail})
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSendingMessage}
+                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <Send className="w-4 h-4" />
+                    {isSendingMessage ? 'Transmitting...' : 'Send to Clinic Inquiries'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Inquiries & Replies History Thread */}
+            <div className="clinic-card p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Message & Response History ({myInquiries.length})</h3>
+                  <p className="text-xs text-slate-500">Track your past inquiries and responses sent by Heritage Animal Clinic.</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {myInquiries.map((inq) => (
+                  <div
+                    key={inq.id}
+                    className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-extrabold text-sm text-slate-900">{inq.subject}</h4>
+                          {inq.status === 'unread' && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-extrabold text-[10px]">
+                              Pending Staff Review
+                            </span>
+                          )}
+                          {inq.status === 'read' && (
+                            <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 font-extrabold text-[10px]">
+                              Reviewed by Clinic Team
+                            </span>
+                          )}
+                          {inq.status === 'replied' && (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-[10px]">
+                              ✓ Replied by Veterinarian
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Sent: {new Date(inq.createdAt).toLocaleString()} • Ref: {inq.id}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-white rounded-xl border border-slate-200/80 text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
+                      {inq.message}
+                    </div>
+
+                    {/* Staff Reply Box if replied */}
+                    {inq.replyMessage && (
+                      <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs space-y-1.5 ml-4">
+                        <div className="flex items-center justify-between font-extrabold text-emerald-900 text-xs">
+                          <span className="flex items-center gap-1.5">
+                            <Reply className="w-3.5 h-3.5 text-emerald-600" />
+                            Heritage Animal Clinic Staff Reply:
+                          </span>
+                          {inq.repliedAt && (
+                            <span className="text-[10px] text-emerald-600 font-normal">
+                              {new Date(inq.repliedAt).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-emerald-800 whitespace-pre-wrap leading-relaxed">
+                          {inq.replyMessage}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {myInquiries.length === 0 && (
+                  <div className="p-8 text-center text-slate-400 space-y-2">
+                    <MessageSquare className="w-8 h-8 text-slate-300 mx-auto" />
+                    <p className="font-semibold text-xs">No inquiries sent yet. Use the form above to reach the clinic staff.</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

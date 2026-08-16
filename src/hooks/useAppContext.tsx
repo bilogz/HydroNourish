@@ -325,6 +325,19 @@ const broadcastInquiryArrival = (inquiry: ContactInquiry) => {
   } catch {}
 };
 
+const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) => {
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel('hn_realtime_inquiries_bus');
+      channel.postMessage({ type: 'UPDATE_INQUIRY', id, updates });
+      channel.close();
+    }
+  } catch {}
+  try {
+    localStorage.setItem('hn_realtime_inquiry_update_sync', JSON.stringify({ id, updates, timestamp: Date.now() }));
+  } catch {}
+};
+
   // ─── Realtime Database Listener & Cross-Tab Inquiries Sync ────────────────
   useEffect(() => {
     const unsubscribe = subscribeToSupabaseRealtime(async (tableName) => {
@@ -385,6 +398,11 @@ const broadcastInquiryArrival = (inquiry: ContactInquiry) => {
               showToast('info', '📬 New Contact Inquiry', `${incoming.name}: "${incoming.subject}"`);
               return [incoming, ...prev];
             });
+          } else if (event.data?.type === 'UPDATE_INQUIRY' && event.data?.id) {
+            const { id, updates } = event.data;
+            setInquiries((prev) =>
+              prev.map((inq) => (inq.id === id ? { ...inq, ...updates } : inq))
+            );
           }
         };
       }
@@ -402,6 +420,16 @@ const broadcastInquiryArrival = (inquiry: ContactInquiry) => {
               showToast('info', '📬 New Contact Inquiry', `${incoming.name}: "${incoming.subject}"`);
               return [incoming, ...prev];
             });
+          }
+        } catch {}
+      } else if (e.key === 'hn_realtime_inquiry_update_sync' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed?.id && parsed?.updates) {
+            const { id, updates } = parsed;
+            setInquiries((prev) =>
+              prev.map((inq) => (inq.id === id ? { ...inq, ...updates } : inq))
+            );
           }
         } catch {}
       }
@@ -930,6 +958,7 @@ const broadcastInquiryArrival = (inquiry: ContactInquiry) => {
     setInquiries((prev) =>
       prev.map((inq) => (inq.id === id ? { ...inq, ...updates } : inq))
     );
+    broadcastInquiryUpdate(id, updates);
 
     const statusLabels: Record<string, string> = {
       unread: 'Marked as Unread',
