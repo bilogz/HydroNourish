@@ -292,7 +292,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(devicePollInterval);
   }, []);
 
-  // ─── Realtime Database Listener ──────────────────────────────────────
+// Web Audio synthesized chime for live incoming notifications
+const playNotificationChime = () => {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12); // A5
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.35);
+  } catch {}
+};
+
+const broadcastInquiryArrival = (inquiry: ContactInquiry) => {
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel('hn_realtime_inquiries_bus');
+      channel.postMessage({ type: 'NEW_INQUIRY', inquiry });
+      channel.close();
+    }
+  } catch {}
+  try {
+    localStorage.setItem('hn_realtime_inquiry_sync', JSON.stringify({ inquiry, timestamp: Date.now() }));
+  } catch {}
+};
+
+  // ─── Realtime Database Listener & Cross-Tab Inquiries Sync ────────────────
   useEffect(() => {
     const unsubscribe = subscribeToSupabaseRealtime(async (tableName) => {
       if (tableName === 'pets') {
@@ -324,12 +357,83 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data) setSettings(data);
       } else if (tableName === 'contact_inquiries') {
         const data = await fetchContactInquiriesFromSupabase();
-        if (data) setInquiries(data);
+        if (data) {
+          setInquiries((prev) => {
+            const existingIds = new Set(prev.map((i) => i.id));
+            const brandNew = data.filter((d) => !existingIds.has(d.id));
+            if (brandNew.length > 0) {
+              playNotificationChime();
+              showToast('info', '📬 New Contact Inquiry', `${brandNew[0].name}: "${brandNew[0].subject}"`);
+            }
+            return data;
+          });
+        }
       }
     }, 'app_context');
 
+    // Cross-tab BroadcastChannel & LocalStorage Event Listeners for zero-latency inquiries
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel('hn_realtime_inquiries_bus');
+        bc.onmessage = (event) => {
+          if (event.data?.type === 'NEW_INQUIRY' && event.data?.inquiry) {
+            const incoming: ContactInquiry = event.data.inquiry;
+            setInquiries((prev) => {
+              if (prev.some((i) => i.id === incoming.id)) return prev;
+              playNotificationChime();
+              showToast('info', '📬 New Contact Inquiry', `${incoming.name}: "${incoming.subject}"`);
+              return [incoming, ...prev];
+            });
+          }
+        };
+      }
+    } catch {}
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'hn_realtime_inquiry_sync' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed?.inquiry) {
+            const incoming: ContactInquiry = parsed.inquiry;
+            setInquiries((prev) => {
+              if (prev.some((i) => i.id === incoming.id)) return prev;
+              playNotificationChime();
+              showToast('info', '📬 New Contact Inquiry', `${incoming.name}: "${incoming.subject}"`);
+              return [incoming, ...prev];
+            });
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    // Fast 2-second background polling for new inquiries from Supabase
+    const inquiriesPollInterval = setInterval(async () => {
+      const remoteInquiries = await fetchContactInquiriesFromSupabase();
+      if (remoteInquiries && remoteInquiries.length > 0) {
+        setInquiries((prev) => {
+          const existingIds = new Set(prev.map((i) => i.id));
+          const brandNew = remoteInquiries.filter((r) => !existingIds.has(r.id));
+          if (brandNew.length > 0) {
+            playNotificationChime();
+            showToast('info', '📬 New Contact Inquiry', `${brandNew[0].name}: "${brandNew[0].subject}"`);
+            return remoteInquiries;
+          }
+          const hasStatusDiff = remoteInquiries.some((r) => {
+            const match = prev.find((p) => p.id === r.id);
+            return !match || match.status !== r.status;
+          });
+          return hasStatusDiff ? remoteInquiries : prev;
+        });
+      }
+    }, 2000);
+
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
+      if (bc) bc.close();
+      window.removeEventListener('storage', handleStorage);
+      clearInterval(inquiriesPollInterval);
     };
   }, []);
 
@@ -801,6 +905,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setInquiries((prev) => [newInquiry, ...prev]);
+    broadcastInquiryArrival(newInquiry);
     showToast(
       'success',
       'Inquiry Received',
