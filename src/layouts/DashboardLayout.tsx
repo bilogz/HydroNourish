@@ -120,25 +120,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const healthGroup = [
     { label: 'Pets', path: '/app/pets', icon: Dog, color: 'text-amber-600' },
+    { label: 'Pet Owners', path: '/app/pet-owners', icon: HeartHandshake, color: 'text-teal-600' },
     { label: 'Feeding', path: '/app/feeding', icon: Utensils, color: 'text-orange-600' },
     { label: 'Hydration', path: '/app/hydration', icon: Droplets, color: 'text-sky-600' },
   ];
 
   const automatedSubItems = [
-    {
-      label: 'AI Health Alerts',
-      path: '/app/alerts',
-      icon: Bot,
-      color: 'text-indigo-600',
-      badge: unreviewedAlertsCount,
-    },
     { label: 'Smart Devices', path: '/app/devices', icon: Cpu, color: 'text-teal-600' },
-    {
-      label: 'Clinic Settings',
-      path: '/app/settings',
-      icon: Settings,
-      color: 'text-amber-500',
-    },
   ];
 
   const renderNavLink = (

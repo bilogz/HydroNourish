@@ -81,10 +81,7 @@ function createFallbackProfile(userId: string, email?: string, fullName?: string
  */
 export async function fetchAdminProfile(userId: string): Promise<AdminProfile | null> {
   try {
-    const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
-    if (!rawKey || rawKey.includes('.placeholder')) {
-      return createFallbackProfile(userId);
-    }
+    // Query Supabase admin_profiles directly
 
     const { data, error } = await supabase
       .from('admin_profiles')
@@ -126,13 +123,11 @@ export async function fetchAdminProfile(userId: string): Promise<AdminProfile | 
  */
 export async function updateAdminLastLogin(userId: string): Promise<void> {
   try {
-    const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
-    if (rawKey && !rawKey.includes('.placeholder')) {
-      await supabase
+          await supabase
         .from('admin_profiles')
         .update({ last_login_at: new Date().toISOString() })
         .eq('id', userId);
-    }
+
   } catch (err) {
     logAuthError('updateAdminLastLogin unexpected', err);
   }

@@ -26,8 +26,7 @@ import type {
  * Checks if Supabase client key is valid before executing requests.
  */
 function isSupabaseConfigured(): boolean {
-  const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
-  return Boolean(rawKey && !rawKey.includes('.placeholder'));
+  return true;
 }
 
 // ─── 1. PETS ──────────────────────────────────────────────────────────────
