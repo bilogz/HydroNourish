@@ -146,6 +146,21 @@ export const OwnerDashboardPage: React.FC = () => {
     }
   }, [ownerEmail, owners, currentOwner, addOwner]);
 
+  // Live presence heartbeat for realtime online status
+  useEffect(() => {
+    if (!ownerEmail) return;
+    const emailClean = ownerEmail.trim().toLowerCase();
+    const touchPresence = () => {
+      localStorage.setItem('hn_owner_last_active_' + emailClean, Date.now().toString());
+      if (currentOwner?.id) {
+        updateOwner(currentOwner.id, { lastLogin: new Date().toISOString() });
+      }
+    };
+    touchPresence();
+    const interval = setInterval(touchPresence, 20000); // 20s heartbeat
+    return () => clearInterval(interval);
+  }, [ownerEmail, currentOwner?.id, updateOwner]);
+
   // ─── DYNAMIC PETS SCOPING ───────────────────────────────────────────
   const myPets = useMemo(() => {
     if (!ownerEmail && !currentOwner) return [];

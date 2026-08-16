@@ -95,6 +95,25 @@ export const PetOwnerDirectoryTable: React.FC = () => {
     });
   };
 
+  const isOwnerOnline = (owner: PetOwner): boolean => {
+    if (!owner) return false;
+    const ownerEmailClean = (owner.email || '').trim().toLowerCase();
+    const loggedInOwnerEmail = (localStorage.getItem('hn_owner_email') || '').trim().toLowerCase();
+    if (loggedInOwnerEmail && (ownerEmailClean === loggedInOwnerEmail || ownerEmailClean.includes(loggedInOwnerEmail) || loggedInOwnerEmail.includes(ownerEmailClean))) {
+      return true;
+    }
+    const lastActiveTime = Number(localStorage.getItem('hn_owner_last_active_' + ownerEmailClean) || 0);
+    if (lastActiveTime && Date.now() - lastActiveTime < 2 * 60 * 1000) {
+      return true;
+    }
+    if (owner.lastLogin) {
+      const diffMs = Date.now() - new Date(owner.lastLogin).getTime();
+      if (diffMs < 5 * 60 * 1000) return true;
+    }
+    if (activeSession && activeSession.ownerId === owner.id) return true;
+    return false;
+  };
+
   const handleOpenEditPet = (pet: Pet) => {
     setEditingPet(pet);
     setPetForm({
@@ -197,7 +216,7 @@ export const PetOwnerDirectoryTable: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={owner.accessStatus.charAt(0).toUpperCase() + owner.accessStatus.slice(1)} size="sm" />
+                    <StatusBadge status={isOwnerOnline(owner) ? 'Online' : 'Offline'} size="sm" />
                   </td>
                   <td className="px-4 py-3">
                     <button

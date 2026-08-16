@@ -89,12 +89,24 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
   // Check if a staff member or owner is currently online in realtime
   const isUserOnline = (email: string, lastActiveText?: string | null): boolean => {
     if (!email) return false;
-    const cleanEmail = email.toLowerCase();
-    const loggedInAdmin = (adminEmail || '').toLowerCase();
-    const loggedInOwner = (localStorage.getItem('hn_owner_email') || '').toLowerCase();
+    const cleanEmail = email.toLowerCase().trim();
+    const loggedInAdmin = (adminEmail || '').toLowerCase().trim();
+    const loggedInOwner = (localStorage.getItem('hn_owner_email') || '').toLowerCase().trim();
 
-    if (cleanEmail === loggedInAdmin || cleanEmail === loggedInOwner) return true;
-    if (lastActiveText && (lastActiveText.includes('Now') || lastActiveText.includes('Active'))) return true;
+    if (cleanEmail === loggedInAdmin || (loggedInOwner && (cleanEmail === loggedInOwner || cleanEmail.includes(loggedInOwner) || loggedInOwner.includes(cleanEmail)))) {
+      return true;
+    }
+    const lastActiveTime = Number(localStorage.getItem('hn_owner_last_active_' + cleanEmail) || 0);
+    if (lastActiveTime && Date.now() - lastActiveTime < 2 * 60 * 1000) {
+      return true;
+    }
+    if (lastActiveText) {
+      if (lastActiveText.includes('Now') || lastActiveText.includes('Active')) return true;
+      const parsedDate = new Date(lastActiveText);
+      if (!isNaN(parsedDate.getTime()) && Date.now() - parsedDate.getTime() < 5 * 60 * 1000) {
+        return true;
+      }
+    }
     return false;
   };
 

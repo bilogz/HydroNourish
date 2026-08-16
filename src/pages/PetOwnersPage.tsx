@@ -27,7 +27,7 @@ export const PetOwnersPage: React.FC = () => {
   const { pets, updatePet, addPet, showToast } = useAppContext();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'archived'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'active' | 'inactive' | 'archived'>('all');
 
   // Modals
   const [selectedOwner, setSelectedOwner] = useState<PetOwner | null>(null);
@@ -37,6 +37,26 @@ export const PetOwnersPage: React.FC = () => {
   const [addOwnerModalOpen, setAddOwnerModalOpen] = useState(false);
   const [addPetModalOpen, setAddPetModalOpen] = useState(false);
   const [deleteOwnerTarget, setDeleteOwnerTarget] = useState<PetOwner | null>(null);
+
+  // Helper to determine if an owner is currently online in realtime
+  const isOwnerOnline = (owner: PetOwner | null): boolean => {
+    if (!owner) return false;
+    const ownerEmailClean = (owner.email || '').trim().toLowerCase();
+    const loggedInOwnerEmail = (localStorage.getItem('hn_owner_email') || '').trim().toLowerCase();
+    if (loggedInOwnerEmail && (ownerEmailClean === loggedInOwnerEmail || ownerEmailClean.includes(loggedInOwnerEmail) || loggedInOwnerEmail.includes(ownerEmailClean))) {
+      return true;
+    }
+    const lastActiveTime = Number(localStorage.getItem('hn_owner_last_active_' + ownerEmailClean) || 0);
+    if (lastActiveTime && Date.now() - lastActiveTime < 2 * 60 * 1000) {
+      return true;
+    }
+    if (owner.lastLogin) {
+      const diffMs = Date.now() - new Date(owner.lastLogin).getTime();
+      if (diffMs < 5 * 60 * 1000) return true;
+    }
+    if (activeSession && activeSession.ownerId === owner.id) return true;
+    return false;
+  };
 
   // New Owner Form State
   const [ownerForm, setOwnerForm] = useState({
@@ -70,7 +90,16 @@ export const PetOwnersPage: React.FC = () => {
       owner.phone.includes(searchQuery) ||
       owner.id.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesStatus = statusFilter === 'all' || owner.accessStatus === statusFilter;
+    const isOnline = isOwnerOnline(owner);
+    let matchesStatus = true;
+    if (statusFilter === 'online') {
+      matchesStatus = isOnline;
+    } else if (statusFilter === 'offline') {
+      matchesStatus = !isOnline;
+    } else if (statusFilter !== 'all') {
+      matchesStatus = owner.accessStatus === statusFilter;
+    }
+
     return matchesSearch && matchesStatus;
   });
 
@@ -254,7 +283,7 @@ export const PetOwnersPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
-            {(['all', 'active', 'inactive', 'archived'] as const).map((f) => (
+            {(['all', 'online', 'offline', 'active', 'inactive', 'archived'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}
@@ -264,7 +293,7 @@ export const PetOwnersPage: React.FC = () => {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
+                {f === 'all' ? 'All Owners' : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
           </div>
@@ -274,6 +303,7 @@ export const PetOwnersPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredOwners.map((owner) => {
             const ownerPets = getPetsForOwner(owner);
+            const online = isOwnerOnline(owner);
             return (
               <div
                 key={owner.id}
@@ -283,15 +313,27 @@ export const PetOwnersPage: React.FC = () => {
                   {/* Header */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-teal-500 to-indigo-600 flex items-center justify-center text-white font-extrabold text-sm shadow-xs">
-                        {owner.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
+                      <div className="relative">
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-teal-500 to-indigo-600 flex items-center justify-center text-white font-extrabold text-sm shadow-xs">
+                          {owner.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
+                        </div>
+                        {online ? (
+                          <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-white" />
+                          </span>
+                        ) : (
+                          <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-slate-300 border-2 border-white" />
+                        )}
                       </div>
                       <div>
                         <h4 className="font-extrabold text-sm text-slate-900 leading-tight">{owner.name}</h4>
                         <span className="text-[11px] font-mono text-slate-400 font-bold">{owner.id}</span>
                       </div>
                     </div>
-                    <StatusBadge status={owner.accessStatus.charAt(0).toUpperCase() + owner.accessStatus.slice(1)} size="sm" />
+                    <div className="flex items-center gap-1.5">
+                      <StatusBadge status={online ? 'Online' : 'Offline'} size="sm" />
+                    </div>
                   </div>
 
                   {/* Contact Info */}
@@ -404,7 +446,10 @@ export const PetOwnersPage: React.FC = () => {
           <div className="space-y-5 text-xs">
             <div className="flex items-center justify-between bg-slate-50 p-3.5 rounded-xl border border-slate-200">
               <div className="space-y-0.5">
-                <div className="font-extrabold text-sm text-slate-900">{selectedOwner.name}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-sm text-slate-900">{selectedOwner.name}</span>
+                  <StatusBadge status={isOwnerOnline(selectedOwner) ? 'Online' : 'Offline'} size="sm" />
+                </div>
                 <div className="text-slate-500">{selectedOwner.email} • {selectedOwner.phone}</div>
               </div>
               <button
