@@ -344,6 +344,7 @@ export const DevicesPage: React.FC = () => {
             const pingColor = isOnline ? 'bg-emerald-400' : isConnecting ? 'bg-amber-300' : '';
 
             const assignedPet = pets.find(p => p.id === featuredDevice.assignedPetId || p.name === featuredDevice.assignedPetName);
+            const autoCamIp = featuredDevice.firmwareVersion?.match(/CAM:([0-9.]+)/)?.[1];
 
             return (
               <div className="clinic-card overflow-hidden bg-white border border-slate-200 shadow-xl rounded-2xl">
@@ -353,6 +354,7 @@ export const DevicesPage: React.FC = () => {
                     <LiveCameraWidget
                       title={`${featuredDevice.id} Live Vision Node`}
                       subtitle={`Node ${featuredDevice.macAddress} • 30 FPS Stream`}
+                      defaultIp={autoCamIp}
                       className="rounded-none border-0 shadow-none bg-transparent"
                       petContext={{
                         name: featuredDevice.assignedPetName || assignedPet?.name || 'Max',

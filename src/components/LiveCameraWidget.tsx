@@ -156,7 +156,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                 LIVE
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-mono">{cleanIp} • {subtitle}</p>
+            <p className="text-[11px] text-slate-400 font-mono"><span className="text-teal-400 font-bold">IP: {cleanIp}</span> • {subtitle}</p>
           </div>
         </div>
 
