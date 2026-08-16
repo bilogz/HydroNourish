@@ -787,10 +787,28 @@ export const OwnerDashboardPage: React.FC = () => {
               <div className="clinic-card border border-teal-200/90 bg-white shadow-md overflow-hidden rounded-3xl flex flex-col">
                 {/* 1. Chat Header */}
                 <div className="p-4 sm:p-5 bg-gradient-to-r from-teal-900 via-slate-900 to-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <div className="w-11 h-11 rounded-2xl bg-teal-500/20 border border-teal-400/40 text-teal-300 flex items-center justify-center font-black text-sm shadow-xs">
-                        <Logo size="sm" showText={false} />
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="relative shrink-0">
+                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-sky-600 via-teal-600 to-emerald-500 text-white flex items-center justify-center shadow-md">
+                        <svg viewBox="0 0 100 100" fill="none" className="w-7 h-7 text-white">
+                          <path
+                            d="M50 8 C50 8, 18 50, 18 66 A32 32 0 0 0 82 66 C82 50, 50 8, 50 8 Z"
+                            fill="currentColor"
+                            opacity="0.25"
+                          />
+                          <path
+                            d="M50 12 C50 12, 22 52, 22 66 A28 28 0 0 0 78 66 C78 52, 50 12, 50 12 Z"
+                            stroke="currentColor"
+                            strokeWidth="5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <ellipse cx="50" cy="70" rx="12" ry="8.5" fill="currentColor" />
+                          <circle cx="36" cy="55" r="4" fill="currentColor" />
+                          <circle cx="45" cy="49" r="4.5" fill="currentColor" />
+                          <circle cx="55" cy="49" r="4.5" fill="currentColor" />
+                          <circle cx="64" cy="55" r="4" fill="currentColor" />
+                        </svg>
                       </div>
                       <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -798,16 +816,16 @@ export const OwnerDashboardPage: React.FC = () => {
                       </span>
                     </div>
 
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-base font-black text-white leading-tight">
                           Heritage Animal Clinic Staff
                         </h3>
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold">
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold whitespace-nowrap">
                           🟢 Live Desk Online
                         </span>
                       </div>
-                      <p className="text-xs text-slate-300">
+                      <p className="text-xs text-slate-300 truncate mt-0.5">
                         Direct Veterinary Consultation &amp; Telemetry Follow-ups
                       </p>
                     </div>
