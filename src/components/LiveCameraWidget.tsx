@@ -1,15 +1,38 @@
-/**
- * HydroNourish — Real-Time Live Pet Camera Widget
- * Heritage Animal Clinic Capstone Project
- *
- * Real-time MJPEG video stream component for ESP32-CAM AI-Thinker node.
- * Features live stream viewing, flashlight control, snapshot capture, IP configuration,
- * and AI Neural Pet Vision Scanner / Animal Diagnostic Analyzer.
+﻿/**
+ * ============================================================================
+ *  HydroNourish LiveCameraWidget - AI Vision Feed & Hardware Control Node
+ * ============================================================================
+ *  - High-Definition MJPEG Stream Receiver (Dual-Port 80 / 81 Fallback)
+ *  - Real-Time Optical AI HUD Tracking Reticle & Diagnostics
+ *  - Hardware Controls: Flashlight (GPIO 4), High-Res Photo Capture
+ *  - Quick Access to Camera Web Portal & Universal Wi-Fi Pairing
+ * ============================================================================
  */
 
-import React, { useState, useEffect } from 'react';
-import { Camera, RefreshCw, Zap, Maximize2, Minimize2, Video, AlertCircle, Settings, Check, Download, Scan, Sparkles, Activity, CheckCircle2, ShieldCheck, HeartPulse, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Camera,
+  RefreshCw,
+  Zap,
+  Maximize2,
+  Minimize2,
+  Video,
+  AlertCircle,
+  Settings,
+  Check,
+  Download,
+  Scan,
+  Sparkles,
+  Activity,
+  CheckCircle2,
+  ShieldCheck,
+  HeartPulse,
+  X,
+  ExternalLink,
+  Wifi
+} from 'lucide-react';
 import { analyzePetVisionScan, PetVisionScanResult } from '../services/aiService';
+import { useAppContext } from '../hooks/useAppContext';
 
 interface LiveCameraWidgetProps {
   title?: string;
@@ -28,26 +51,48 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   allowIpChange = true,
   petContext,
 }) => {
+  const { devices } = useAppContext();
+
+  // Try auto-discovering camera IP from Supabase device telemetry
+  const discoveredIp = React.useMemo(() => {
+    if (!devices || devices.length === 0) return null;
+    for (const d of devices) {
+      if (d.firmwareVersion) {
+        const match = d.firmwareVersion.match(/CAM:([0-9.]+)/i);
+        if (match && match[1]) return match[1];
+      }
+    }
+    return null;
+  }, [devices]);
+
   const [cameraIp, setCameraIp] = useState<string>(() => {
-    return localStorage.getItem('hn_camera_ip') || defaultIp;
+    return localStorage.getItem('hn_camera_ip') || discoveredIp || defaultIp;
   });
+
+  useEffect(() => {
+    if (discoveredIp && !localStorage.getItem('hn_camera_ip')) {
+      setCameraIp(discoveredIp);
+    }
+  }, [discoveredIp]);
+
   const [inputIp, setInputIp] = useState<string>(cameraIp);
   const [isEditingIp, setIsEditingIp] = useState(false);
   const [streamKey, setStreamKey] = useState<number>(Date.now());
+  const [streamPortIndex, setStreamPortIndex] = useState<number>(0); // 0: Port 80, 1: Port 81, 2: mDNS
   const [isStreamLoading, setIsStreamLoading] = useState(true);
   const [streamError, setStreamError] = useState(false);
   const [flashOn, setFlashOn] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
 
-  // ── Real-Time Continuous AI Pet Tracking State ─────────────────────────────
+  // ── AI Vision State ────────────────────────────────────────────────────────
   const [isScannerEnabled, setIsScannerEnabled] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiScanResult, setAiScanResult] = useState<PetVisionScanResult | null>(null);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  // Dynamic Live Pet Detection State (Defaults to Standby Scanning until pet appears!)
+  // Dynamic Live Pet Detection State
   const [isPetDetected, setIsPetDetected] = useState(false);
   const [trackingConfidence, setTrackingConfidence] = useState(98.4);
   const [trackingActivity, setTrackingActivity] = useState<'Feeding at Smart Bowl' | 'Drinking Water' | 'Approaching Station' | 'Resting near Dispenser'>('Feeding at Smart Bowl');
@@ -57,7 +102,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const petName = petContext?.name || 'Max';
   const petSpecies = petContext?.species || 'Canine (Dog)';
 
-  // ── Continuous Real-Time Tracking Loop ─────────────────────────────────────
+  // ── Tracking Animation Loop ────────────────────────────────────────────────
   useEffect(() => {
     if (!isScannerEnabled || streamError || isStreamLoading) return;
 
@@ -65,10 +110,9 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       setScanTick(prev => prev + 1);
 
       if (isPetDetected) {
-        // Micro-jitter box coordinates when pet is locked
         const topOffset = Math.sin(Date.now() / 2000) * 3;
         const leftOffset = Math.cos(Date.now() / 2500) * 3;
-        
+
         setBoxPosition({
           top: Math.max(12, Math.min(28, 20 + topOffset)),
           left: Math.max(14, Math.min(30, 22 + leftOffset)),
@@ -83,15 +127,24 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     return () => clearInterval(trackingInterval);
   }, [isScannerEnabled, isPetDetected, streamError, isStreamLoading]);
 
-  // Normalize IP
+  // Clean IP format
   const cleanIp = cameraIp.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
-  const streamUrl = `http://${cleanIp}/stream?t=${streamKey}`;
+
+  // Multi-Port Fallback URIs
+  const streamCandidates = [
+    `http://${cleanIp}/stream?t=${streamKey}`,
+    `http://${cleanIp}:81/stream?t=${streamKey}`,
+    `http://hydronourish-cam.local/stream?t=${streamKey}`
+  ];
+
+  const currentStreamUrl = streamCandidates[streamPortIndex] || streamCandidates[0];
   const captureUrl = `http://${cleanIp}/capture?t=${Date.now()}`;
+  const cameraPortalUrl = `http://${cleanIp}/`;
 
   useEffect(() => {
     setIsStreamLoading(true);
     setStreamError(false);
-  }, [cameraIp, streamKey]);
+  }, [cameraIp, streamKey, streamPortIndex]);
 
   const handleSaveIp = (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,15 +152,27 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     if (formatted) {
       setCameraIp(formatted);
       localStorage.setItem('hn_camera_ip', formatted);
+      setStreamPortIndex(0);
       setStreamKey(Date.now());
       setIsEditingIp(false);
     }
   };
 
   const handleRefresh = () => {
+    setStreamPortIndex(0);
     setStreamKey(Date.now());
     setIsStreamLoading(true);
     setStreamError(false);
+  };
+
+  const handleStreamError = () => {
+    if (streamPortIndex < streamCandidates.length - 1) {
+      // Try next port candidate (Port 80 -> Port 81 -> mDNS)
+      setStreamPortIndex(prev => prev + 1);
+    } else {
+      setIsStreamLoading(false);
+      setStreamError(true);
+    }
   };
 
   const toggleFlash = async () => {
@@ -116,7 +181,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     try {
       await fetch(`http://${cleanIp}/flash?state=${nextState ? 1 : 0}`, { mode: 'no-cors' });
     } catch {
-      // no-cors fetch fires fire-and-forget
+      // no-cors fetch
     }
   };
 
@@ -124,7 +189,6 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     setSnapshotUrl(captureUrl);
   };
 
-  // ── Trigger AI Vision Scan ────────────────────────────────────────────────
   const handleRunAiScan = async () => {
     setIsAnalyzing(true);
     try {
@@ -151,12 +215,20 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-sm text-slate-100">{title}</h3>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                LIVE
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                streamError
+                  ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                  : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${streamError ? 'bg-rose-400' : 'bg-emerald-400 animate-pulse'}`}></span>
+                {streamError ? 'STANDBY' : 'LIVE HD'}
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-mono"><span className="text-teal-400 font-bold">IP: {cleanIp}</span> • {subtitle}</p>
+            <p className="text-[11px] text-slate-400 font-mono">
+              <span className="text-teal-400 font-bold">IP: {cleanIp}</span>
+              {streamPortIndex === 1 && <span className="text-amber-400 ml-1">(Port 81)</span>}
+              {' '}• {subtitle}
+            </p>
           </div>
         </div>
 
@@ -166,7 +238,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           <button
             onClick={() => setIsScannerEnabled(!isScannerEnabled)}
             title="Toggle AI Animal Detection Reticle"
-            className={`p-2 rounded-lg border transition-all text-xs flex items-center gap-1.5 font-bold ${
+            className={`p-2 rounded-lg border transition-all text-xs flex items-center gap-1.5 font-bold cursor-pointer ${
               isScannerEnabled
                 ? 'bg-teal-500/20 border-teal-400/50 text-teal-300 shadow-sm shadow-teal-500/20'
                 : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-400'
@@ -176,13 +248,23 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             <span className="hidden sm:inline">AI Scanner</span>
           </button>
 
-          
+          {/* Direct Camera Setup Portal Link */}
+          <a
+            href={cameraPortalUrl}
+            target="_blank"
+            rel="noreferrer"
+            title="Open Onboard Camera Setup & Wi-Fi Portal"
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-teal-400 transition-all text-xs flex items-center gap-1 cursor-pointer"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Cam Portal</span>
+          </a>
 
           {allowIpChange && (
             <button
               onClick={() => setIsEditingIp(!isEditingIp)}
               title="Configure Camera IP"
-              className={`p-2 rounded-lg border transition-all text-xs flex items-center gap-1 ${
+              className={`p-2 rounded-lg border transition-all text-xs flex items-center gap-1 cursor-pointer ${
                 isEditingIp
                   ? 'bg-teal-500/20 border-teal-500/40 text-teal-300'
                   : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
@@ -193,10 +275,11 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             </button>
           )}
 
+          {/* Hardware Flashlight Control */}
           <button
             onClick={toggleFlash}
-            title="Toggle Flashlight LED"
-            className={`p-2 rounded-lg border transition-all text-xs flex items-center gap-1 ${
+            title="Toggle ESP32-CAM Flashlight LED (GPIO 4)"
+            className={`p-2 rounded-lg border transition-all text-xs flex items-center gap-1 cursor-pointer ${
               flashOn
                 ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-lg shadow-amber-500/20'
                 : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-amber-400'
@@ -206,27 +289,30 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             <span className="hidden sm:inline">{flashOn ? 'Flash ON' : 'Flash'}</span>
           </button>
 
+          {/* High-Resolution Capture */}
           <button
             onClick={handleSnapshot}
             title="Take High-Resolution Snapshot"
-            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all text-xs flex items-center gap-1"
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all text-xs flex items-center gap-1 cursor-pointer"
           >
             <Camera className="w-3.5 h-3.5 text-sky-400" />
             <span className="hidden sm:inline">Photo</span>
           </button>
 
+          {/* Refresh Stream */}
           <button
             onClick={handleRefresh}
             title="Reconnect Stream"
-            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all"
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5 text-slate-300 hover:rotate-180 transition-transform" />
           </button>
 
+          {/* Fullscreen Toggle */}
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
             title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all"
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all cursor-pointer"
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
@@ -246,7 +332,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           />
           <button
             type="submit"
-            className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold flex items-center gap-1"
+            className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold flex items-center gap-1 cursor-pointer"
           >
             <Check className="w-3.5 h-3.5" />
             Save IP
@@ -260,29 +346,26 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       }`}>
         {/* Live MJPEG Stream Image */}
         <img
-          key={streamKey}
-          src={streamUrl}
+          key={`${streamKey}-${streamPortIndex}`}
+          src={currentStreamUrl}
           alt="ESP32-CAM Real-Time Stream"
           onLoad={() => {
             setIsStreamLoading(false);
             setStreamError(false);
           }}
-          onError={() => {
-            setIsStreamLoading(false);
-            setStreamError(true);
-          }}
+          onError={handleStreamError}
           className={`w-full h-full object-cover transition-opacity duration-300 ${
             streamError ? 'hidden' : isStreamLoading ? 'opacity-30' : 'opacity-100'
           }`}
         />
 
-        {/* ================= AI VISION SCANNER HUD OVERLAY ================= */}
+        {/* AI VISION SCANNER HUD OVERLAY */}
         {isScannerEnabled && !streamError && !isStreamLoading && (
           <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-4">
             {/* Animated Laser Scanline */}
             <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-75 shadow-lg shadow-teal-400/50 animate-bounce duration-1000 top-1/3" />
 
-            {/* 1. STATE: TARGET LOCKED (Only renders when pet is actually detected in front of lens!) */}
+            {/* 1. STATE: TARGET LOCKED */}
             {isPetDetected ? (
               <div 
                 style={{
@@ -293,20 +376,17 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                 }}
                 className="absolute border-2 border-teal-400/80 rounded-2xl pointer-events-none transition-all duration-700 shadow-[0_0_30px_rgba(20,184,166,0.3)] animate-in fade-in zoom-in-95"
               >
-                {/* Corner L-Brackets */}
                 <div className="absolute -top-1.5 -left-1.5 w-5 h-5 border-t-3 border-l-3 border-teal-300" />
                 <div className="absolute -top-1.5 -right-1.5 w-5 h-5 border-t-3 border-r-3 border-teal-300" />
                 <div className="absolute -bottom-1.5 -left-1.5 w-5 h-5 border-b-3 border-l-3 border-teal-300" />
                 <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 border-b-3 border-r-3 border-teal-300" />
 
-                {/* Center Crosshair */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center opacity-70">
                   <div className="w-full h-0.5 bg-teal-300/80" />
                   <div className="h-full w-0.5 bg-teal-300/80 absolute" />
                   <div className="w-2.5 h-2.5 rounded-full border border-teal-300 absolute animate-ping" />
                 </div>
 
-                {/* Pet Name Tag (Over Head of Pet) */}
                 <div className="absolute -top-8 left-0 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-[11px] px-3 py-1 rounded-lg flex items-center gap-1.5 shadow-lg tracking-wide uppercase backdrop-blur-md">
                   <Scan className="w-3.5 h-3.5" />
                   <span>🎯 {petName} ({petSpecies})</span>
@@ -315,16 +395,14 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                   </span>
                 </div>
 
-                {/* Bottom Activity Tag */}
                 <div className="absolute -bottom-7 right-0 bg-slate-950/85 border border-teal-400/40 text-teal-300 font-bold text-[9px] px-2.5 py-0.5 rounded-md flex items-center gap-1 font-mono">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                   <span>{trackingActivity}</span>
                 </div>
               </div>
             ) : (
-              /* 2. STATE: STANDBY SEARCHING (When area is empty / No pet in front of camera) */
+              /* 2. STATE: STANDBY SEARCHING */
               <div className="absolute inset-8 sm:inset-12 border border-dashed border-teal-500/20 rounded-3xl pointer-events-none flex items-center justify-center">
-                {/* 4 Corner Crosshairs */}
                 <div className="absolute top-2 left-2 w-3 h-3 border-t border-l border-teal-500/40" />
                 <div className="absolute top-2 right-2 w-3 h-3 border-t border-r border-teal-500/40" />
                 <div className="absolute bottom-2 left-2 w-3 h-3 border-b border-l border-teal-500/40" />
@@ -397,7 +475,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/60 backdrop-blur-sm z-10">
             <RefreshCw className="w-8 h-8 text-teal-400 animate-spin mb-2" />
             <p className="text-xs text-slate-300 font-medium">Connecting to ESP32-CAM stream...</p>
-            <p className="text-[10px] text-slate-500 font-mono mt-1">http://{cleanIp}/stream</p>
+            <p className="text-[10px] text-slate-500 font-mono mt-1">{currentStreamUrl}</p>
           </div>
         )}
 
@@ -411,30 +489,38 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             <p className="text-xs text-slate-400 max-w-sm mt-1">
               Verify your ESP32-CAM is powered and connected to <span className="text-teal-400 font-mono font-bold">Garcia Wifi 4G Wifi</span>.
             </p>
-            <div className="mt-4 flex items-center gap-2">
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
               <button
                 onClick={handleRefresh}
-                className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-teal-500/20"
+                className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-teal-500/20 cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                Retry Connection
+                Retry Stream
               </button>
+              <a
+                href={cameraPortalUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Wifi className="w-3.5 h-3.5" />
+                Setup Wi-Fi on Cam
+              </a>
               <button
                 onClick={() => setIsEditingIp(true)}
-                className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs border border-slate-700"
+                className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs border border-slate-700 cursor-pointer"
               >
-                Update IP ({cleanIp})
+                Change IP ({cleanIp})
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* ================= AI VETERINARY DIAGNOSTIC MODAL ================= */}
+      {/* AI VETERINARY DIAGNOSTIC MODAL */}
       {isAiModalOpen && aiScanResult && (
         <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-5 text-white animate-in fade-in zoom-in-95 duration-200">
-            {/* Header */}
             <div className="flex items-start justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-2xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400 shadow-inner">
@@ -454,13 +540,12 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               </div>
               <button
                 onClick={() => setIsAiModalOpen(false)}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Diagnostic Score & Species Identification Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Detected Animal</span>
@@ -484,7 +569,6 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               </div>
             </div>
 
-            {/* Observed Behavior & Ingestion Activity */}
             <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80 space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-slate-300 flex items-center gap-1.5">
@@ -500,7 +584,6 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               </p>
             </div>
 
-            {/* Clinical Bullet Points */}
             <div className="space-y-2">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
                 Clinical Vision Findings:
@@ -515,7 +598,6 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               </div>
             </div>
 
-            {/* Recommended Action Box */}
             <div className="bg-teal-950/40 border border-teal-500/30 p-3.5 rounded-2xl space-y-1">
               <span className="text-[10px] font-bold text-teal-400 uppercase tracking-wider flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
@@ -526,7 +608,6 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               </p>
             </div>
 
-            {/* Footer Buttons */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-800">
               <span className="text-[10px] text-slate-500 font-mono">
                 Scan Logged at {aiScanResult.timestamp}
@@ -540,7 +621,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                       setIsAiModalOpen(false);
                     }, 1200);
                   }}
-                  className={`px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shadow-md ${
+                  className={`px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shadow-md cursor-pointer ${
                     savedSuccess
                       ? 'bg-emerald-600 text-white'
                       : 'bg-teal-600 hover:bg-teal-500 text-white active:scale-95'
@@ -566,7 +647,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               </h4>
               <button
                 onClick={() => setSnapshotUrl(null)}
-                className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded bg-slate-800"
+                className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded bg-slate-800 cursor-pointer"
               >
                 Close
               </button>
@@ -580,7 +661,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                 target="_blank"
                 rel="noreferrer"
                 download={`hydronourish_snap_${Date.now()}.jpg`}
-                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
                 Open / Download Image
