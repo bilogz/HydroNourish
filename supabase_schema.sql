@@ -196,6 +196,19 @@ CREATE TABLE IF NOT EXISTS public.clinic_settings (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 12. CONTACT INQUIRIES TABLE
+CREATE TABLE IF NOT EXISTS public.contact_inquiries (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    subject TEXT,
+    message TEXT NOT NULL,
+    status TEXT DEFAULT 'unread',
+    replied_at TIMESTAMP WITH TIME ZONE,
+    reply_message TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- ====================================================================
 -- ENABLE ROW LEVEL SECURITY AND CREATE PUBLIC PERMISSIVE POLICIES
 -- ====================================================================

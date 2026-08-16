@@ -5,7 +5,6 @@ import {
   Building,
   Utensils,
   Droplets,
-  ShieldAlert,
   Bell,
   User,
   Cpu,
@@ -18,7 +17,7 @@ export const SettingsPage: React.FC = () => {
   const { settings, updateSettings, showToast } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<
-    'clinic' | 'feeding' | 'hydration' | 'alerts' | 'notifications' | 'account' | 'api'
+    'clinic' | 'feeding' | 'hydration' | 'notifications' | 'account' | 'api'
   >('clinic');
 
   // Form State initialized from settings
@@ -46,7 +45,6 @@ export const SettingsPage: React.FC = () => {
             { id: 'clinic', label: 'Clinic Information', icon: Building },
             { id: 'feeding', label: 'Feeding Defaults', icon: Utensils },
             { id: 'hydration', label: 'Hydration Defaults', icon: Droplets },
-            { id: 'alerts', label: 'Alert Thresholds', icon: ShieldAlert },
             { id: 'notifications', label: 'Notifications', icon: Bell },
             { id: 'account', label: 'Account Profile', icon: User },
             { id: 'api', label: 'Device API Configuration', icon: Cpu },
@@ -164,61 +162,7 @@ export const SettingsPage: React.FC = () => {
               </div>
             )}
 
-            {/* 4. ALERT THRESHOLDS */}
-            {activeTab === 'alerts' && (
-              <div className="space-y-4">
-                <div className="pb-3 border-b border-slate-100">
-                  <h3 className="text-base font-extrabold text-slate-900">Biometric Health Alert Thresholds</h3>
-                  <p className="text-xs text-slate-500">Triggers AI health observation flags when vitals exceed boundaries</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">Min Normal Temp (°C)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={form.tempWarningMin}
-                      onChange={e => setForm({ ...form, tempWarningMin: Number(e.target.value) })}
-                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">Max Normal Temp (°C)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={form.tempWarningMax}
-                      onChange={e => setForm({ ...form, tempWarningMax: Number(e.target.value) })}
-                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">Min Heart Rate (bpm)</label>
-                    <input
-                      type="number"
-                      value={form.hrWarningMin}
-                      onChange={e => setForm({ ...form, hrWarningMin: Number(e.target.value) })}
-                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">Max Heart Rate (bpm)</label>
-                    <input
-                      type="number"
-                      value={form.hrWarningMax}
-                      onChange={e => setForm({ ...form, hrWarningMax: Number(e.target.value) })}
-                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 5. NOTIFICATIONS */}
+            {/* 4. NOTIFICATIONS */}
             {activeTab === 'notifications' && (
               <div className="space-y-4">
                 <div className="pb-3 border-b border-slate-100">
@@ -250,7 +194,7 @@ export const SettingsPage: React.FC = () => {
               </div>
             )}
 
-            {/* 6. ACCOUNT PROFILE */}
+            {/* 5. ACCOUNT PROFILE */}
             {activeTab === 'account' && (
               <div className="space-y-4">
                 <div className="pb-3 border-b border-slate-100">
@@ -278,11 +222,11 @@ export const SettingsPage: React.FC = () => {
               </div>
             )}
 
-            {/* 8. DEVICE API CONFIGURATION PLACEHOLDER */}
+            {/* 6. DEVICE API CONFIGURATION */}
             {activeTab === 'api' && (
               <div className="space-y-4">
                 <div className="pb-3 border-b border-slate-100">
-                  <h3 className="text-base font-extrabold text-slate-900">ESP32 Device REST / MQTT API Placeholder</h3>
+                  <h3 className="text-base font-extrabold text-slate-900">ESP32 Device REST / MQTT API</h3>
                   <p className="text-xs text-slate-500">Configured endpoint for microcontroller telemetry payloads</p>
                 </div>
 

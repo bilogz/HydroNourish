@@ -266,7 +266,8 @@ export type NotificationType =
   | 'session_completed'
   | 'owner_deactivated'
   | 'hardware_available'
-  | 'hardware_maintenance';
+  | 'hardware_maintenance'
+  | 'inquiry_received';
 
 export interface SystemNotification {
   id: string;
@@ -279,3 +280,20 @@ export interface SystemNotification {
   petName?: string;
   severity: 'info' | 'success' | 'warning' | 'critical';
 }
+
+// ─── Contact Inquiry / Messages ───────────────────────────────────────────
+
+export type InquiryStatus = 'unread' | 'read' | 'replied' | 'archived';
+
+export interface ContactInquiry {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  createdAt: string;
+  status: InquiryStatus;
+  repliedAt?: string;
+  replyMessage?: string;
+}
+

@@ -40,6 +40,10 @@ import {
   Zap,
   ClipboardList,
   HeartHandshake,
+  Inbox,
+  Mail,
+  MessageSquare,
+  CheckCircle2,
 } from 'lucide-react';
 import { AIAssistantModal } from '../components/AIAssistantModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -61,6 +65,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     mobileSidebarOpen,
     setMobileSidebarOpen,
     alerts,
+    inquiries,
+    unreadInquiriesCount,
   } = useAppContext();
 
   const { adminProfile, signOut } = useAuth();
@@ -76,9 +82,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
 
-  const unreviewedAlertsCount = (alerts || []).filter(
+  const unreviewedAlerts = (alerts || []).filter(
     (a) => a && a.reviewStatus === 'Unreviewed'
-  ).length;
+  );
+  const unreadInquiries = (inquiries || []).filter(
+    (i) => i && i.status === 'unread'
+  );
+  const totalNotificationCount = unreviewedAlerts.length + unreadInquiries.length;
 
   // ─── Derived admin display values from AuthContext ────────────────────
   const adminName = adminProfile?.full_name ?? 'Administrator';
@@ -105,13 +115,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     await signOut();
     setIsSigningOut(false);
     setLogoutDialogOpen(false);
-    // Replace history to prevent back-navigation to dashboard
     navigate('/admin/login', { replace: true });
   };
 
   // ─── Navigation Items ─────────────────────────────────────────────────
   const adminGroup = [
     { label: 'Dashboard', path: '/app', icon: Home, color: 'text-blue-600' },
+    { label: 'Inquiries', path: '/app/inquiries', icon: Inbox, color: 'text-teal-600', badge: unreadInquiriesCount },
     { label: 'Session History', path: '/app/sessions', icon: ClipboardList, color: 'text-violet-600' },
     { label: 'Users', path: '/app/users', icon: Users, color: 'text-emerald-600' },
     { label: 'Reports', path: '/app/reports', icon: FileText, color: 'text-purple-600' },
@@ -318,7 +328,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       }
                     >
                       <item.icon className={`w-4 h-4 ${item.color}`} />
-                      <span>{item.label}</span>
+                      <span className="flex-1">{item.label}</span>
+                      {item.badge ? (
+                        <span className="px-2 py-0.5 text-[10px] font-extrabold bg-rose-500 text-white rounded-full">
+                          {item.badge}
+                        </span>
+                      ) : null}
                     </NavLink>
                   ))}
                 </div>
@@ -484,58 +499,135 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             {/* Notifications */}
             <div className="relative">
               <button
+                id="notifications-bell-btn"
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
                 className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors relative"
-                title="System Notifications"
+                title="System Notifications & Inquiries"
               >
                 <Bell className="w-5 h-5" />
-                {unreviewedAlertsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white rounded-full text-[10px] font-extrabold flex items-center justify-center ring-2 ring-white">
-                    {unreviewedAlertsCount}
+                {totalNotificationCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white rounded-full text-[10px] font-extrabold flex items-center justify-center ring-2 ring-white animate-pulse">
+                    {totalNotificationCount}
                   </span>
                 )}
               </button>
 
               {notificationsOpen && (
-                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl border border-slate-200 shadow-xl z-50 p-4 space-y-3">
+                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl border border-slate-200 shadow-2xl z-50 p-4 space-y-3">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <h3 className="font-bold text-sm text-slate-900">Unreviewed Observations</h3>
-                    <span className="text-xs text-slate-500">{unreviewedAlertsCount} pending</span>
+                    <h3 className="font-bold text-sm text-slate-900">Notifications &amp; Activity</h3>
+                    <span className="text-xs text-slate-500 font-semibold">{totalNotificationCount} pending</span>
                   </div>
-                  <div className="max-h-80 overflow-y-auto space-y-2">
-                    {alerts
-                      .filter((a) => a.reviewStatus === 'Unreviewed')
-                      .map((alert) => (
-                        <Link
-                          key={alert.id}
-                          to="/app/alerts"
-                          onClick={() => setNotificationsOpen(false)}
-                          className="block p-3 rounded-xl bg-slate-50 hover:bg-teal-50/50 border border-slate-100 transition-colors"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-xs text-slate-900">
-                              {alert.petName}
-                            </span>
-                            <span className="text-[10px] text-slate-400">{alert.timestamp}</span>
-                          </div>
-                          <p className="text-xs text-slate-600 mt-1 line-clamp-2">
-                            {alert.aiObservation}
-                          </p>
-                        </Link>
-                      ))}
-                    {unreviewedAlertsCount === 0 && (
-                      <p className="text-xs text-slate-500 text-center py-4">
-                        No unreviewed alerts.
-                      </p>
+
+                  <div className="max-h-80 overflow-y-auto space-y-3">
+                    {/* 1. CONTACT INQUIRIES NOTIFICATIONS */}
+                    {unreadInquiries.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-extrabold text-teal-800 uppercase tracking-wider">
+                          <span className="flex items-center gap-1.5">
+                            <Inbox className="w-3.5 h-3.5 text-teal-600" />
+                            Client Inquiries ({unreadInquiries.length})
+                          </span>
+                          <Link
+                            to="/app/inquiries"
+                            onClick={() => setNotificationsOpen(false)}
+                            className="text-teal-600 hover:underline capitalize font-bold"
+                          >
+                            View All
+                          </Link>
+                        </div>
+                        {unreadInquiries.slice(0, 3).map((inquiry) => (
+                          <Link
+                            key={inquiry.id}
+                            to="/app/inquiries"
+                            onClick={() => setNotificationsOpen(false)}
+                            className="block p-3 rounded-xl bg-teal-50/70 hover:bg-teal-100/70 border border-teal-200/80 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-teal-950 flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+                                {inquiry.name}
+                              </span>
+                              <span className="text-[10px] text-teal-700 font-mono">
+                                {inquiry.createdAt ? new Date(inquiry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'New'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] font-semibold text-teal-900 mt-0.5 truncate">
+                              {inquiry.subject}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1 line-clamp-2">
+                              {inquiry.message}
+                            </p>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 2. AI HEALTH OBSERVATIONS */}
+                    {unreviewedAlerts.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                          <span className="flex items-center gap-1.5">
+                            <Bot className="w-3.5 h-3.5 text-amber-600" />
+                            AI Health Flags ({unreviewedAlerts.length})
+                          </span>
+                          <Link
+                            to="/app/alerts"
+                            onClick={() => setNotificationsOpen(false)}
+                            className="text-teal-600 hover:underline capitalize font-bold"
+                          >
+                            View All
+                          </Link>
+                        </div>
+                        {unreviewedAlerts.slice(0, 3).map((alert) => (
+                          <Link
+                            key={alert.id}
+                            to="/app/alerts"
+                            onClick={() => setNotificationsOpen(false)}
+                            className="block p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-100 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-slate-900">
+                                {alert.petName}
+                              </span>
+                              <span className="text-[10px] text-slate-400">{alert.timestamp}</span>
+                            </div>
+                            <p className="text-xs text-slate-600 mt-1 line-clamp-2">
+                              {alert.aiObservation}
+                            </p>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* EMPTY NOTIFICATIONS STATE */}
+                    {totalNotificationCount === 0 && (
+                      <div className="text-center py-6 space-y-2">
+                        <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+                        <p className="text-xs font-bold text-slate-800">All Caught Up!</p>
+                        <p className="text-[11px] text-slate-500">No unread inquiries or unreviewed alerts.</p>
+                      </div>
                     )}
                   </div>
-                  <Link
-                    to="/app/alerts"
-                    onClick={() => setNotificationsOpen(false)}
-                    className="block text-center text-xs font-bold text-teal-600 hover:underline pt-1"
-                  >
-                    View All AI Observations →
-                  </Link>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-bold">
+                    <Link
+                      to="/app/inquiries"
+                      onClick={() => setNotificationsOpen(false)}
+                      className="text-teal-600 hover:underline flex items-center gap-1"
+                    >
+                      <Inbox className="w-3.5 h-3.5" />
+                      Inquiries Hub
+                    </Link>
+                    <Link
+                      to="/app/alerts"
+                      onClick={() => setNotificationsOpen(false)}
+                      className="text-slate-600 hover:text-teal-600 hover:underline flex items-center gap-1"
+                    >
+                      <Bot className="w-3.5 h-3.5" />
+                      AI Observations
+                    </Link>
+                  </div>
                 </div>
               )}
             </div>

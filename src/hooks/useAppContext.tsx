@@ -18,6 +18,7 @@ import {
   ClinicUser,
   ClinicSettings,
   ToastMessage,
+  ContactInquiry,
 } from '../types';
 
 import {
@@ -30,6 +31,7 @@ import {
   initialDevices,
   initialUsers,
   initialSettings,
+  initialInquiries,
 } from '../data/mockData';
 
 import {
@@ -54,6 +56,10 @@ import {
   fetchUsersFromSupabase,
   fetchSettingsFromSupabase,
   updateSettingsInSupabase,
+  fetchContactInquiriesFromSupabase,
+  insertContactInquiryToSupabase,
+  updateContactInquiryInSupabase,
+  deleteContactInquiryFromSupabase,
   subscribeToSupabaseRealtime,
 } from '../services/supabase';
 
@@ -76,6 +82,8 @@ interface AppContextType {
   users: ClinicUser[];
   settings: ClinicSettings;
   toasts: ToastMessage[];
+  inquiries: ContactInquiry[];
+  unreadInquiriesCount: number;
 
   // Navigation & UI State
   sidebarCollapsed: boolean;
@@ -107,6 +115,11 @@ interface AppContextType {
   updateUser: (id: string, updated: Partial<ClinicUser>) => void;
   toggleUserStatus: (userId: string) => void;
   updateSettings: (newSettings: Partial<ClinicSettings>) => void;
+
+  // Contact Inquiries
+  addInquiry: (inquiryData: Omit<ContactInquiry, 'id' | 'createdAt' | 'status'>) => Promise<boolean>;
+  markInquiryStatus: (id: string, status: ContactInquiry['status'], replyMessage?: string) => Promise<void>;
+  deleteInquiry: (id: string) => Promise<void>;
 
   showToast: (type: ToastMessage['type'], title: string, message: string) => void;
   removeToast: (id: string) => void;
@@ -198,6 +211,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [settings, setSettings] = useState<ClinicSettings>(initialSettings || ({} as ClinicSettings));
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  // Contact Inquiries State
+  const [inquiries, setInquiries] = useState<ContactInquiry[]>(() => {
+    try {
+      const saved = localStorage.getItem('hn_inquiries');
+      if (saved) return JSON.parse(saved) as ContactInquiry[];
+      return initialInquiries || [];
+    } catch {
+      return initialInquiries || [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('hn_inquiries', JSON.stringify(inquiries));
+    } catch {}
+  }, [inquiries]);
+
   // Navigation UI Preferences
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem('hn_sidebar_collapsed') === 'true';
@@ -218,6 +248,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           remoteDevices,
           remoteUsers,
           remoteSettings,
+          remoteInquiries,
         ] = await Promise.all([
           fetchPetsFromSupabase(),
           fetchSchedulesFromSupabase(),
@@ -228,6 +259,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetchDevicesFromSupabase(),
           fetchUsersFromSupabase(),
           fetchSettingsFromSupabase(),
+          fetchContactInquiriesFromSupabase(),
         ]);
 
         if (remotePets && remotePets.length > 0) setPets(remotePets);
@@ -241,6 +273,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         if (remoteUsers && remoteUsers.length > 0) setUsers(remoteUsers);
         if (remoteSettings) setSettings(remoteSettings);
+        if (remoteInquiries && remoteInquiries.length > 0) setInquiries(remoteInquiries);
       } catch (err) {
         if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase full sync notice.');
       }
@@ -289,6 +322,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else if (tableName === 'clinic_settings') {
         const data = await fetchSettingsFromSupabase();
         if (data) setSettings(data);
+      } else if (tableName === 'contact_inquiries') {
+        const data = await fetchContactInquiriesFromSupabase();
+        if (data) setInquiries(data);
       }
     }, 'app_context');
 
@@ -750,6 +786,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateSettingsInSupabase(newSet);
   };
 
+  // ─── Contact Inquiries Handlers ─────────────────────────────────────
+  const addInquiry = async (
+    inquiryData: Omit<ContactInquiry, 'id' | 'createdAt' | 'status'>
+  ): Promise<boolean> => {
+    const newId = `INQ-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const newInquiry: ContactInquiry = {
+      ...inquiryData,
+      id: newId,
+      createdAt: new Date().toISOString(),
+      status: 'unread',
+    };
+
+    setInquiries((prev) => [newInquiry, ...prev]);
+    showToast(
+      'success',
+      'Inquiry Received',
+      `Thank you ${inquiryData.name}! Your inquiry has been received by Heritage Animal Clinic.`
+    );
+    await insertContactInquiryToSupabase(newInquiry);
+    return true;
+  };
+
+  const markInquiryStatus = async (
+    id: string,
+    status: ContactInquiry['status'],
+    replyMessage?: string
+  ) => {
+    const updates: Partial<ContactInquiry> = {
+      status,
+      ...(status === 'replied'
+        ? { repliedAt: new Date().toISOString(), replyMessage }
+        : {}),
+    };
+
+    setInquiries((prev) =>
+      prev.map((inq) => (inq.id === id ? { ...inq, ...updates } : inq))
+    );
+
+    const statusLabels: Record<string, string> = {
+      unread: 'Marked as Unread',
+      read: 'Marked as Read',
+      replied: 'Marked as Replied',
+      archived: 'Archived',
+    };
+
+    showToast('info', 'Inquiry Status', `Message ${statusLabels[status] || status}.`);
+    await updateContactInquiryInSupabase(id, updates);
+  };
+
+  const deleteInquiry = async (id: string) => {
+    setInquiries((prev) => prev.filter((inq) => inq.id !== id));
+    showToast('info', 'Inquiry Deleted', 'Inquiry record removed.');
+    await deleteContactInquiryFromSupabase(id);
+  };
+
+  const unreadInquiriesCount = (inquiries || []).filter(
+    (inq) => inq && inq.status === 'unread'
+  ).length;
+
   return (
     <AppContext.Provider
       value={{
@@ -763,6 +858,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         users,
         settings,
         toasts,
+        inquiries,
+        unreadInquiriesCount,
         sidebarCollapsed,
         setSidebarCollapsed,
         mobileSidebarOpen,
@@ -786,6 +883,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateUser,
         toggleUserStatus,
         updateSettings,
+        addInquiry,
+        markInquiryStatus,
+        deleteInquiry,
         showToast,
         removeToast,
       }}

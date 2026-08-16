@@ -23,24 +23,37 @@ import { useAppContext } from '../hooks/useAppContext';
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
-  const { showToast } = useAppContext();
+  const { showToast, addInquiry } = useAppContext();
 
   // Contact form local state
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactSubject, setContactSubject] = useState('');
   const [contactMessage, setContactMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const handleContactSubmit = (e: React.FormEvent) => {
+  const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!contactName || !contactEmail || !contactMessage) {
+    if (!contactName.trim() || !contactEmail.trim() || !contactMessage.trim()) {
       showToast('warning', 'Form Incomplete', 'Please fill in all required fields.');
       return;
     }
 
-    setSubmitted(true);
-    showToast('success', 'Message Sent', 'Thank you! Your message has been received by Heritage Animal Clinic staff.');
+    try {
+      setIsSubmitting(true);
+      await addInquiry({
+        name: contactName.trim(),
+        email: contactEmail.trim(),
+        subject: contactSubject.trim() || 'General Inquiry',
+        message: contactMessage.trim(),
+      });
+      setSubmitted(true);
+    } catch {
+      showToast('error', 'Error', 'Failed to submit inquiry. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -51,11 +64,6 @@ export const LandingPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             {/* Left Content Column */}
             <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-100/80 border border-teal-200 text-teal-800 text-xs font-bold uppercase tracking-wider">
-                <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                Heritage Animal Clinic • Capstone Presentation Ready
-              </div>
-
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-[1.15]">
                 Smarter Feeding, Hydration, and Health Monitoring for <span className="clinic-gradient-text">Pets</span>
               </h1>
@@ -457,10 +465,11 @@ export const LandingPage: React.FC = () => {
 
                 <button
                   type="submit"
-                  className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
+                  className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
                 >
-                  <Send className="w-4 h-4" />
-                  Submit Contact Form
+                  <Send className={`w-4 h-4 ${isSubmitting ? 'animate-spin' : ''}`} />
+                  {isSubmitting ? 'Sending Inquiry...' : 'Submit Contact Form'}
                 </button>
               </form>
             )}

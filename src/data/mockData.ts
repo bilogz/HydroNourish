@@ -11,7 +11,8 @@ import {
   PetOwner,
   PetSession,
   ActivityLog,
-  SystemNotification
+  SystemNotification,
+  ContactInquiry
 } from '../types';
 
 // ─── REAL DATA INITIALIZATION (EMPTY BY DEFAULT UNTIL CREATED IN SUPABASE) ────
@@ -27,6 +28,8 @@ export const initialOwners: PetOwner[] = [];
 export const initialSessions: PetSession[] = [];
 export const initialActivityLogs: ActivityLog[] = [];
 export const initialNotifications: SystemNotification[] = [];
+export const initialInquiries: ContactInquiry[] = [];
+
 
 // ─── PROTECTED CLINIC SUPER ADMIN ACCOUNTS ───────────────────────────────────
 

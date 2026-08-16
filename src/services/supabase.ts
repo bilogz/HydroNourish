@@ -20,6 +20,7 @@ import type {
   PetSession,
   ClinicSettings,
   UserRole,
+  ContactInquiry,
 } from '../types';
 
 /**
@@ -813,7 +814,86 @@ export async function updateSettingsInSupabase(updated: Partial<ClinicSettings>)
   }
 }
 
-// ─── 12. REAL-TIME MULTI-TABLE SUBSCRIPTION ───────────────────────────────
+// ─── 12. CONTACT INQUIRIES ────────────────────────────────────────────────
+
+export async function fetchContactInquiriesFromSupabase(): Promise<ContactInquiry[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase
+      .from('contact_inquiries')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error || !data) return null;
+
+    return data.map((item) => ({
+      id: item.id,
+      name: item.name,
+      email: item.email,
+      subject: item.subject || 'General Inquiry',
+      message: item.message,
+      createdAt: item.created_at || new Date().toISOString(),
+      status: item.status || 'unread',
+      repliedAt: item.replied_at || undefined,
+      replyMessage: item.reply_message || undefined,
+    }));
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase inquiries fetch notice:', err);
+    return null;
+  }
+}
+
+export async function insertContactInquiryToSupabase(inquiry: ContactInquiry): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('contact_inquiries').insert({
+      id: inquiry.id,
+      name: inquiry.name,
+      email: inquiry.email,
+      subject: inquiry.subject,
+      message: inquiry.message,
+      status: inquiry.status,
+      created_at: inquiry.createdAt,
+      replied_at: inquiry.repliedAt || null,
+      reply_message: inquiry.replyMessage || null,
+    });
+    return !error;
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase inquiry insert error:', err);
+    return false;
+  }
+}
+
+export async function updateContactInquiryInSupabase(
+  id: string,
+  updated: Partial<ContactInquiry>
+): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const payload: Record<string, any> = {};
+    if (updated.status !== undefined) payload.status = updated.status;
+    if (updated.repliedAt !== undefined) payload.replied_at = updated.repliedAt;
+    if (updated.replyMessage !== undefined) payload.reply_message = updated.replyMessage;
+
+    const { error } = await supabase.from('contact_inquiries').update(payload).eq('id', id);
+    return !error;
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase inquiry update error:', err);
+    return false;
+  }
+}
+
+export async function deleteContactInquiryFromSupabase(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('contact_inquiries').delete().eq('id', id);
+    return !error;
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase inquiry delete error:', err);
+    return false;
+  }
+}
+
+// ─── 13. REAL-TIME MULTI-TABLE SUBSCRIPTION ───────────────────────────────
 
 export function subscribeToSupabaseRealtime(
   onTableChange: (tableName: string, payload: any) => void,

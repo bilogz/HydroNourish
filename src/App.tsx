@@ -40,6 +40,7 @@ import { ReportsPage } from './pages/ReportsPage';
 import { UsersPage } from './pages/UsersPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SessionHistoryPage } from './pages/SessionHistoryPage';
+import { InquiriesPage } from './pages/InquiriesPage';
 
 // Owner Pages
 import { OwnerLoginPage } from './pages/auth/OwnerLoginPage';
@@ -162,6 +163,14 @@ export const App: React.FC = () => {
                 element={
                   <AdminRoute>
                     <SessionHistoryPage />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/app/inquiries"
+                element={
+                  <AdminRoute>
+                    <InquiriesPage />
                   </AdminRoute>
                 }
               />
