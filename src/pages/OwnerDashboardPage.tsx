@@ -100,11 +100,23 @@ export const OwnerDashboardPage: React.FC = () => {
   });
 
   // ─── DYNAMIC OWNER RESOLUTION ───────────────────────────────────────
+  const matchingOwners = useMemo(() => {
+    const emailLower = ownerEmail.trim().toLowerCase();
+    if (!emailLower) return [];
+    return (owners || []).filter((o) => {
+      if (!o) return false;
+      const oEmail = o.email?.trim().toLowerCase();
+      const oName = o.name?.trim().toLowerCase();
+      return (
+        (oEmail && oEmail === emailLower) ||
+        (oEmail && emailLower && (oEmail.includes(emailLower) || emailLower.includes(oEmail))) ||
+        (oName && emailLower && emailLower.startsWith(oName.replace(/\s+/g, '')))
+      );
+    });
+  }, [owners, ownerEmail]);
+
   const currentOwner = useMemo(() => {
-    const found = (owners || []).find(
-      (o) => o.email.trim().toLowerCase() === ownerEmail.toLowerCase()
-    );
-    if (found) return found;
+    if (matchingOwners.length > 0) return matchingOwners[0];
 
     const nameFromEmail = ownerEmail.split('@')[0] || 'Pet Owner';
     const capitalized = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
@@ -119,7 +131,7 @@ export const OwnerDashboardPage: React.FC = () => {
       dateCreated: new Date().toISOString(),
       lastLogin: new Date().toISOString(),
     };
-  }, [owners, ownerEmail]);
+  }, [matchingOwners, ownerEmail]);
 
   // Auto-register owner in session context if not present
   useEffect(() => {
@@ -136,26 +148,52 @@ export const OwnerDashboardPage: React.FC = () => {
 
   // ─── DYNAMIC PETS SCOPING ───────────────────────────────────────────
   const myPets = useMemo(() => {
-    if (!currentOwner && !ownerEmail) return [];
-    const ownerNameLower = currentOwner?.name?.trim().toLowerCase() || '';
-    const emailLower = ownerEmail.trim().toLowerCase();
-    const ownerId = currentOwner?.id;
+    if (!ownerEmail && !currentOwner) return [];
+    const emailClean = ownerEmail.trim().toLowerCase();
+    const ownerNameClean = currentOwner?.name?.trim().toLowerCase() || '';
+    const ownerCleanSimple = ownerNameClean.replace(/[^a-z0-9]/g, '');
+    const ownerPhoneDigits = currentOwner?.phone ? currentOwner.phone.replace(/\D/g, '') : '';
+
+    // Collect all pet IDs explicitly assigned to any matching owner record or session
+    const linkedPetIds = new Set<string>();
+    matchingOwners.forEach((mo) => {
+      (mo.petIds || []).forEach((pid) => linkedPetIds.add(pid));
+    });
+    (currentOwner?.petIds || []).forEach((pid) => linkedPetIds.add(pid));
+
+    (sessions || []).forEach((s) => {
+      const sOwnerEmail = s.ownerEmail?.trim().toLowerCase();
+      if (
+        (sOwnerEmail && (sOwnerEmail === emailClean || emailClean.includes(sOwnerEmail) || sOwnerEmail.includes(emailClean))) ||
+        (s.ownerId && (s.ownerId === currentOwner?.id || matchingOwners.some((m) => m.id === s.ownerId)))
+      ) {
+        if (s.petId) linkedPetIds.add(s.petId);
+      }
+    });
 
     return (pets || []).filter((p) => {
       if (!p) return false;
       const petOwnerId = p.ownerId;
-      const petOwnerName = p.ownerName?.trim().toLowerCase();
-      const petOwnerEmail = p.ownerEmail?.trim().toLowerCase();
+      const petOwnerName = p.ownerName?.trim().toLowerCase() || '';
+      const petOwnerCleanSimple = petOwnerName.replace(/[^a-z0-9]/g, '');
+      const petOwnerEmail = p.ownerEmail?.trim().toLowerCase() || '';
+      const petOwnerPhoneDigits = p.ownerPhone ? p.ownerPhone.replace(/\D/g, '') : '';
 
       return (
-        (ownerId && petOwnerId === ownerId) ||
-        (petOwnerEmail && petOwnerEmail === emailLower) ||
-        (ownerNameLower && petOwnerName === ownerNameLower) ||
-        (currentOwner?.petIds && currentOwner.petIds.includes(p.id)) ||
-        (emailLower && petOwnerName && emailLower.includes(petOwnerName))
+        linkedPetIds.has(p.id) ||
+        (petOwnerId && (petOwnerId === currentOwner?.id || matchingOwners.some((m) => m.id === petOwnerId))) ||
+        (petOwnerEmail && (petOwnerEmail === emailClean || emailClean.includes(petOwnerEmail) || petOwnerEmail.includes(emailClean))) ||
+        (petOwnerName && ownerNameClean && (
+          petOwnerName === ownerNameClean ||
+          petOwnerCleanSimple === ownerCleanSimple ||
+          (ownerCleanSimple.length >= 3 && petOwnerCleanSimple.includes(ownerCleanSimple)) ||
+          (petOwnerCleanSimple.length >= 3 && ownerCleanSimple.includes(petOwnerCleanSimple))
+        )) ||
+        (emailClean && petOwnerCleanSimple && (emailClean.includes(petOwnerCleanSimple) || petOwnerCleanSimple.includes(emailClean.split('@')[0]))) ||
+        (petOwnerPhoneDigits && ownerPhoneDigits && petOwnerPhoneDigits.length >= 7 && petOwnerPhoneDigits === ownerPhoneDigits)
       );
     });
-  }, [pets, currentOwner, ownerEmail]);
+  }, [pets, currentOwner, ownerEmail, matchingOwners, sessions]);
 
   // Dynamic Feeding & Hydration Logs Scoping
   const myPetIds = useMemo(() => myPets.map((p) => p.id), [myPets]);
