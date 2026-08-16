@@ -517,32 +517,42 @@ export const InquiriesPage: React.FC = () => {
 
         {/* ================= INQUIRY DETAIL CHATBOX MODAL ================= */}
         {selectedInquiry && (() => {
-          const threadMessages = selectedInquiry.messagesThread && selectedInquiry.messagesThread.length > 0
-            ? selectedInquiry.messagesThread
-            : [
-                ...(selectedInquiry.message
-                  ? [
-                      {
-                        id: `msg-1-${selectedInquiry.id}`,
-                        sender: 'owner' as const,
-                        senderName: selectedInquiry.name || 'Client',
-                        message: selectedInquiry.message,
-                        timestamp: selectedInquiry.createdAt,
-                      },
-                    ]
-                  : []),
-                ...(selectedInquiry.replyMessage
-                  ? [
-                      {
-                        id: `msg-2-${selectedInquiry.id}`,
-                        sender: 'admin' as const,
-                        senderName: 'Heritage Animal Clinic Staff',
-                        message: selectedInquiry.replyMessage,
-                        timestamp: selectedInquiry.repliedAt || selectedInquiry.createdAt,
-                      },
-                    ]
-                  : []),
-              ];
+          let threadMessages: ChatMessageItem[] = [];
+          if (selectedInquiry.messagesThread && selectedInquiry.messagesThread.length > 0) {
+            threadMessages = selectedInquiry.messagesThread;
+          } else if (
+            selectedInquiry.replyMessage &&
+            selectedInquiry.replyMessage.trim().startsWith('[') &&
+            selectedInquiry.replyMessage.trim().endsWith(']')
+          ) {
+            try {
+              const parsed = JSON.parse(selectedInquiry.replyMessage.trim());
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                threadMessages = parsed;
+              }
+            } catch {}
+          }
+
+          if (threadMessages.length === 0) {
+            if (selectedInquiry.message) {
+              threadMessages.push({
+                id: `msg-1-${selectedInquiry.id}`,
+                sender: 'owner' as const,
+                senderName: selectedInquiry.name || 'Client',
+                message: selectedInquiry.message,
+                timestamp: selectedInquiry.createdAt,
+              });
+            }
+            if (selectedInquiry.replyMessage && !selectedInquiry.replyMessage.trim().startsWith('[')) {
+              threadMessages.push({
+                id: `msg-2-${selectedInquiry.id}`,
+                sender: 'admin' as const,
+                senderName: 'Heritage Animal Clinic Staff',
+                message: selectedInquiry.replyMessage,
+                timestamp: selectedInquiry.repliedAt || selectedInquiry.createdAt,
+              });
+            }
+          }
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">

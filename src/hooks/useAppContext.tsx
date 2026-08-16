@@ -1019,7 +1019,16 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         let currentThread: ChatMessageItem[] = [];
         if (inq.messagesThread && inq.messagesThread.length > 0) {
           currentThread = [...inq.messagesThread];
-        } else {
+        } else if (inq.replyMessage && inq.replyMessage.trim().startsWith('[') && inq.replyMessage.trim().endsWith(']')) {
+          try {
+            const p = JSON.parse(inq.replyMessage);
+            if (Array.isArray(p) && p.length > 0) {
+              currentThread = [...p];
+            }
+          } catch {}
+        }
+
+        if (currentThread.length === 0) {
           if (inq.message) {
             currentThread.push({
               id: `msg-1-${inq.id}`,
@@ -1029,7 +1038,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
               timestamp: inq.createdAt,
             });
           }
-          if (inq.replyMessage && !inq.replyMessage.trim().startsWith('[{"')) {
+          if (inq.replyMessage && !inq.replyMessage.trim().startsWith('[')) {
             currentThread.push({
               id: `msg-2-${inq.id}`,
               sender: 'admin',
@@ -1055,7 +1064,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         const updates: Partial<ContactInquiry> = {
           status,
           ...(status === 'replied' && replyMessage
-            ? { repliedAt: new Date().toISOString(), replyMessage, messagesThread: currentThread }
+            ? { repliedAt: new Date().toISOString(), replyMessage: replyMessage, messagesThread: currentThread }
             : { messagesThread: currentThread }),
         };
 
@@ -1066,7 +1075,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     const updates: Partial<ContactInquiry> = {
       status,
       ...(status === 'replied' && replyMessage
-        ? { repliedAt: new Date().toISOString(), replyMessage, messagesThread: finalThread }
+        ? { repliedAt: new Date().toISOString(), replyMessage: replyMessage, messagesThread: finalThread }
         : { messagesThread: finalThread }),
     };
 
@@ -1094,17 +1103,38 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       prev.map((inq) => {
         if (inq.id !== inquiryId) return inq;
 
-        const currentThread: ChatMessageItem[] = inq.messagesThread && inq.messagesThread.length > 0
-          ? [...inq.messagesThread]
-          : [
-              {
-                id: `msg-1-${inq.id}`,
-                sender: 'owner',
-                senderName: inq.name || 'Pet Owner',
-                message: inq.message,
-                timestamp: inq.createdAt,
-              },
-            ];
+        let currentThread: ChatMessageItem[] = [];
+        if (inq.messagesThread && inq.messagesThread.length > 0) {
+          currentThread = [...inq.messagesThread];
+        } else if (inq.replyMessage && inq.replyMessage.trim().startsWith('[') && inq.replyMessage.trim().endsWith(']')) {
+          try {
+            const p = JSON.parse(inq.replyMessage);
+            if (Array.isArray(p) && p.length > 0) {
+              currentThread = [...p];
+            }
+          } catch {}
+        }
+
+        if (currentThread.length === 0) {
+          if (inq.message) {
+            currentThread.push({
+              id: `msg-1-${inq.id}`,
+              sender: 'owner',
+              senderName: inq.name || 'Pet Owner',
+              message: inq.message,
+              timestamp: inq.createdAt,
+            });
+          }
+          if (inq.replyMessage && !inq.replyMessage.trim().startsWith('[')) {
+            currentThread.push({
+              id: `msg-2-${inq.id}`,
+              sender: 'admin',
+              senderName: 'Heritage Animal Clinic Staff',
+              message: inq.replyMessage,
+              timestamp: inq.repliedAt || inq.createdAt,
+            });
+          }
+        }
 
         const newMsg: ChatMessageItem = {
           id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,

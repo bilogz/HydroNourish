@@ -886,34 +886,43 @@ export const OwnerDashboardPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 3. Real Chat Messages Conversation Feed */}
                 {(() => {
-                  const threadMessages = activeInquiry.messagesThread && activeInquiry.messagesThread.length > 0
-                    ? activeInquiry.messagesThread
-                    : [
-                        ...(activeInquiry.message
-                          ? [
-                              {
-                                id: `msg-1-${activeInquiry.id}`,
-                                sender: 'owner' as const,
-                                senderName: currentOwner.name || 'You',
-                                message: activeInquiry.message,
-                                timestamp: activeInquiry.createdAt,
-                              },
-                            ]
-                          : []),
-                        ...(activeInquiry.replyMessage
-                          ? [
-                              {
-                                id: `msg-2-${activeInquiry.id}`,
-                                sender: 'admin' as const,
-                                senderName: 'Heritage Animal Clinic Staff',
-                                message: activeInquiry.replyMessage,
-                                timestamp: activeInquiry.repliedAt || activeInquiry.createdAt,
-                              },
-                            ]
-                          : []),
-                      ];
+                  let threadMessages: ChatMessageItem[] = [];
+                  if (activeInquiry.messagesThread && activeInquiry.messagesThread.length > 0) {
+                    threadMessages = activeInquiry.messagesThread;
+                  } else if (
+                    activeInquiry.replyMessage &&
+                    activeInquiry.replyMessage.trim().startsWith('[') &&
+                    activeInquiry.replyMessage.trim().endsWith(']')
+                  ) {
+                    try {
+                      const parsed = JSON.parse(activeInquiry.replyMessage.trim());
+                      if (Array.isArray(parsed) && parsed.length > 0) {
+                        threadMessages = parsed;
+                      }
+                    } catch {}
+                  }
+
+                  if (threadMessages.length === 0) {
+                    if (activeInquiry.message) {
+                      threadMessages.push({
+                        id: `msg-1-${activeInquiry.id}`,
+                        sender: 'owner' as const,
+                        senderName: currentOwner.name || 'You',
+                        message: activeInquiry.message,
+                        timestamp: activeInquiry.createdAt,
+                      });
+                    }
+                    if (activeInquiry.replyMessage && !activeInquiry.replyMessage.trim().startsWith('[')) {
+                      threadMessages.push({
+                        id: `msg-2-${activeInquiry.id}`,
+                        sender: 'admin' as const,
+                        senderName: 'Heritage Animal Clinic Staff',
+                        message: activeInquiry.replyMessage,
+                        timestamp: activeInquiry.repliedAt || activeInquiry.createdAt,
+                      });
+                    }
+                  }
 
                   return (
                     <div className="p-5 sm:p-6 space-y-4 flex-1 overflow-y-auto bg-gradient-to-b from-slate-50/60 via-white to-slate-50/40 min-h-[350px] max-h-[500px]">
