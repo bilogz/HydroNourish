@@ -37,7 +37,7 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { owners, addOwner, assignPetAndOwner, canAssignPet } = useSession();
+  const { owners, addOwner, updateOwner, assignPetAndOwner, canAssignPet } = useSession();
   const { pets, addPet, showToast } = useAppContext();
   const { adminProfile } = useAuth();
 
@@ -101,7 +101,7 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
     showToast('success', 'Owner Created', `${created.name} has been registered.`);
   };
 
-  const handleCreatePet = () => {
+  const handleCreatePet = async () => {
     if (!newPet.name.trim() || !newPet.breed.trim()) {
       showToast('error', 'Validation Error', 'Pet name and breed are required.');
       return;
@@ -117,6 +117,7 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
       weight: newPet.weight,
       sex: newPet.sex,
       ownerName: owner.name,
+      ownerEmail: owner.email,
       ownerPhone: owner.phone,
       ownerId: owner.id,
       clinicRef: `REF-${new Date().getFullYear()}-${Math.floor(Math.random() * 900 + 100)}`,
@@ -132,13 +133,15 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
       notes: '',
     };
 
-    addPet(petData);
-    // Find the newly added pet (it will be the first in the array since addPet prepends)
-    setTimeout(() => {
-      const allPets = JSON.parse(localStorage.getItem('hn_pets') || '[]');
-      const newlyCreated = allPets.find((p: Pet) => p.name === newPet.name && p.ownerId === owner.id);
-      if (newlyCreated) setSelectedPetId(newlyCreated.id);
-    }, 100);
+    const createdPet = await addPet(petData);
+    if (createdPet) {
+      setSelectedPetId(createdPet.id);
+      if (owner.id) {
+        updateOwner(owner.id, {
+          petIds: Array.from(new Set([...(owner.petIds || []), createdPet.id])),
+        });
+      }
+    }
     setShowNewPetForm(false);
   };
 

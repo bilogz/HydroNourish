@@ -19,6 +19,7 @@ export interface Pet {
   sex?: 'Male' | 'Female';
   ownerName: string;
   ownerPhone: string;
+  ownerEmail?: string;
   ownerId?: string; // reference to PetOwner
   clinicRef: string;
   assignedDeviceId: string;

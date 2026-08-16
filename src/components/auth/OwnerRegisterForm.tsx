@@ -38,7 +38,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
   onSuccess,
   onSwitchToLogin,
 }) => {
-  const { owners, addOwner } = useSession();
+  const { owners, addOwner, updateOwner } = useSession();
   const { addPet, showToast } = useAppContext();
 
   // Owner Fields
@@ -140,7 +140,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
 
     // If pet details were provided, add the pet
     if (hasPet && petName.trim()) {
-      addPet({
+      const createdPet = await addPet({
         name: petName.trim(),
         species: petSpecies,
         breed: petBreed.trim() || (petSpecies === 'Cat' ? 'Domestic Shorthair' : 'Mixed Breed'),
@@ -149,13 +149,14 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
         sex: 'Male',
         ownerName: trimmedName,
         ownerPhone: trimmedPhone,
+        ownerEmail: trimmedEmail,
         ownerId: newOwner.id,
         clinicRef: 'REF-2026-' + Math.floor(100 + Math.random() * 800),
         assignedDeviceId: 'Cage 1',
         healthStatus: 'Healthy',
-        avatarUrl: petAvatarUrl || (petSpecies === 'Cat'
+        avatarUrl: petSpecies === 'Cat'
           ? 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=300'
-          : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=300'),
+          : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=300',
         feedingPlan: {
           portionGrams: 100,
           timesPerDay: 2,
@@ -170,6 +171,10 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
         },
         notes: petNotes.trim() || 'Registered during owner portal signup.',
       });
+
+      if (newOwner.id && createdPet) {
+        updateOwner(newOwner.id, { petIds: [createdPet.id] });
+      }
     }
 
     await sendVerificationEmail(trimmedEmail, trimmedName);

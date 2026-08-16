@@ -36,25 +36,32 @@ import {
   Plus,
   FileText,
   History,
+  Dog,
+  Cat,
+  LogOut,
   Sparkles,
+  Camera,
+  CheckCircle2,
+  Trash2,
+  Edit3,
+  Clock,
+  Zap,
+  Image as ImageIcon,
+  Upload,
+  User,
   Phone,
   Mail,
   MapPin,
-  ChevronRight,
-  MessageSquare,
-  Edit3,
-  Trash2,
-  Camera,
-  Upload,
-  Image as ImageIcon,
+  RefreshCw,
 } from 'lucide-react';
 import { useNavigate, Navigate } from 'react-router-dom';
+import { compressImageFile } from '../utils/imageCompressor';
 
 type OwnerTab = 'monitoring' | 'pets' | 'intake' | 'sessions';
 
 export const OwnerDashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const { activeSession, sessions, hardware, owners, addOwner } = useSession();
+  const { activeSession, sessions, hardware, owners, addOwner, updateOwner } = useSession();
   const { pets, addPet, updatePet, deletePet, feedingLogs, hydrationLogs, alerts, showToast } = useAppContext();
 
   const [ownerEmail, setOwnerEmail] = useState<string>(() => {
@@ -129,17 +136,25 @@ export const OwnerDashboardPage: React.FC = () => {
 
   // ─── DYNAMIC PETS SCOPING ───────────────────────────────────────────
   const myPets = useMemo(() => {
-    if (!currentOwner) return [];
-    const ownerNameLower = currentOwner.name.trim().toLowerCase();
-    const emailLower = ownerEmail.toLowerCase();
+    if (!currentOwner && !ownerEmail) return [];
+    const ownerNameLower = currentOwner?.name?.trim().toLowerCase() || '';
+    const emailLower = ownerEmail.trim().toLowerCase();
+    const ownerId = currentOwner?.id;
 
-    return (pets || []).filter(
-      (p) =>
-        p.ownerId === currentOwner.id ||
-        (p.ownerName && p.ownerName.trim().toLowerCase() === ownerNameLower) ||
-        (p as any).ownerEmail?.toLowerCase() === emailLower ||
-        (currentOwner.petIds && currentOwner.petIds.includes(p.id))
-    );
+    return (pets || []).filter((p) => {
+      if (!p) return false;
+      const petOwnerId = p.ownerId;
+      const petOwnerName = p.ownerName?.trim().toLowerCase();
+      const petOwnerEmail = p.ownerEmail?.trim().toLowerCase();
+
+      return (
+        (ownerId && petOwnerId === ownerId) ||
+        (petOwnerEmail && petOwnerEmail === emailLower) ||
+        (ownerNameLower && petOwnerName === ownerNameLower) ||
+        (currentOwner?.petIds && currentOwner.petIds.includes(p.id)) ||
+        (emailLower && petOwnerName && emailLower.includes(petOwnerName))
+      );
+    });
   }, [pets, currentOwner, ownerEmail]);
 
   // Dynamic Feeding & Hydration Logs Scoping
@@ -152,10 +167,7 @@ export const OwnerDashboardPage: React.FC = () => {
     return (hydrationLogs || []).filter((h) => myPetIds.includes(h.petId));
   }, [hydrationLogs, myPetIds]);
 
-  const myAlerts = useMemo(() => {
-    return (alerts || []).filter((a) => myPetIds.includes(a.petId));
-  }, [alerts, myPetIds]);
-
+  // Dynamic Sessions Scoping
   const mySessions = useMemo(() => {
     return (sessions || []).filter(
       (s) =>
@@ -166,23 +178,20 @@ export const OwnerDashboardPage: React.FC = () => {
   }, [sessions, ownerEmail, currentOwner, myPetIds]);
 
   // Handle Image File Selection
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        showToast('warning', 'IMAGE TOO LARGE', 'Please choose an image under 5MB.');
-        return;
+      try {
+        const compressed = await compressImageFile(file, 400, 400, 0.8);
+        setPetForm((prev) => ({ ...prev, avatarUrl: compressed }));
+        showToast('info', 'PHOTO ATTACHED', 'Pet picture loaded and optimized.');
+      } catch {
+        showToast('warning', 'IMAGE ERROR', 'Could not process image file.');
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPetForm((prev) => ({ ...prev, avatarUrl: reader.result as string }));
-        showToast('info', 'PHOTO ATTACHED', 'Pet picture loaded successfully.');
-      };
-      reader.readAsDataURL(file);
     }
   };
 
-  const handleAddPetSubmit = (e: React.FormEvent) => {
+  const handleAddPetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!petForm.name.trim()) return;
 
@@ -190,7 +199,7 @@ export const OwnerDashboardPage: React.FC = () => {
       ? 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=300'
       : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=300';
 
-    addPet({
+    const createdPet = await addPet({
       name: petForm.name.trim(),
       species: petForm.species,
       breed: petForm.breed.trim() || (petForm.species === 'Cat' ? 'Domestic Shorthair' : 'Mixed Breed'),
@@ -199,6 +208,7 @@ export const OwnerDashboardPage: React.FC = () => {
       sex: petForm.sex,
       ownerName: currentOwner.name,
       ownerPhone: currentOwner.phone,
+      ownerEmail: ownerEmail,
       ownerId: currentOwner.id,
       clinicRef: 'REF-2026-' + Math.floor(100 + Math.random() * 800),
       assignedDeviceId: 'HN-NODE-F778',
@@ -218,6 +228,12 @@ export const OwnerDashboardPage: React.FC = () => {
       },
       notes: petForm.notes || 'Registered by pet owner in portal.',
     });
+
+    if (currentOwner?.id) {
+      updateOwner(currentOwner.id, {
+        petIds: Array.from(new Set([...(currentOwner.petIds || []), createdPet.id])),
+      });
+    }
 
     showToast('success', 'PET REGISTERED', petForm.name + ' was successfully added with photo.');
     setAddPetModalOpen(false);

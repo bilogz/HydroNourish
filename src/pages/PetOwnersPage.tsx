@@ -23,7 +23,7 @@ import {
 export const PetOwnersPage: React.FC = () => {
   const addPetFileRef = React.useRef<HTMLInputElement>(null);
   const editPetFileRef = React.useRef<HTMLInputElement>(null);
-  const { owners, addOwner, deleteOwnerPermanent, activeSession } = useSession();
+  const { owners, addOwner, updateOwner, deleteOwnerPermanent, activeSession } = useSession();
   const { pets, updatePet, addPet, showToast } = useAppContext();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -75,12 +75,28 @@ export const PetOwnersPage: React.FC = () => {
   });
 
   const getPetsForOwner = (owner: PetOwner): Pet[] => {
-    return (pets ?? []).filter(
-      (p) =>
-        (p.ownerId && p.ownerId === owner.id) ||
-        (p.ownerName && p.ownerName.toLowerCase() === owner.name.toLowerCase()) ||
-        (owner.petIds && owner.petIds.includes(p.id))
-    );
+    if (!owner) return [];
+    const ownerNameClean = owner.name?.trim().toLowerCase();
+    const ownerEmailClean = owner.email?.trim().toLowerCase();
+    const ownerPhoneDigits = owner.phone ? owner.phone.replace(/\D/g, '') : '';
+
+    return (pets ?? []).filter((p) => {
+      if (!p) return false;
+      const petOwnerId = p.ownerId;
+      const petOwnerName = p.ownerName?.trim().toLowerCase();
+      const petOwnerEmail = p.ownerEmail?.trim().toLowerCase();
+      const petOwnerPhoneDigits = p.ownerPhone ? p.ownerPhone.replace(/\D/g, '') : '';
+
+      return (
+        (petOwnerId && petOwnerId === owner.id) ||
+        (owner.petIds && owner.petIds.includes(p.id)) ||
+        (petOwnerEmail && petOwnerEmail === ownerEmailClean) ||
+        (petOwnerName && ownerNameClean && petOwnerName === ownerNameClean) ||
+        (petOwnerName && ownerEmailClean && ownerEmailClean.includes(petOwnerName)) ||
+        (ownerNameClean && petOwnerEmail && ownerNameClean.includes(petOwnerEmail)) ||
+        (petOwnerPhoneDigits && ownerPhoneDigits && petOwnerPhoneDigits.length >= 7 && petOwnerPhoneDigits === ownerPhoneDigits)
+      );
+    });
   };
 
   const handleOpenViewPets = (owner: PetOwner) => {
@@ -152,11 +168,11 @@ export const PetOwnersPage: React.FC = () => {
     setAddOwnerModalOpen(false);
   };
 
-  const handleAddNewPetForOwner = (e: React.FormEvent) => {
+  const handleAddNewPetForOwner = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOwner || !petForm.name.trim()) return;
 
-    addPet({
+    const createdPet = await addPet({
       name: petForm.name.trim(),
       species: petForm.species,
       breed: petForm.breed.trim(),
@@ -165,6 +181,7 @@ export const PetOwnersPage: React.FC = () => {
       sex: petForm.sex,
       ownerName: selectedOwner.name,
       ownerPhone: selectedOwner.phone,
+      ownerEmail: selectedOwner.email,
       ownerId: selectedOwner.id,
       clinicRef: 'REF-2026-' + Math.floor(100 + Math.random() * 800),
       assignedDeviceId: 'Cage 1',
@@ -186,6 +203,12 @@ export const PetOwnersPage: React.FC = () => {
       },
       notes: petForm.notes || 'Registered by clinic staff.',
     });
+
+    if (selectedOwner.id) {
+      updateOwner(selectedOwner.id, {
+        petIds: Array.from(new Set([...(selectedOwner.petIds || []), createdPet.id])),
+      });
+    }
 
     showToast('success', 'PET REGISTERED', petForm.name + ' added for ' + selectedOwner.name + '.');
     setAddPetModalOpen(false);

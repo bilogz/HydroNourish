@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS public.pets (
     owner_name TEXT NOT NULL,
     owner_phone TEXT NOT NULL,
     owner_id TEXT,
+    owner_email TEXT,
     clinic_ref TEXT NOT NULL,
     assigned_device_id TEXT,
     health_status TEXT DEFAULT 'Healthy',

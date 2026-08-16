@@ -92,7 +92,7 @@ interface AppContextType {
   setMobileSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
 
   // Actions & State Modifiers
-  addPet: (pet: Omit<Pet, 'id'>) => void;
+  addPet: (pet: Omit<Pet, 'id'>) => Promise<Pet>;
   updatePet: (id: string, updated: Partial<Pet>) => void;
   deletePet: (id: string) => void;
 
@@ -390,12 +390,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // ─── Pet Handlers ────────────────────────────────────────────────────
-  const addPet = async (petData: Omit<Pet, 'id'>) => {
-    const newId = `PET-${String((pets?.length ?? 0) + 1).padStart(3, '0')}`;
+  const addPet = async (petData: Omit<Pet, 'id'>): Promise<Pet> => {
+    const count = (pets?.length ?? 0) + 1;
+    const newId = `PET-${String(count).padStart(3, '0')}-${Date.now().toString().slice(-4)}`;
     const newPet: Pet = { ...petData, id: newId };
-    setPets((prev) => [newPet, ...prev]);
+    setPets((prev) => [newPet, ...(prev || [])]);
     showToast('success', 'Pet Registered', `${newPet.name} added to database.`);
     await insertPetToSupabase(newPet);
+    return newPet;
   };
 
   const updatePet = async (id: string, updated: Partial<Pet>) => {

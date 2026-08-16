@@ -62,12 +62,28 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
 
   // Get pets linked to an owner
   const getPetsForOwner = (owner: PetOwner): Pet[] => {
-    return (pets ?? []).filter(
-      (p) =>
-        (p.ownerId && p.ownerId === owner.id) ||
-        (p.ownerName && p.ownerName.toLowerCase() === owner.name.toLowerCase()) ||
-        (owner.petIds && owner.petIds.includes(p.id))
-    );
+    if (!owner) return [];
+    const ownerNameClean = owner.name?.trim().toLowerCase();
+    const ownerEmailClean = owner.email?.trim().toLowerCase();
+    const ownerPhoneDigits = owner.phone ? owner.phone.replace(/\D/g, '') : '';
+
+    return (pets ?? []).filter((p) => {
+      if (!p) return false;
+      const petOwnerId = p.ownerId;
+      const petOwnerName = p.ownerName?.trim().toLowerCase();
+      const petOwnerEmail = p.ownerEmail?.trim().toLowerCase();
+      const petOwnerPhoneDigits = p.ownerPhone ? p.ownerPhone.replace(/\D/g, '') : '';
+
+      return (
+        (petOwnerId && petOwnerId === owner.id) ||
+        (owner.petIds && owner.petIds.includes(p.id)) ||
+        (petOwnerEmail && petOwnerEmail === ownerEmailClean) ||
+        (petOwnerName && ownerNameClean && petOwnerName === ownerNameClean) ||
+        (petOwnerName && ownerEmailClean && ownerEmailClean.includes(petOwnerName)) ||
+        (ownerNameClean && petOwnerEmail && ownerNameClean.includes(petOwnerEmail)) ||
+        (petOwnerPhoneDigits && ownerPhoneDigits && petOwnerPhoneDigits.length >= 7 && petOwnerPhoneDigits === ownerPhoneDigits)
+      );
+    });
   };
 
   // Check if a staff member or owner is currently online in realtime
