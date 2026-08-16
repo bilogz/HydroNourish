@@ -286,15 +286,25 @@ export interface SystemNotification {
 
 export type InquiryStatus = 'unread' | 'read' | 'replied' | 'archived';
 
+export interface ChatMessageItem {
+  id: string;
+  sender: 'owner' | 'admin';
+  senderName: string;
+  message: string;
+  timestamp: string;
+}
+
 export interface ContactInquiry {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   subject: string;
   message: string;
   createdAt: string;
   status: InquiryStatus;
   repliedAt?: string;
   replyMessage?: string;
+  messagesThread?: ChatMessageItem[];
 }
 

@@ -839,17 +839,56 @@ export async function fetchContactInquiriesFromSupabase(): Promise<ContactInquir
       .order('created_at', { ascending: false });
     if (error || !data) return null;
 
-    return data.map((item) => ({
-      id: item.id,
-      name: item.name,
-      email: item.email,
-      subject: item.subject || 'General Inquiry',
-      message: item.message,
-      createdAt: item.created_at || new Date().toISOString(),
-      status: item.status || 'unread',
-      repliedAt: item.replied_at || undefined,
-      replyMessage: item.reply_message || undefined,
-    }));
+    return data.map((item) => {
+      let messagesThread: any[] | undefined = undefined;
+      let replyMessage = item.reply_message || undefined;
+
+      if (item.reply_message && item.reply_message.trim().startsWith('[{"')) {
+        try {
+          const parsed = JSON.parse(item.reply_message);
+          if (Array.isArray(parsed)) {
+            messagesThread = parsed;
+            const lastAdminReply = [...parsed].reverse().find((m) => m.sender === 'admin');
+            replyMessage = lastAdminReply ? lastAdminReply.message : replyMessage;
+          }
+        } catch {}
+      }
+
+      if (!messagesThread) {
+        messagesThread = [];
+        if (item.message) {
+          messagesThread.push({
+            id: `msg-1-${item.id}`,
+            sender: 'owner',
+            senderName: item.name || 'Client',
+            message: item.message,
+            timestamp: item.created_at || new Date().toISOString(),
+          });
+        }
+        if (replyMessage && !replyMessage.trim().startsWith('[{"')) {
+          messagesThread.push({
+            id: `msg-2-${item.id}`,
+            sender: 'admin',
+            senderName: 'Heritage Animal Clinic Staff',
+            message: replyMessage,
+            timestamp: item.replied_at || item.created_at || new Date().toISOString(),
+          });
+        }
+      }
+
+      return {
+        id: item.id,
+        name: item.name,
+        email: item.email,
+        subject: item.subject || 'General Inquiry',
+        message: item.message,
+        createdAt: item.created_at || new Date().toISOString(),
+        status: item.status || 'unread',
+        repliedAt: item.replied_at || undefined,
+        replyMessage: replyMessage,
+        messagesThread: messagesThread,
+      };
+    });
   } catch (err) {
     if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase inquiries fetch notice:', err);
     return null;
@@ -859,6 +898,10 @@ export async function fetchContactInquiriesFromSupabase(): Promise<ContactInquir
 export async function insertContactInquiryToSupabase(inquiry: ContactInquiry): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   try {
+    const threadData = inquiry.messagesThread && inquiry.messagesThread.length > 0
+      ? JSON.stringify(inquiry.messagesThread)
+      : (inquiry.replyMessage || null);
+
     const { error } = await supabase.from('contact_inquiries').insert({
       id: inquiry.id,
       name: inquiry.name,
@@ -868,7 +911,7 @@ export async function insertContactInquiryToSupabase(inquiry: ContactInquiry): P
       status: inquiry.status,
       created_at: inquiry.createdAt,
       replied_at: inquiry.repliedAt || null,
-      reply_message: inquiry.replyMessage || null,
+      reply_message: threadData,
     });
     return !error;
   } catch (err) {
@@ -886,7 +929,12 @@ export async function updateContactInquiryInSupabase(
     const payload: Record<string, any> = {};
     if (updated.status !== undefined) payload.status = updated.status;
     if (updated.repliedAt !== undefined) payload.replied_at = updated.repliedAt;
-    if (updated.replyMessage !== undefined) payload.reply_message = updated.replyMessage;
+    
+    if (updated.messagesThread !== undefined && Array.isArray(updated.messagesThread)) {
+      payload.reply_message = JSON.stringify(updated.messagesThread);
+    } else if (updated.replyMessage !== undefined) {
+      payload.reply_message = updated.replyMessage;
+    }
 
     const { error } = await supabase.from('contact_inquiries').update(payload).eq('id', id);
     return !error;

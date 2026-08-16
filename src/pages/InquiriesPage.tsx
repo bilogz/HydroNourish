@@ -505,183 +505,235 @@ export const InquiriesPage: React.FC = () => {
           </div>
         )}
 
-        {/* ================= INQUIRY DETAIL MODAL ================= */}
-        {selectedInquiry && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-            <div
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Modal Header */}
-              <div className="p-6 border-b border-slate-100 flex items-start justify-between gap-4 sticky top-0 bg-white/95 backdrop-blur-md z-10">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-teal-100 text-teal-800 flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
-                    {getInitials(selectedInquiry.name)}
+        {/* ================= INQUIRY DETAIL CHATBOX MODAL ================= */}
+        {selectedInquiry && (() => {
+          const threadMessages = selectedInquiry.messagesThread && selectedInquiry.messagesThread.length > 0
+            ? selectedInquiry.messagesThread
+            : [
+                ...(selectedInquiry.message
+                  ? [
+                      {
+                        id: `msg-1-${selectedInquiry.id}`,
+                        sender: 'owner' as const,
+                        senderName: selectedInquiry.name || 'Client',
+                        message: selectedInquiry.message,
+                        timestamp: selectedInquiry.createdAt,
+                      },
+                    ]
+                  : []),
+                ...(selectedInquiry.replyMessage
+                  ? [
+                      {
+                        id: `msg-2-${selectedInquiry.id}`,
+                        sender: 'admin' as const,
+                        senderName: 'Heritage Animal Clinic Staff',
+                        message: selectedInquiry.replyMessage,
+                        timestamp: selectedInquiry.repliedAt || selectedInquiry.createdAt,
+                      },
+                    ]
+                  : []),
+              ];
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+              <div
+                className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* 1. Chat Header */}
+                <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between gap-3 bg-slate-50/80 backdrop-blur-md">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-teal-500 to-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-xs">
+                        {getInitials(selectedInquiry.name)}
+                      </div>
+                      <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-white" />
+                      </span>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-black text-slate-900 leading-tight">
+                          {selectedInquiry.name}
+                        </h3>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                            selectedInquiry.status === 'replied'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              : selectedInquiry.status === 'unread'
+                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                              : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {selectedInquiry.status}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-2 font-mono mt-0.5">
+                        <span>{selectedInquiry.email}</span>
+                        {selectedInquiry.phone && <span>• {selectedInquiry.phone}</span>}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900 leading-tight">
-                      {selectedInquiry.name}
-                    </h3>
-                    <p className="text-xs text-slate-500 font-mono">{selectedInquiry.email}</p>
-                  </div>
+
+                  <button
+                    onClick={() => setSelectedInquiry(null)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                  >
+                    ✕
+                  </button>
                 </div>
 
-                <button
-                  onClick={() => setSelectedInquiry(null)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Modal Body */}
-              <div className="p-6 space-y-6 flex-1 text-xs">
-                {/* Meta details */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <div>
-                    <span className="block text-[10px] font-extrabold uppercase text-slate-400">
-                      Subject
+                {/* 2. Details Summary Ribbon (Always Included!) */}
+                <div className="bg-slate-100/90 border-b border-slate-200/80 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-slate-500 uppercase text-[10px]">Topic:</span>
+                    <span className="font-extrabold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                      {selectedInquiry.subject || 'General Inquiry'}
                     </span>
-                    <span className="font-bold text-slate-800">{selectedInquiry.subject}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-extrabold uppercase text-slate-400">
-                      Date Received
-                    </span>
-                    <span className="font-bold text-slate-800">
-                      {formatTimestamp(selectedInquiry.createdAt)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-extrabold uppercase text-slate-400">
-                      Status
-                    </span>
-                    <span
-                      className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold mt-0.5 ${
-                        selectedInquiry.status === 'replied'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : selectedInquiry.status === 'unread'
-                          ? 'bg-rose-100 text-rose-800'
-                          : 'bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      {selectedInquiry.status.toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Inquiry Message Text */}
-                <div className="space-y-2">
-                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
-                    Message Content
-                  </label>
-                  <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-2xl text-slate-800 leading-relaxed whitespace-pre-wrap font-sans text-xs">
-                    {selectedInquiry.message}
-                  </div>
-                </div>
-
-                {/* Response / Notes Section */}
-                <div className="space-y-3 pt-2 border-t border-slate-100">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
-                      Clinic Response (Transmitted Live to Client / Pet Owner)
-                    </label>
-                    {selectedInquiry.repliedAt && (
-                      <span className="text-[10px] text-emerald-600 font-bold">
-                        Replied on: {formatTimestamp(selectedInquiry.repliedAt)}
+                    {selectedInquiry.subject?.includes('[') && selectedInquiry.subject?.includes(']') && (
+                      <span className="font-extrabold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 flex items-center gap-1 text-[10px]">
+                        🐾 Patient Linked
                       </span>
                     )}
                   </div>
 
-                  {/* Quick Response Templates */}
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Quick Reply Templates:</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        { label: 'Telemtry Normal', text: 'Hello! We have reviewed your inquiry. Your pet’s diet and telemetry look stable. Please continue regular feeding routine.' },
-                        { label: 'Prescription Ready', text: 'Hi! The requested medication / supplement prescription has been prepared and is ready for pickup at our front desk.' },
-                        { label: 'Schedule Checkup', text: 'Hello! Based on the symptoms described, we recommend bringing your pet in for an in-person physical checkup.' },
-                        { label: 'Hydration Guidance', text: 'Thank you for reaching out! Please ensure your pet meets the daily hydration target and observe for 24 hours.' },
-                      ].map((t) => (
-                        <button
-                          key={t.label}
-                          type="button"
-                          onClick={() => setReplyText(t.text)}
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-teal-50 hover:text-teal-800 text-slate-600 text-[11px] font-semibold transition-colors border border-slate-200"
-                        >
-                          + {t.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <textarea
-                    rows={4}
-                    placeholder="Write clinical reply notes, follow-up instructions, or answers to the pet owner..."
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    className="w-full p-3.5 rounded-2xl border border-slate-300 focus:border-teal-500 focus:outline-none text-xs leading-relaxed"
-                  />
-
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleLaunchEmailClient(selectedInquiry)}
-                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <ExternalLink className="w-4 h-4 text-slate-500" />
-                      Email App Client
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={isSendingReply}
-                      onClick={handleSendReply}
-                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-                    >
-                      <Send className={`w-4 h-4 ${isSendingReply ? 'animate-spin' : ''}`} />
-                      {isSendingReply ? 'Transmitting Reply...' : 'Send Reply via Website & Portal'}
-                    </button>
+                  <div className="flex items-center gap-3 text-slate-500 font-medium text-[10px]">
+                    <span>Received: <strong>{formatTimestamp(selectedInquiry.createdAt)}</strong></span>
+                    <span className="font-mono">Ref: {selectedInquiry.id}</span>
                   </div>
                 </div>
-              </div>
 
-              {/* Modal Footer Actions */}
-              <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-3xl flex items-center justify-between gap-2">
-                <button
-                  onClick={() => {
-                    setDeleteTargetId(selectedInquiry.id);
-                  }}
-                  className="px-3.5 py-2 rounded-xl text-rose-600 hover:bg-rose-100/70 font-bold text-xs flex items-center gap-1.5 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete Inquiry
-                </button>
+                {/* 3. Real Chatbox Conversation Timeline */}
+                <div className="p-4 sm:p-5 space-y-3.5 flex-1 overflow-y-auto bg-gradient-to-b from-slate-50/50 via-white to-slate-50/30 max-h-[46vh]">
+                  <div className="text-center my-1">
+                    <span className="px-3 py-1 rounded-full bg-slate-200/70 text-slate-600 text-[10px] font-bold">
+                      Conversation Started • {formatTimestamp(selectedInquiry.createdAt)}
+                    </span>
+                  </div>
 
-                <div className="flex items-center gap-2">
-                  {selectedInquiry.status !== 'archived' && (
+                  {threadMessages.map((msg, idx) => {
+                    const isClient = msg.sender === 'owner';
+                    return (
+                      <div
+                        key={msg.id || idx}
+                        className={`flex flex-col ${isClient ? 'items-start' : 'items-end'} space-y-1`}
+                      >
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 px-1">
+                          <span className="font-bold text-slate-600">{msg.senderName || (isClient ? selectedInquiry.name : 'Heritage Animal Clinic Staff')}</span>
+                          <span>• {formatTimestamp(msg.timestamp)}</span>
+                        </div>
+
+                        <div
+                          className={`p-3.5 rounded-2xl text-xs leading-relaxed max-w-[85%] whitespace-pre-wrap ${
+                            isClient
+                              ? 'bg-white text-slate-800 border border-slate-200 shadow-2xs rounded-tl-xs'
+                              : 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs rounded-tr-xs font-medium'
+                          }`}
+                        >
+                          {msg.message}
+                        </div>
+
+                        {!isClient && (
+                          <div className="text-[10px] text-emerald-600 font-bold px-1 flex items-center gap-1">
+                            <span>✓ Delivered to Portal</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 4. Quick Reply Suggestion Chips */}
+                <div className="px-4 py-2 bg-slate-50 border-t border-slate-200/80 flex items-center gap-1.5 overflow-x-auto text-[11px]">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0">Quick Templates:</span>
+                  {[
+                    { label: 'Telemetry Normal', text: 'Hello! We have reviewed your inquiry. Your pet’s diet and telemetry look stable. Please continue regular feeding routine.' },
+                    { label: 'Prescription Ready', text: 'Hi! The requested medication / supplement prescription has been prepared and is ready for pickup at our front desk.' },
+                    { label: 'Schedule Checkup', text: 'Hello! Based on the symptoms described, we recommend bringing your pet in for an in-person physical checkup.' },
+                    { label: 'Hydration Guidance', text: 'Thank you for reaching out! Please ensure your pet meets the daily hydration target and observe for 24 hours.' },
+                  ].map((t) => (
                     <button
-                      onClick={() => {
-                        markInquiryStatus(selectedInquiry.id, 'archived');
-                        setSelectedInquiry(null);
-                      }}
-                      className="px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                      key={t.label}
+                      type="button"
+                      onClick={() => setReplyText(t.text)}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-teal-50 hover:text-teal-800 text-slate-600 text-[11px] font-semibold transition-colors border border-slate-200 shrink-0 cursor-pointer shadow-2xs"
                     >
-                      <Archive className="w-4 h-4 text-slate-500" />
-                      Archive
+                      + {t.label}
                     </button>
-                  )}
-                  <button
-                    onClick={() => setSelectedInquiry(null)}
-                    className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors"
-                  >
-                    Close
-                  </button>
+                  ))}
+                </div>
+
+                {/* 5. Chat Input Bar */}
+                <div className="p-3.5 bg-white border-t border-slate-200 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <textarea
+                      rows={2}
+                      placeholder={`Type your reply to ${selectedInquiry.name}... (Press Enter to send, Shift+Enter for newline)`}
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendReply();
+                        }
+                      }}
+                      className="flex-1 p-3 rounded-2xl border border-slate-300 focus:border-teal-500 focus:outline-none text-xs leading-relaxed resize-none bg-slate-50/50"
+                    />
+
+                    <button
+                      type="button"
+                      disabled={isSendingReply || !replyText.trim()}
+                      onClick={handleSendReply}
+                      className="px-5 py-3 rounded-2xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 disabled:opacity-40 cursor-pointer shrink-0"
+                    >
+                      <Send className={`w-4 h-4 ${isSendingReply ? 'animate-spin' : ''}`} />
+                      <span>{isSendingReply ? 'Sending...' : 'Send'}</span>
+                    </button>
+                  </div>
+
+                  {/* Footer Action Links */}
+                  <div className="flex items-center justify-between pt-1 text-[11px]">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleLaunchEmailClient(selectedInquiry)}
+                        className="text-slate-500 hover:text-teal-700 font-semibold flex items-center gap-1 cursor-pointer"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Open in Mail App
+                      </button>
+
+                      <span className="text-slate-300">•</span>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          markInquiryStatus(selectedInquiry.id, 'archived');
+                          setSelectedInquiry(null);
+                        }}
+                        className="text-slate-500 hover:text-slate-800 font-semibold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Archive className="w-3.5 h-3.5" />
+                        Archive
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTargetId(selectedInquiry.id)}
+                      className="text-rose-500 hover:text-rose-700 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ================= DELETE CONFIRMATION DIALOG ================= */}
         <ConfirmDialog

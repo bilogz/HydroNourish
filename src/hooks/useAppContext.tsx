@@ -116,9 +116,10 @@ interface AppContextType {
   toggleUserStatus: (userId: string) => void;
   updateSettings: (newSettings: Partial<ClinicSettings>) => void;
 
-  // Contact Inquiries
+  // Contact Inquiries & Chat
   addInquiry: (inquiryData: Omit<ContactInquiry, 'id' | 'createdAt' | 'status'>) => Promise<boolean>;
-  markInquiryStatus: (id: string, status: ContactInquiry['status'], replyMessage?: string) => Promise<void>;
+  markInquiryStatus: (id: string, status: ContactInquiry['status'], replyMessage?: string, senderName?: string) => Promise<void>;
+  sendOwnerFollowUpMessage: (inquiryId: string, messageText: string, senderName?: string) => Promise<boolean>;
   deleteInquiry: (id: string) => Promise<void>;
 
   showToast: (type: ToastMessage['type'], title: string, message: string) => void;
@@ -920,16 +921,27 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     await updateSettingsInSupabase(newSet);
   };
 
-  // ─── Contact Inquiries Handlers ─────────────────────────────────────
+  // ─── Contact Inquiries & Chat Handlers ─────────────────────────────
   const addInquiry = async (
     inquiryData: Omit<ContactInquiry, 'id' | 'createdAt' | 'status'>
   ): Promise<boolean> => {
     const newId = `INQ-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const initialThread: ChatMessageItem[] = [
+      {
+        id: `msg-init-${newId}`,
+        sender: 'owner',
+        senderName: inquiryData.name || 'Pet Owner',
+        message: inquiryData.message,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
     const newInquiry: ContactInquiry = {
       ...inquiryData,
       id: newId,
       createdAt: new Date().toISOString(),
       status: 'unread',
+      messagesThread: initialThread,
     };
 
     setInquiries((prev) => [newInquiry, ...prev]);
@@ -937,7 +949,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     showToast(
       'success',
       'Inquiry Received',
-      `Thank you ${inquiryData.name}! Your inquiry has been received by Heritage Animal Clinic.`
+      `Thank you ${inquiryData.name}! Your message has been received by Heritage Animal Clinic.`
     );
     await insertContactInquiryToSupabase(newInquiry);
     return true;
@@ -946,29 +958,122 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   const markInquiryStatus = async (
     id: string,
     status: ContactInquiry['status'],
-    replyMessage?: string
+    replyMessage?: string,
+    senderName: string = 'Heritage Animal Clinic Staff'
   ) => {
-    const updates: Partial<ContactInquiry> = {
-      status,
-      ...(status === 'replied'
-        ? { repliedAt: new Date().toISOString(), replyMessage }
-        : {}),
-    };
+    let finalThread: ChatMessageItem[] | undefined = undefined;
 
     setInquiries((prev) =>
-      prev.map((inq) => (inq.id === id ? { ...inq, ...updates } : inq))
+      prev.map((inq) => {
+        if (inq.id !== id) return inq;
+
+        const currentThread: ChatMessageItem[] = inq.messagesThread && inq.messagesThread.length > 0
+          ? [...inq.messagesThread]
+          : [
+              {
+                id: `msg-1-${inq.id}`,
+                sender: 'owner',
+                senderName: inq.name || 'Client',
+                message: inq.message,
+                timestamp: inq.createdAt,
+              },
+            ];
+
+        if (replyMessage) {
+          currentThread.push({
+            id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            sender: 'admin',
+            senderName: senderName,
+            message: replyMessage,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        finalThread = currentThread;
+
+        const updates: Partial<ContactInquiry> = {
+          status,
+          ...(status === 'replied' && replyMessage
+            ? { repliedAt: new Date().toISOString(), replyMessage, messagesThread: currentThread }
+            : { messagesThread: currentThread }),
+        };
+
+        return { ...inq, ...updates };
+      })
     );
+
+    const updates: Partial<ContactInquiry> = {
+      status,
+      ...(status === 'replied' && replyMessage
+        ? { repliedAt: new Date().toISOString(), replyMessage, messagesThread: finalThread }
+        : { messagesThread: finalThread }),
+    };
+
     broadcastInquiryUpdate(id, updates);
 
     const statusLabels: Record<string, string> = {
       unread: 'Marked as Unread',
       read: 'Marked as Read',
-      replied: 'Marked as Replied',
+      replied: 'Reply Sent via Website',
       archived: 'Archived',
     };
 
     showToast('info', 'Inquiry Status', `Message ${statusLabels[status] || status}.`);
     await updateContactInquiryInSupabase(id, updates);
+  };
+
+  const sendOwnerFollowUpMessage = async (
+    inquiryId: string,
+    messageText: string,
+    senderName?: string
+  ): Promise<boolean> => {
+    let finalThread: ChatMessageItem[] | undefined = undefined;
+
+    setInquiries((prev) =>
+      prev.map((inq) => {
+        if (inq.id !== inquiryId) return inq;
+
+        const currentThread: ChatMessageItem[] = inq.messagesThread && inq.messagesThread.length > 0
+          ? [...inq.messagesThread]
+          : [
+              {
+                id: `msg-1-${inq.id}`,
+                sender: 'owner',
+                senderName: inq.name || 'Pet Owner',
+                message: inq.message,
+                timestamp: inq.createdAt,
+              },
+            ];
+
+        const newMsg: ChatMessageItem = {
+          id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          sender: 'owner',
+          senderName: senderName || inq.name || 'Pet Owner',
+          message: messageText.trim(),
+          timestamp: new Date().toISOString(),
+        };
+
+        const updatedThread = [...currentThread, newMsg];
+        finalThread = updatedThread;
+
+        return {
+          ...inq,
+          message: messageText.trim(),
+          status: 'unread',
+          messagesThread: updatedThread,
+        };
+      })
+    );
+
+    const updates: Partial<ContactInquiry> = {
+      message: messageText.trim(),
+      status: 'unread',
+      messagesThread: finalThread,
+    };
+
+    broadcastInquiryUpdate(inquiryId, updates);
+    await updateContactInquiryInSupabase(inquiryId, updates);
+    return true;
   };
 
   const deleteInquiry = async (id: string) => {
@@ -1021,6 +1126,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         updateSettings,
         addInquiry,
         markInquiryStatus,
+        sendOwnerFollowUpMessage,
         deleteInquiry,
         showToast,
         removeToast,
