@@ -967,17 +967,29 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       prev.map((inq) => {
         if (inq.id !== id) return inq;
 
-        const currentThread: ChatMessageItem[] = inq.messagesThread && inq.messagesThread.length > 0
-          ? [...inq.messagesThread]
-          : [
-              {
-                id: `msg-1-${inq.id}`,
-                sender: 'owner',
-                senderName: inq.name || 'Client',
-                message: inq.message,
-                timestamp: inq.createdAt,
-              },
-            ];
+        let currentThread: ChatMessageItem[] = [];
+        if (inq.messagesThread && inq.messagesThread.length > 0) {
+          currentThread = [...inq.messagesThread];
+        } else {
+          if (inq.message) {
+            currentThread.push({
+              id: `msg-1-${inq.id}`,
+              sender: 'owner',
+              senderName: inq.name || 'Client',
+              message: inq.message,
+              timestamp: inq.createdAt,
+            });
+          }
+          if (inq.replyMessage && !inq.replyMessage.trim().startsWith('[{"')) {
+            currentThread.push({
+              id: `msg-2-${inq.id}`,
+              sender: 'admin',
+              senderName: senderName,
+              message: inq.replyMessage,
+              timestamp: inq.repliedAt || inq.createdAt,
+            });
+          }
+        }
 
         if (replyMessage) {
           currentThread.push({

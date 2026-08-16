@@ -40,10 +40,16 @@ export const InquiriesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | InquiryStatus>('all');
   
-  // Selected Inquiry for Modal View
-  const [selectedInquiry, setSelectedInquiry] = useState<ContactInquiry | null>(null);
+  // Selected Inquiry for Modal View (dynamic by ID so thread updates instantly)
+  const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [isSendingReply, setIsSendingReply] = useState(false);
+
+  // Active selected inquiry derived dynamically from inquiries state
+  const selectedInquiry = useMemo(() => {
+    if (!selectedInquiryId) return null;
+    return (inquiries || []).find((i) => i.id === selectedInquiryId) || null;
+  }, [inquiries, selectedInquiryId]);
 
   // Delete Dialog state
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -80,8 +86,8 @@ export const InquiriesPage: React.FC = () => {
 
   // Handler: Open Inquiry Modal & mark as read if unread
   const handleOpenDetail = (inquiry: ContactInquiry) => {
-    setSelectedInquiry(inquiry);
-    setReplyText(inquiry.replyMessage || '');
+    setSelectedInquiryId(inquiry.id);
+    setReplyText(''); // Always start with a clean input box to type a NEW reply
     if (inquiry.status === 'unread') {
       markInquiryStatus(inquiry.id, 'read');
     }
@@ -109,11 +115,15 @@ export const InquiriesPage: React.FC = () => {
       return;
     }
 
+    const textToSend = replyText.trim();
+    setReplyText(''); // Instantly clear input field
     setIsSendingReply(true);
     try {
-      await markInquiryStatus(selectedInquiry.id, 'replied', replyText.trim());
-      showToast('success', 'Reply Recorded', `Response saved for ${selectedInquiry.name}.`);
-      setSelectedInquiry((prev) => (prev ? { ...prev, status: 'replied', replyMessage: replyText.trim(), repliedAt: new Date().toISOString() } : null));
+      await markInquiryStatus(selectedInquiry.id, 'replied', textToSend);
+      showToast('success', 'Reply Sent', `Message transmitted live to ${selectedInquiry.name}.`);
+    } catch {
+      showToast('error', 'Reply Failed', 'Could not transmit reply.');
+      setReplyText(textToSend);
     } finally {
       setIsSendingReply(false);
     }
@@ -130,8 +140,8 @@ export const InquiriesPage: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!deleteTargetId) return;
     await deleteInquiry(deleteTargetId);
-    if (selectedInquiry?.id === deleteTargetId) {
-      setSelectedInquiry(null);
+    if (selectedInquiryId === deleteTargetId) {
+      setSelectedInquiryId(null);
     }
     setDeleteTargetId(null);
   };
@@ -578,7 +588,7 @@ export const InquiriesPage: React.FC = () => {
                   </div>
 
                   <button
-                    onClick={() => setSelectedInquiry(null)}
+                    onClick={() => setSelectedInquiryId(null)}
                     className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
                   >
                     ✕
@@ -711,7 +721,7 @@ export const InquiriesPage: React.FC = () => {
                         type="button"
                         onClick={() => {
                           markInquiryStatus(selectedInquiry.id, 'archived');
-                          setSelectedInquiry(null);
+                          setSelectedInquiryId(null);
                         }}
                         className="text-slate-500 hover:text-slate-800 font-semibold flex items-center gap-1 cursor-pointer"
                       >
