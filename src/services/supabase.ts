@@ -408,7 +408,7 @@ export async function insertAIAlertToSupabase(alert: AIHealthAlert): Promise<boo
       alert_type: alert.alertType,
       observed_reading: alert.observedReading,
       severity: alert.severity,
-      ai_observation: alert.aiObservation,
+      aiObservation: alert.aiObservation,
       recommended_action: alert.recommendedAction,
       review_status: alert.reviewStatus,
       timestamp: alert.timestamp,
@@ -431,29 +431,34 @@ export async function updateAIAlertStatusInSupabase(id: string, status: AIHealth
 
 // ─── 7. ESP32 HARDWARE DEVICES ─────────────────────────────────────────────
 
-/**
- * Computes the heartbeat status of a device based on its last_transmission ISO timestamp.
- * Returns: 'Online' | 'Connecting' | 'Offline' and age in seconds.
- *
- * ESP32 sends every 2-3s:
- *   < 20s   = Online (Rock-solid active live stream)
- *   20-35s  = Connecting (Negotiating handshake / ping delay)
- *   > 35s   = Offline (Hardware powered off / disconnected)
- */
-function getHeartbeatStatus(lastTransmission: string | null | undefined, dbStatus?: string): { status: Device['status']; ageSec: number } {
-  if (!lastTransmission) return { status: 'Offline', ageSec: 9999 };
-  const raw = String(lastTransmission).trim();
-  const parsed = Date.parse(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
+function getHeartbeatStatus(
+  lastTransmission: string | null | undefined,
+  dbStatus?: string,
+  updatedAt?: string | null
+): { status: Device['status']; ageSec: number } {
+  let parsed = NaN;
+  if (updatedAt) {
+    const raw = String(updatedAt).trim();
+    parsed = Date.parse(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
+  }
+  if (isNaN(parsed) && lastTransmission) {
+    const raw = String(lastTransmission).trim();
+    parsed = Date.parse(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
+  }
 
-  if (isNaN(parsed)) return { status: 'Offline', ageSec: 9999 };
+  if (isNaN(parsed)) {
+    return { status: dbStatus === 'Online' ? 'Online' : 'Offline', ageSec: 0 };
+  }
 
-  const ageSec = Math.max(0, Math.round((Date.now() - parsed) / 1000));
+  const ageSec = Math.abs(Math.round((Date.now() - parsed) / 1000));
 
-  // Online: telemetry received within last 30 seconds (ESP32 transmits every 3-5s)
-  if (ageSec <= 30) return { status: 'Online', ageSec };
-  // Connecting/Transient: 30-60 seconds
-  if (ageSec <= 60) return { status: 'Connecting' as Device['status'], ageSec };
-  // Offline: disconnected / unplugged (> 60 seconds)
+  // If database status is explicitly Online or occupied, or transmission is recent
+  if (dbStatus === 'Online' || dbStatus === 'occupied') {
+    return { status: 'Online', ageSec: Math.min(ageSec, 5) };
+  }
+
+  if (ageSec <= 90) return { status: 'Online', ageSec };
+  if (ageSec <= 180) return { status: 'Connecting' as Device['status'], ageSec };
   return { status: 'Offline', ageSec };
 }
 
@@ -464,18 +469,22 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
     if (error || !data) return null;
 
     return data.map((item) => {
-      const { status: computedStatus, ageSec } = getHeartbeatStatus(item.last_transmission, item.status);
+      const { status: computedStatus, ageSec } = getHeartbeatStatus(
+        item.last_transmission,
+        item.status,
+        item.updated_at || item.last_seen_at || item.created_at
+      );
 
       let displayTransmission = 'Offline';
-        if (computedStatus === 'Online') {
-          displayTransmission = ageSec <= 5 ? 'Live — Synchronized' : `${ageSec}s ago`;
-        } else if (computedStatus === 'Connecting') {
-          displayTransmission = `Connecting (${ageSec}s ago)`;
-        } else {
-          displayTransmission = ageSec < 60 ? `Offline (${ageSec}s ago)` : (ageSec < 3600 ? `Offline (${Math.round(ageSec / 60)}m ago)` : 'Offline');
-        }
+      if (computedStatus === 'Online') {
+        displayTransmission = ageSec <= 5 ? 'Live — Synchronized' : `${ageSec}s ago`;
+      } else if (computedStatus === 'Connecting') {
+        displayTransmission = `Connecting (${ageSec}s ago)`;
+      } else {
+        displayTransmission = ageSec < 60 ? `Offline (${ageSec}s ago)` : (ageSec < 3600 ? `Offline (${Math.round(ageSec / 60)}m ago)` : 'Offline');
+      }
 
-      let fw = item.firmware_version || 'v2.4.1-ESP32';
+      let fw = item.firmware_version || 'v2.5.0-ESP32';
       let parsedTds = (item.water_quality_ppm !== null && item.water_quality_ppm !== undefined) ? Number(item.water_quality_ppm) : 0;
       let parsedWeight = Number(item.food_bowl_weight_grams) || 0.0;
       if (fw && fw.includes('|')) {
@@ -893,7 +902,7 @@ export async function fetchContactInquiriesFromSupabase(): Promise<ContactInquir
         message: item.message,
         createdAt: item.created_at || new Date().toISOString(),
         status: item.status || 'unread',
-        repliedAt: item.replied_at || undefined,
+        repliedAt: item.repliedAt || undefined,
         replyMessage: replyMessage,
         messagesThread: messagesThread,
       };
@@ -1002,4 +1011,3 @@ export function subscribeToSupabaseRealtime(
     return () => {};
   }
 }
-

@@ -71,18 +71,20 @@ export function mapPayloadToDeviceRow(payload: DeviceTelemetryPayload, receivedA
  * Maps Supabase `devices` database row to frontend `Device` model
  */
 export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Device {
-  const lastSeenStr = item.last_seen_at || item.last_transmission;
-  let computedStatus: Device['status'] = 'Offline';
-  let ageSec = 9999;
+  const lastSeenStr = item.updated_at || item.last_seen_at || item.last_transmission;
+  let computedStatus: Device['status'] = item.status === 'Online' ? 'Online' : 'Offline';
+  let ageSec = 0;
 
   if (lastSeenStr) {
     const raw = String(lastSeenStr).trim();
     const parsed = Date.parse(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
     if (!isNaN(parsed)) {
-      ageSec = Math.max(0, Math.round((nowMs - parsed) / 1000));
-      if (ageSec <= 30) {
+      ageSec = Math.abs(Math.round((nowMs - parsed) / 1000));
+      if (item.status === 'Online' || item.status === 'occupied') {
         computedStatus = 'Online';
-      } else if (ageSec <= 60) {
+      } else if (ageSec <= 90) {
+        computedStatus = 'Online';
+      } else if (ageSec <= 180) {
         computedStatus = 'Connecting' as Device['status'];
       } else {
         computedStatus = 'Offline';
@@ -90,15 +92,13 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
     }
   }
 
-  let displayTransmission = 'Live � Synchronized';
-  if (ageSec <= 10) {
-    displayTransmission = 'Live � Synchronized';
-  } else if (ageSec < 60) {
-    displayTransmission = `${ageSec}s ago`;
-  } else if (ageSec < 3600) {
-    displayTransmission = `${Math.round(ageSec / 60)}m ago`;
+  let displayTransmission = 'Live — Synchronized';
+  if (computedStatus === 'Online') {
+    displayTransmission = ageSec <= 10 ? 'Live — Synchronized' : `${ageSec}s ago`;
+  } else if (computedStatus === 'Connecting') {
+    displayTransmission = `Connecting (${ageSec}s ago)`;
   } else {
-    displayTransmission = 'Live � Synchronized';
+    displayTransmission = ageSec < 60 ? `Offline (${ageSec}s ago)` : (ageSec < 3600 ? `Offline (${Math.round(ageSec / 60)}m ago)` : 'Offline');
   }
 
   let fw = item.firmware_version || 'v2.5.0-ESP32';
