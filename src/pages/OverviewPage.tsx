@@ -37,6 +37,8 @@ import {
   ArrowUpRight,
   UserCheck,
   CheckCircle2,
+  Square,
+  Play,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -52,7 +54,17 @@ import {
 
 export const OverviewPage: React.FC = () => {
   const navigate = useNavigate();
-  const { pets, devices, feedingLogs, hydrationLogs, showToast } = useAppContext();
+  const {
+    pets,
+    devices,
+    feedingLogs,
+    hydrationLogs,
+    dispenseDirect,
+    dispenseWaterDirect,
+    stopPumpDirect,
+    toggleAutoRefillDirect,
+    showToast,
+  } = useAppContext();
   const {
     activeSession,
     hardware,
@@ -194,6 +206,68 @@ export const OverviewPage: React.FC = () => {
             badgeType={activeSession ? 'warning' : 'success'}
           />
         </div>
+
+        {/* ================= QUICK HARDWARE ACTIONS BAR ================= */}
+        {hasDeviceConnected && (
+          <div className="clinic-card p-4 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex flex-wrap items-center justify-between gap-4 border border-slate-700/60 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-teal-500/20 text-teal-400 border border-teal-500/30">
+                <Cpu className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                  Node Controls ({hardware.id})
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Online
+                  </span>
+                </h4>
+                <p className="text-xs text-slate-300">Instant hardware actuation & auto-refill management</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => dispenseDirect(hardware.id, 75)}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+                title="Dispense 75g kibble (+90° / -90° cycle)"
+              >
+                <Utensils className="w-3.5 h-3.5" />
+                Feed Food (90°)
+              </button>
+
+              <button
+                onClick={() => dispenseWaterDirect(hardware.id, 250)}
+                className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+                title="Pump 250ml water (~2.5s cycle)"
+              >
+                <Droplets className="w-3.5 h-3.5" />
+                Pump Water (250ml)
+              </button>
+
+              <button
+                onClick={() => stopPumpDirect(hardware.id)}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+                title="Emergency stop water pump relay"
+              >
+                <Square className="w-3.5 h-3.5 fill-white" />
+                Stop Pump
+              </button>
+
+              <button
+                onClick={() => toggleAutoRefillDirect(hardware.id, hardware.firmwareVersion?.includes('AUTO:OFF'))}
+                className={`px-3.5 py-2 rounded-xl font-bold text-xs border flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                  !hardware.firmwareVersion?.includes('AUTO:OFF')
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 hover:bg-emerald-500/30'
+                    : 'bg-slate-700/50 text-slate-300 border-slate-600 hover:bg-slate-700'
+                }`}
+                title="Toggle automated water refilling when water drops <= 10%"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                Auto-Refill: {!hardware.firmwareVersion?.includes('AUTO:OFF') ? 'ENABLED (<=10%)' : 'DISABLED'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ================= LIVE PET WARD CAMERA FEED ================= */}
         <LiveCameraWidget

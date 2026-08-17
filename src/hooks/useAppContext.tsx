@@ -100,7 +100,9 @@ interface AppContextType {
   dispenseNow: (scheduleId: string) => void;
   dispenseDirect: (deviceId: string, grams?: number, foodType?: string) => void;
   dispenseWaterDirect: (deviceId: string, amountMl?: number) => void;
+  startPumpDirect: (deviceId: string) => Promise<void>;
   stopPumpDirect: (deviceId: string) => Promise<void>;
+  toggleAutoRefillDirect: (deviceId: string, enable?: boolean) => Promise<void>;
   togglePumpMasterDirect: (deviceId: string) => Promise<void>;
   deactivatePumpDirect: (deviceId: string, deactivate?: boolean) => Promise<void>;
 
@@ -703,6 +705,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
 
     const newSch: FeedingSchedule = {
       id: `SCH-WTR-${Date.now().toString().slice(-4)}`,
@@ -716,6 +719,21 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     };
 
     setSchedules((prev) => [newSch, ...prev]);
+
+    // ⚡ Ultra-Fast Parallel Dispatch: Direct LAN REST + Supabase Cloud Queue
+    try {
+      const endpoints = [
+        `http://${cleanIp}/api/dispense/water?amount=${amountMl}`,
+        `http://192.168.100.159/api/dispense/water?amount=${amountMl}`,
+        `http://hydronourish.local/api/dispense/water?amount=${amountMl}`
+      ];
+      endpoints.forEach((url) => {
+        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+        const img = new Image();
+        img.src = `${url}&_t=${Date.now()}`;
+      });
+    } catch {}
 
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const newLog: HydrationLog = {
@@ -731,6 +749,45 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     showToast('success', 'Water Dispense Triggered', `Triggered ${amountMl}ml water pump to ${deviceId}.`);
     await insertScheduleToSupabase(newSch);
     await insertHydrationLogToSupabase(newLog);
+  };
+
+  const startPumpDirect = async (deviceId: string) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const petName = dev?.assignedPetName || 'Max';
+    const petId = dev?.assignedPetId || 'PET-001';
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
+
+    // 1. Direct LAN call
+    try {
+      const endpoints = [
+        `http://${cleanIp}/api/pump/on`,
+        `http://192.168.100.159/api/pump/on`,
+        `http://hydronourish.local/api/pump/on`
+      ];
+      endpoints.forEach((url) => {
+        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+        const img = new Image();
+        img.src = `${url}?_t=${Date.now()}`;
+      });
+    } catch {}
+
+    // 2. Supabase Cloud Remote Command
+    const newSch: FeedingSchedule = {
+      id: `SCH-PUMPON-${Date.now()}`,
+      deviceId: deviceId,
+      foodType: 'Force Pump ON',
+      portionGrams: 0,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      petId: petId,
+      petName: petName,
+    };
+
+    setSchedules((prev) => [newSch, ...prev]);
+    showToast('success', '🌊 Water Pump Started', `Turned water pump ON for node ${deviceId}.`);
+
+    await insertScheduleToSupabase(newSch);
   };
 
   const stopPumpDirect = async (deviceId: string) => {
@@ -769,6 +826,52 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
 
     setSchedules((prev) => [newSch, ...prev]);
     showToast('info', 'Water Pump Stopped', `Deactivated water pump relay on node ${deviceId}.`);
+
+    await insertScheduleToSupabase(newSch);
+  };
+
+  const toggleAutoRefillDirect = async (deviceId: string, enable?: boolean) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const shouldEnable = enable !== undefined ? enable : !dev?.firmwareVersion?.includes('AUTO:ON');
+    const petName = dev?.assignedPetName || 'Max';
+    const petId = dev?.assignedPetId || 'PET-001';
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
+
+    // 1. Direct LAN call
+    try {
+      const endpoints = [
+        `http://${cleanIp}/api/auto-refill?enabled=${shouldEnable ? '1' : '0'}`,
+        `http://192.168.100.159/api/auto-refill?enabled=${shouldEnable ? '1' : '0'}`,
+        `http://hydronourish.local/api/auto-refill?enabled=${shouldEnable ? '1' : '0'}`
+      ];
+      endpoints.forEach((url) => {
+        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+        const img = new Image();
+        img.src = `${url}&_t=${Date.now()}`;
+      });
+    } catch {}
+
+    // 2. Supabase Cloud Remote Command
+    const newSch: FeedingSchedule = {
+      id: `SCH-${shouldEnable ? 'AUTOON' : 'AUTOOFF'}-${Date.now()}`,
+      deviceId: deviceId,
+      foodType: shouldEnable ? 'Auto Refill Enable' : 'Auto Refill Disable',
+      portionGrams: 0,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      petId: petId,
+      petName: petName,
+    };
+
+    setSchedules((prev) => [newSch, ...prev]);
+    showToast(
+      shouldEnable ? 'success' : 'info',
+      shouldEnable ? '🔄 Auto-Refill Enabled' : '⏸️ Auto-Refill Disabled',
+      shouldEnable
+        ? `Node ${deviceId} will automatically refill reservoir when water level drops <= 10%.`
+        : `Automatic refill paused for node ${deviceId}.`
+    );
 
     await insertScheduleToSupabase(newSch);
   };
@@ -1259,7 +1362,9 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         dispenseNow,
         dispenseDirect,
         dispenseWaterDirect,
+        startPumpDirect,
         stopPumpDirect,
+        toggleAutoRefillDirect,
         togglePumpMasterDirect,
         deactivatePumpDirect,
         refillWater,

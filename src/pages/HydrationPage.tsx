@@ -19,7 +19,12 @@ import {
   Sliders,
   Sparkles,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Play,
+  Square,
+  Zap,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -35,7 +40,17 @@ import { formatHydration } from '../utils/formatters';
 const PAGE_SIZE = 10;
 
 export const HydrationPage: React.FC = () => {
-  const { devices, pets, hydrationLogs, refillWater, dispenseWaterDirect, stopPumpDirect, showToast } = useAppContext();
+  const {
+    devices,
+    pets,
+    hydrationLogs,
+    refillWater,
+    dispenseWaterDirect,
+    startPumpDirect,
+    stopPumpDirect,
+    toggleAutoRefillDirect,
+    showToast,
+  } = useAppContext();
 
   const [confirmRefillOpen, setConfirmRefillOpen] = useState(false);
   const [customWaterModalOpen, setCustomWaterModalOpen] = useState(false);
@@ -285,36 +300,88 @@ export const HydrationPage: React.FC = () => {
                     })()}
                   </div>
                 </div>
+                <div>
+                  <span className="text-slate-400 font-bold uppercase text-[10px]">Auto-Refill Mode</span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      !selectedDevice.firmwareVersion?.includes('AUTO:OFF')
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : 'bg-slate-100 text-slate-600 border border-slate-200'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${!selectedDevice.firmwareVersion?.includes('AUTO:OFF') ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                      {!selectedDevice.firmwareVersion?.includes('AUTO:OFF') ? 'Auto-Refill (<=10%)' : 'Auto Paused'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => setCustomWaterModalOpen(true)}
-                className="py-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-                title="Custom Water Level Override"
-              >
-                <Sliders className="w-4 h-4 text-sky-400" />
-                <span className="hidden sm:inline">Custom</span> Pump
-              </button>
-              <button
-                onClick={handleOpenRefillModal}
-                className="py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-                title="Refill reservoir to 100%"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Refill 100%
-              </button>
-              <button
-                onClick={async () => {
-                  if (selectedDevice) await stopPumpDirect(selectedDevice.id);
-                }}
-                className="py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-                title="Emergency Deactivate / Stop Water Pump"
-              >
-                <Square className="w-4 h-4 fill-white" />
-                Stop Pump
-              </button>
+            {/* Pump Live Control Toolbar */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {/* 1. Quick Water Pump (250ml) */}
+                <button
+                  onClick={() => dispenseWaterDirect(selectedDevice.id, 250)}
+                  className="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  title="Pump 250ml Water (~2.5s Cycle)"
+                >
+                  <Droplets className="w-3.5 h-3.5" />
+                  Pump 250ml
+                </button>
+
+                {/* 2. Force Pump ON (Continuous) */}
+                <button
+                  onClick={() => startPumpDirect(selectedDevice.id)}
+                  className="py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  title="Turn Pump ON Continuously"
+                >
+                  <Play className="w-3.5 h-3.5 fill-white" />
+                  Pump ON
+                </button>
+
+                {/* 3. Emergency Stop Pump */}
+                <button
+                  onClick={() => stopPumpDirect(selectedDevice.id)}
+                  className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-sm shadow-rose-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  title="Emergency Stop Water Pump Relay"
+                >
+                  <Square className="w-3.5 h-3.5 fill-white" />
+                  Stop Pump
+                </button>
+
+                {/* 4. Auto-Refill Toggle */}
+                <button
+                  onClick={() => toggleAutoRefillDirect(selectedDevice.id, selectedDevice.firmwareVersion?.includes('AUTO:OFF'))}
+                  className={`py-2.5 px-3 rounded-xl font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+                    !selectedDevice.firmwareVersion?.includes('AUTO:OFF')
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
+                      : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                  }`}
+                  title="Toggle Autonomous Water Refilling below 10%"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  Auto: {!selectedDevice.firmwareVersion?.includes('AUTO:OFF') ? 'ON' : 'OFF'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  onClick={() => setCustomWaterModalOpen(true)}
+                  className="py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  title="Custom Water Level Target Override"
+                >
+                  <Sliders className="w-3.5 h-3.5 text-sky-400" />
+                  Custom Level Target
+                </button>
+                <button
+                  onClick={handleOpenRefillModal}
+                  className="py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border border-slate-300 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  title="Mark reservoir refilled to 100%"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-sky-600" />
+                  Refill 100%
+                </button>
+              </div>
             </div>
           </div>
         )}

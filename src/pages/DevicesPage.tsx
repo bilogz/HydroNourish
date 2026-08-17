@@ -37,7 +37,21 @@ import {
 } from 'lucide-react';
 
 export const DevicesPage: React.FC = () => {
-  const { devices, pets, addDevice, updatePet, removeDevice, showToast, dispenseDirect, dispenseWaterDirect, stopPumpDirect, togglePumpMasterDirect, deactivatePumpDirect } = useAppContext();
+  const {
+    devices,
+    pets,
+    addDevice,
+    updatePet,
+    removeDevice,
+    showToast,
+    dispenseDirect,
+    dispenseWaterDirect,
+    startPumpDirect,
+    stopPumpDirect,
+    toggleAutoRefillDirect,
+    togglePumpMasterDirect,
+    deactivatePumpDirect,
+  } = useAppContext();
 
   const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -530,6 +544,23 @@ export const DevicesPage: React.FC = () => {
                           >
                             {isPumpDeactivated ? <Lock className="w-4 h-4 text-amber-500" /> : <Droplets className="w-4 h-4" />}
                             {isPumpDeactivated ? 'Pump Locked' : 'Pump Water'}
+                          </button>
+
+                          {/* Auto-Refill Mode Toggle */}
+                          <button
+                            onClick={() => toggleAutoRefillDirect(featuredDevice.id, featuredDevice.firmwareVersion?.includes('AUTO:OFF'))}
+                            disabled={!isOnline}
+                            className={`px-3.5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                              !isOnline
+                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                : !featuredDevice.firmwareVersion?.includes('AUTO:OFF')
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 cursor-pointer active:scale-95'
+                                : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200 cursor-pointer active:scale-95'
+                            }`}
+                            title="Toggle Autonomous Water Refilling below 10%"
+                          >
+                            <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
+                            Auto: {!featuredDevice.firmwareVersion?.includes('AUTO:OFF') ? 'ON' : 'OFF'}
                           </button>
 
                           {/* Stateful Activate / Deactivate Toggle Button */}
