@@ -121,6 +121,7 @@ export interface Device {
   ipAddress?: string;
   isPumping?: boolean;
   autoRefillEnabled?: boolean;
+  isPumpDeactivated?: boolean;
 }
 
 export interface ClinicUser {

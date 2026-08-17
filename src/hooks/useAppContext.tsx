@@ -911,13 +911,22 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     // 2. Immediate Optimistic update on frontend
     let newFw = dev?.firmwareVersion || 'v2.5.0-ESP32';
     if (makeDeactivated) {
-      newFw = newFw.includes('PUMP:ACTIVE') ? newFw.replace('PUMP:ACTIVE', 'PUMP:DISABLED') : `${newFw}|PUMP:DISABLED`;
+      newFw = newFw.replace('PUMP:ACTIVE', 'PUMP:DISABLED').replace('PUMP:RUNNING', 'PUMP:DISABLED');
+      if (!newFw.includes('PUMP:DISABLED')) newFw += '|PUMP:DISABLED';
     } else {
       newFw = newFw.replace('PUMP:DISABLED', 'PUMP:ACTIVE').replace('PUMP:LOCKED', 'PUMP:ACTIVE').replace('PUMP:OFF', 'PUMP:ACTIVE');
     }
 
     setDevices((prev) =>
-      prev.map((d) => (d.id === deviceId ? { ...d, firmwareVersion: newFw } : d))
+      prev.map((d) =>
+        d.id === deviceId
+          ? {
+              ...d,
+              firmwareVersion: newFw,
+              isPumpDeactivated: makeDeactivated,
+            }
+          : d
+      )
     );
 
     // 3. Supabase Cloud Remote Command & Device Metadata Sync
@@ -966,6 +975,26 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       });
     } catch {}
 
+    let newFw = dev?.firmwareVersion || 'v2.5.0-ESP32';
+    if (deactivate) {
+      newFw = newFw.replace('PUMP:ACTIVE', 'PUMP:DISABLED').replace('PUMP:RUNNING', 'PUMP:DISABLED');
+      if (!newFw.includes('PUMP:DISABLED')) newFw += '|PUMP:DISABLED';
+    } else {
+      newFw = newFw.replace('PUMP:DISABLED', 'PUMP:ACTIVE').replace('PUMP:LOCKED', 'PUMP:ACTIVE').replace('PUMP:OFF', 'PUMP:ACTIVE');
+    }
+
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId
+          ? {
+              ...d,
+              firmwareVersion: newFw,
+              isPumpDeactivated: deactivate,
+            }
+          : d
+      )
+    );
+
     const newSch: FeedingSchedule = {
       id: `SCH-${deactivate ? 'DEACT' : 'ACT'}-${Date.now()}`,
       deviceId: deviceId,
@@ -984,6 +1013,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       `Master safety lock ${deactivate ? 'engaged' : 'released'} for ${deviceId}.`
     );
 
+    await updateDeviceInSupabase(deviceId, { firmwareVersion: newFw });
     await insertScheduleToSupabase(newSch);
   };
 

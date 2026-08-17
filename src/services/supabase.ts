@@ -484,12 +484,13 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
         displayTransmission = ageSec < 60 ? `Offline (${ageSec}s ago)` : (ageSec < 3600 ? `Offline (${Math.round(ageSec / 60)}m ago)` : 'Offline');
       }
 
-      let fw = item.firmware_version || 'v2.5.0-ESP32';
+      const rawFw = item.firmware_version || 'v2.5.0-ESP32';
       let parsedTds = (item.water_quality_ppm !== null && item.water_quality_ppm !== undefined) ? Number(item.water_quality_ppm) : 0;
       let parsedWeight = Number(item.food_bowl_weight_grams) || 0.0;
-      if (fw && fw.includes('|')) {
-        const parts = fw.split('|');
-        fw = parts[0];
+      let parsedIp = item.ip_address || '192.168.100.159';
+
+      if (rawFw && rawFw.includes('|')) {
+        const parts = rawFw.split('|');
         for (const p of parts) {
           if (p.startsWith('TDS:')) {
             const val = Number(p.replace('TDS:', ''));
@@ -499,8 +500,19 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
             const val = Number(p.replace('WT:', ''));
             if (!isNaN(val)) parsedWeight = val;
           }
+          if (p.startsWith('IP:')) {
+            parsedIp = p.replace('IP:', '').trim();
+          }
         }
       }
+
+      const isPumpDeactivated = Boolean(
+        rawFw.includes('PUMP:DISABLED') ||
+        rawFw.includes('PUMP:LOCKED') ||
+        rawFw.includes('PUMP:OFF')
+      );
+      const isPumping = Boolean(rawFw.includes('PUMP:RUNNING') || item.is_pumping);
+      const autoRefillEnabled = !rawFw.includes('AUTO:OFF');
 
       return {
         id: item.id,
@@ -517,11 +529,12 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
         batteryPct: Number(item.battery_pct) || 100,
         isPluggedIn: true,
         lastTransmission: displayTransmission,
-        firmwareVersion: fw,
+        firmwareVersion: rawFw,
         macAddress: item.mac_address || '1C:C3:AB:F9:F7:78',
-        ipAddress: item.ip_address || '192.168.100.159',
-        isPumping: Boolean(item.is_pumping),
-        autoRefillEnabled: !item.firmware_version?.includes('AUTO:OFF'),
+        ipAddress: parsedIp,
+        isPumping,
+        autoRefillEnabled,
+        isPumpDeactivated,
       };
     });
   } catch {
