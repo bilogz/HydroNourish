@@ -879,19 +879,14 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   const togglePumpMasterDirect = async (deviceId: string) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     
-    // Check both persistent local storage flag AND firmwareVersion string
-    const localDeact = typeof window !== 'undefined' && localStorage.getItem(`hn_pump_deactivated_${deviceId}`) === 'true';
-    const fwDeact = Boolean(
+    const isCurrentlyDeactivated = Boolean(
       dev?.firmwareVersion?.includes('PUMP:DISABLED') ||
-      dev?.firmwareVersion?.includes('PUMP:LOCKED') ||
-      dev?.firmwareVersion?.includes('PUMP:OFF')
+      dev?.firmwareVersion?.includes('PUMP:LOCKED')
     );
-    const isCurrentlyDeactivated = localDeact || fwDeact;
     const makeDeactivated = !isCurrentlyDeactivated;
 
-    // Explicitly lock state in localStorage so UI never bounces
     if (typeof window !== 'undefined') {
-      localStorage.setItem(`hn_pump_deactivated_${deviceId}`, makeDeactivated ? 'true' : 'false');
+      localStorage.removeItem(`hn_pump_deactivated_${deviceId}`);
     }
 
     const nextAction = makeDeactivated ? 'Deactivate Pump' : 'Activate Pump';
