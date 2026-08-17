@@ -975,21 +975,21 @@ export const DevicesPage: React.FC = () => {
       >
         {selectedDevice && (
           <div className="space-y-4 text-xs">
-            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
               <div>
                 <span className="text-slate-400 font-bold uppercase text-[10px]">Node ID:</span>
                 <p className="font-mono font-bold text-slate-800">{selectedDevice.id}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-bold uppercase text-[10px]">IP Address:</span>
+                <p className="font-mono font-bold text-indigo-600">{selectedDevice.ipAddress || '192.168.100.159'}</p>
               </div>
               <div>
                 <span className="text-slate-400 font-bold uppercase text-[10px]">MAC Address:</span>
                 <p className="font-mono font-bold text-slate-800">{selectedDevice.macAddress}</p>
               </div>
               <div>
-                <span className="text-slate-400 font-bold uppercase text-[10px]">Firmware Version:</span>
-                <p className="font-semibold text-slate-800">{selectedDevice.firmwareVersion}</p>
-              </div>
-              <div>
-                <span className="text-slate-400 font-bold uppercase text-[10px]">Status:</span>
+                <span className="text-slate-400 font-bold uppercase text-[10px]">Node Status:</span>
                 <div className="mt-0.5">
                   <StatusBadge status={selectedDevice.status} size="sm" />
                 </div>
@@ -1002,12 +1002,36 @@ export const DevicesPage: React.FC = () => {
                 <span className="text-slate-400 font-bold uppercase text-[10px]">Wi-Fi Signal:</span>
                 <p className="font-semibold text-slate-800">{selectedDevice.wifiSignalDbm} dBm</p>
               </div>
+              <div>
+                <span className="text-slate-400 font-bold uppercase text-[10px]">Food Hopper:</span>
+                <p className="font-bold text-emerald-600">{selectedDevice.foodLevelPct}% Level</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-bold uppercase text-[10px]">Water Reservoir:</span>
+                <p className="font-bold text-sky-600">{selectedDevice.waterLevelPct}% Depth</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-bold uppercase text-[10px]">Water Quality (TDS):</span>
+                <p className="font-bold text-slate-800">{selectedDevice.waterQualityPpm ?? 0} PPM</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-bold uppercase text-[10px]">Auto-Refill:</span>
+                <p className="font-bold text-emerald-600">{!selectedDevice.firmwareVersion?.includes('AUTO:OFF') ? 'Enabled (<=10%)' : 'Paused'}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-bold uppercase text-[10px]">Last Sync:</span>
+                <p className="font-medium text-slate-700">{selectedDevice.lastTransmission}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-bold uppercase text-[10px]">Firmware:</span>
+                <p className="font-mono text-[11px] text-slate-700 truncate">{selectedDevice.firmwareVersion}</p>
+              </div>
             </div>
 
             <div className="flex justify-end pt-2 border-t border-slate-100">
               <button
                 onClick={() => setDetailsModalOpen(false)}
-                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold"
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold cursor-pointer"
               >
                 Close Diagnostic View
               </button>

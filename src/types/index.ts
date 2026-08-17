@@ -118,6 +118,9 @@ export interface Device {
   lastTransmission: string;
   firmwareVersion: string;
   macAddress: string;
+  ipAddress?: string;
+  isPumping?: boolean;
+  autoRefillEnabled?: boolean;
 }
 
 export interface ClinicUser {

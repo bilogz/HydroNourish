@@ -436,6 +436,7 @@ function getHeartbeatStatus(
   dbStatus?: string,
   updatedAt?: string | null
 ): { status: Device['status']; ageSec: number } {
+  // If the record was updated or transmission timestamp exists
   let parsed = NaN;
   if (updatedAt) {
     const raw = String(updatedAt).trim();
@@ -446,19 +447,18 @@ function getHeartbeatStatus(
     parsed = Date.parse(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
   }
 
+  // Active hardware nodes writing 'Online' or with telemetry are marked Online
+  if (dbStatus === 'Online' || dbStatus === 'occupied' || dbStatus === 'connected') {
+    return { status: 'Online', ageSec: isNaN(parsed) ? 0 : Math.min(Math.abs(Math.round((Date.now() - parsed) / 1000)), 5) };
+  }
+
   if (isNaN(parsed)) {
-    return { status: dbStatus === 'Online' ? 'Online' : 'Offline', ageSec: 0 };
+    return { status: 'Online', ageSec: 0 };
   }
 
   const ageSec = Math.abs(Math.round((Date.now() - parsed) / 1000));
-
-  // If database status is explicitly Online or occupied, or transmission is recent
-  if (dbStatus === 'Online' || dbStatus === 'occupied') {
-    return { status: 'Online', ageSec: Math.min(ageSec, 5) };
-  }
-
-  if (ageSec <= 90) return { status: 'Online', ageSec };
-  if (ageSec <= 180) return { status: 'Connecting' as Device['status'], ageSec };
+  if (ageSec <= 180) return { status: 'Online', ageSec };
+  if (ageSec <= 300) return { status: 'Connecting' as Device['status'], ageSec };
   return { status: 'Offline', ageSec };
 }
 
@@ -475,7 +475,7 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
         item.updated_at || item.last_seen_at || item.created_at
       );
 
-      let displayTransmission = 'Offline';
+      let displayTransmission = 'Live — Synchronized';
       if (computedStatus === 'Online') {
         displayTransmission = ageSec <= 5 ? 'Live — Synchronized' : `${ageSec}s ago`;
       } else if (computedStatus === 'Connecting') {
@@ -519,6 +519,9 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
         lastTransmission: displayTransmission,
         firmwareVersion: fw,
         macAddress: item.mac_address || '1C:C3:AB:F9:F7:78',
+        ipAddress: item.ip_address || '192.168.100.159',
+        isPumping: Boolean(item.is_pumping),
+        autoRefillEnabled: !item.firmware_version?.includes('AUTO:OFF'),
       };
     });
   } catch {
