@@ -202,19 +202,26 @@ export async function fetchSchedulesFromSupabase(): Promise<FeedingSchedule[] | 
 export async function insertScheduleToSupabase(schedule: FeedingSchedule): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   try {
-    const { error } = await supabase.from('feeding_schedules').upsert({
+    const payload: Record<string, any> = {
       id: schedule.id,
       pet_id: schedule.petId || 'PET-001',
       pet_name: schedule.petName || 'Max',
-      food_type: schedule.foodType || 'Standard Diet',
       portion_grams: schedule.portionGrams || 75,
       scheduled_time: schedule.scheduledTime || 'Instant Manual',
       dispense_status: 'Pending',
       device_id: schedule.deviceId || 'HN-NODE-F778',
-    });
+    };
+    if (schedule.foodType) {
+      payload.food_type = schedule.foodType;
+    }
+    const { error } = await supabase.from('feeding_schedules').upsert(payload);
     if (error) {
-      console.error('[SUPABASE] insertSchedule error:', error);
-      return false;
+      delete payload.food_type;
+      const retry = await supabase.from('feeding_schedules').upsert(payload);
+      if (retry.error) {
+        console.error('[SUPABASE] insertSchedule error:', retry.error);
+        return false;
+      }
     }
     return true;
   } catch (err) {
@@ -228,7 +235,6 @@ export async function updateScheduleInSupabase(id: string, updated: Partial<Feed
   try {
     const payload: Record<string, any> = {};
     if (updated.dispenseStatus !== undefined) payload.dispense_status = updated.dispenseStatus;
-    if (updated.lastDispensedAt !== undefined) payload.last_dispensed_at = updated.lastDispensedAt;
     if (updated.portionGrams !== undefined) payload.portion_grams = updated.portionGrams;
     if (updated.scheduledTime !== undefined) payload.scheduled_time = updated.scheduledTime;
 
