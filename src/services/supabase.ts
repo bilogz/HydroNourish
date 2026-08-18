@@ -38,7 +38,7 @@ export async function fetchPetsFromSupabase(): Promise<Pet[] | null> {
     const { data, error } = await supabase.from('pets').select('*').order('created_at', { ascending: false });
     if (error || !data) return null;
 
-    return data.map((item) => ({
+    return (data as any[]).map((item) => ({
       id: item.id,
       name: item.name,
       species: item.species as Pet['species'],
@@ -65,7 +65,7 @@ export async function fetchPetsFromSupabase(): Promise<Pet[] | null> {
       latestVitals: {
         temperature: Number(item.latest_temp) || 38.5,
         heartRate: Number(item.latest_heart_rate) || 85,
-        activityLevel: (item.latest_activity ?? 'Normal') as Pet['latestVitals']['activityLevel'],
+        activityLevel: (item.latest_activity ?? 'Normal') as any,
         lastMeasured: 'Today',
       },
       emergencyContact: item.emergency_contact || undefined,
@@ -156,7 +156,7 @@ export async function updatePetInSupabase(id: string, updated: Partial<Pet>): Pr
       if (updated.latestVitals.activityLevel !== undefined) payload.latest_activity = updated.latestVitals.activityLevel;
     }
 
-    const { error } = await supabase.from('pets').update(payload).eq('id', id);
+    const { error } = await (supabase.from('pets') as any).update(payload).eq('id', id);
     return !error;
   } catch (err) {
     if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase pet update error:', err);
@@ -238,7 +238,7 @@ export async function updateScheduleInSupabase(id: string, updated: Partial<Feed
     if (updated.portionGrams !== undefined) payload.portion_grams = updated.portionGrams;
     if (updated.scheduledTime !== undefined) payload.scheduled_time = updated.scheduledTime;
 
-    const { error } = await supabase.from('feeding_schedules').update(payload).eq('id', id);
+    const { error } = await (supabase.from('feeding_schedules') as any).update(payload).eq('id', id);
     return !error;
   } catch {
     return false;
@@ -390,7 +390,7 @@ export async function fetchAIAlertsFromSupabase(): Promise<AIHealthAlert[] | nul
       severity: item.severity as AIHealthAlert['severity'],
       aiObservation: item.ai_observation,
       recommendedAction: item.recommended_action,
-      reviewStatus: item.review_status as AIHealthAlert['reviewStatus'],
+      reviewStatus: (item.review_status ?? 'Unreviewed') as AIHealthAlert['reviewStatus'],
       timestamp: item.timestamp,
     }));
   } catch {
@@ -401,14 +401,14 @@ export async function fetchAIAlertsFromSupabase(): Promise<AIHealthAlert[] | nul
 export async function insertAIAlertToSupabase(alert: AIHealthAlert): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   try {
-    const { error } = await supabase.from('ai_alerts').upsert({
+    const { error } = await (supabase.from('ai_alerts') as any).upsert({
       id: alert.id,
       pet_id: alert.petId,
       pet_name: alert.petName,
       alert_type: alert.alertType,
       observed_reading: alert.observedReading,
       severity: alert.severity,
-      aiObservation: alert.aiObservation,
+      ai_observation: alert.aiObservation,
       recommended_action: alert.recommendedAction,
       review_status: alert.reviewStatus,
       timestamp: alert.timestamp,
@@ -468,7 +468,7 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
     const { data, error } = await supabase.from('devices').select('*').order('created_at', { ascending: false });
     if (error || !data) return null;
 
-    return data.map((item) => {
+    return (data as any[]).map((item) => {
       const { status: computedStatus, ageSec } = getHeartbeatStatus(
         item.last_transmission,
         item.status,
@@ -578,7 +578,7 @@ export async function updateDeviceInSupabase(id: string, updated: Partial<Device
     if (updated.firmwareVersion !== undefined) payload.firmware_version = updated.firmwareVersion;
     if (updated.lastTransmission !== undefined) payload.last_transmission = updated.lastTransmission;
 
-    const { error } = await supabase.from('devices').update(payload).eq('id', id);
+    const { error } = await (supabase.from('devices') as any).update(payload).eq('id', id);
     return !error;
   } catch {
     return false;
@@ -687,7 +687,7 @@ export async function updateOwnerInSupabase(id: string, updated: Partial<PetOwne
     if (updated.password !== undefined) payload.password = updated.password;
     if (updated.address !== undefined) payload.address = updated.address;
 
-    const { error } = await supabase.from('pet_owners').update(payload).eq('id', id);
+    const { error } = await (supabase.from('pet_owners') as any).update(payload).eq('id', id);
     return !error;
   } catch {
     return false;
@@ -797,7 +797,7 @@ export async function updateSessionInSupabase(id: string, updated: Partial<PetSe
     if (updated.releaseAdmin !== undefined) payload.release_admin = updated.releaseAdmin;
     if (updated.releaseCondition !== undefined) payload.release_condition = updated.releaseCondition;
 
-    const { error } = await supabase.from('pet_sessions').update(payload).eq('id', id);
+    const { error } = await (supabase.from('pet_sessions') as any).update(payload).eq('id', id);
     return !error;
   } catch {
     return false;
@@ -809,7 +809,7 @@ export async function updateSessionInSupabase(id: string, updated: Partial<PetSe
 export async function fetchSettingsFromSupabase(): Promise<ClinicSettings | null> {
   if (!isSupabaseConfigured()) return null;
   try {
-    const { data, error } = await supabase.from('clinic_settings').select('*').eq('id', 1).single();
+    const { data, error } = await (supabase.from('clinic_settings') as any).select('*').eq('id', 1).single();
     if (error || !data) return null;
 
     return {
@@ -826,7 +826,7 @@ export async function fetchSettingsFromSupabase(): Promise<ClinicSettings | null
       emailNotifications: Boolean(data.email_notifications),
       smsNotifications: Boolean(data.sms_notifications),
       browserNotifications: Boolean(data.browser_notifications),
-      theme: data.theme,
+      theme: data.theme as any,
       compactLayout: Boolean(data.compact_layout),
       apiEndpoint: data.api_endpoint,
       apiSecretKey: data.api_secret_key,
@@ -837,22 +837,31 @@ export async function fetchSettingsFromSupabase(): Promise<ClinicSettings | null
   }
 }
 
-export async function updateSettingsInSupabase(updated: Partial<ClinicSettings>): Promise<boolean> {
+export async function updateSettingsInSupabase(settings: ClinicSettings): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   try {
-    const payload: Record<string, any> = {};
-    if (updated.clinicName !== undefined) payload.clinic_name = updated.clinicName;
-    if (updated.clinicAddress !== undefined) payload.clinic_address = updated.clinicAddress;
-    if (updated.clinicPhone !== undefined) payload.clinic_phone = updated.clinicPhone;
-    if (updated.licenseId !== undefined) payload.license_id = updated.licenseId;
-    if (updated.defaultPortionGrams !== undefined) payload.default_portion_grams = updated.defaultPortionGrams;
-    if (updated.defaultHydrationMlPerKg !== undefined) payload.default_hydration_ml_per_kg = updated.defaultHydrationMlPerKg;
-    if (updated.tempWarningMin !== undefined) payload.temp_warning_min = updated.tempWarningMin;
-    if (updated.tempWarningMax !== undefined) payload.temp_warning_max = updated.tempWarningMax;
-    if (updated.hrWarningMin !== undefined) payload.hr_warning_min = updated.hrWarningMin;
-    if (updated.hrWarningMax !== undefined) payload.hr_warning_max = updated.hrWarningMax;
-
-    const { error } = await supabase.from('clinic_settings').upsert({ id: 1, ...payload });
+    const { error } = await (supabase.from('clinic_settings') as any)
+      .upsert({
+        id: 1,
+        clinic_name: settings.clinicName,
+        clinic_address: settings.clinicAddress,
+        clinic_phone: settings.clinicPhone,
+        license_id: settings.licenseId,
+        default_portion_grams: settings.defaultPortionGrams,
+        default_hydration_ml_per_kg: settings.defaultHydrationMlPerKg,
+        temp_warning_min: settings.tempWarningMin,
+        temp_warning_max: settings.tempWarningMax,
+        hr_warning_min: settings.hrWarningMin,
+        hr_warning_max: settings.hrWarningMax,
+        email_notifications: settings.emailNotifications,
+        sms_notifications: settings.smsNotifications,
+        browser_notifications: settings.browserNotifications,
+        theme: settings.theme,
+        compact_layout: settings.compactLayout,
+        api_endpoint: settings.apiEndpoint,
+        api_secret_key: settings.apiSecretKey,
+        webhook_url: settings.webhookUrl,
+      });
     return !error;
   } catch {
     return false;
@@ -864,13 +873,12 @@ export async function updateSettingsInSupabase(updated: Partial<ClinicSettings>)
 export async function fetchContactInquiriesFromSupabase(): Promise<ContactInquiry[] | null> {
   if (!isSupabaseConfigured()) return null;
   try {
-    const { data, error } = await supabase
-      .from('contact_inquiries')
+    const { data, error } = await (supabase.from('contact_inquiries') as any)
       .select('*')
       .order('created_at', { ascending: false });
     if (error || !data) return null;
 
-    return data.map((item) => {
+    return (data as any[]).map((item) => {
       let messagesThread: any[] | undefined = undefined;
       let replyMessage = item.reply_message || undefined;
 
@@ -881,7 +889,7 @@ export async function fetchContactInquiriesFromSupabase(): Promise<ContactInquir
             const parsed = JSON.parse(trimmed);
             if (Array.isArray(parsed) && parsed.length > 0) {
               messagesThread = parsed;
-              const lastAdminReply = [...parsed].reverse().find((m) => m.sender === 'admin');
+              const lastAdminReply = [...parsed].reverse().find((m: any) => m.sender === 'admin');
               replyMessage = lastAdminReply ? lastAdminReply.message : replyMessage;
             }
           } catch {}
@@ -936,7 +944,7 @@ export async function insertContactInquiryToSupabase(inquiry: ContactInquiry): P
       ? JSON.stringify(inquiry.messagesThread)
       : (inquiry.replyMessage || null);
 
-    const { error } = await supabase.from('contact_inquiries').insert({
+    const { error } = await (supabase.from('contact_inquiries') as any).insert({
       id: inquiry.id,
       name: inquiry.name,
       email: inquiry.email,
@@ -970,7 +978,7 @@ export async function updateContactInquiryInSupabase(
       payload.reply_message = updated.replyMessage;
     }
 
-    const { error } = await supabase.from('contact_inquiries').update(payload).eq('id', id);
+    const { error } = await (supabase.from('contact_inquiries' as any) as any).update(payload).eq('id', id);
     return !error;
   } catch (err) {
     if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase inquiry update error:', err);

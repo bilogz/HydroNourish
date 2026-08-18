@@ -44,6 +44,7 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
 }) => {
   const { activeSession, hardware, canAssignPet } = useSession();
   const [elapsed, setElapsed] = useState('');
+  const isOnline = hardware.status === 'Online';
 
   // Live session duration timer
   useEffect(() => {
@@ -261,22 +262,22 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
                   />
                 </div>
               </div>
-              {/* Latest Vitals */}
+              {/* Feeding and Hydration Telemetry Stats */}
               <div className="pt-1 grid grid-cols-3 gap-2 text-center">
                 <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-                  <Thermometer className="w-3.5 h-3.5 text-rose-500 mx-auto mb-0.5" />
-                  <span className="text-[11px] text-slate-500 block">Temp</span>
-                  <span className="text-xs font-bold text-slate-800">{activeSession.petSnapshot.weight > 10 ? '38.5' : '39.0'}°C</span>
+                  <Utensils className="w-3.5 h-3.5 text-orange-500 mx-auto mb-0.5" />
+                  <span className="text-[11px] text-slate-500 block">Portion</span>
+                  <span className="text-xs font-bold text-slate-800">{activeSession.petSnapshot?.feedingPlan?.portionGrams || 100}g</span>
                 </div>
                 <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-                  <Heart className="w-3.5 h-3.5 text-pink-500 mx-auto mb-0.5" />
-                  <span className="text-[11px] text-slate-500 block">Heart</span>
-                  <span className="text-xs font-bold text-slate-800">{activeSession.petSnapshot.weight > 10 ? '85' : '130'} bpm</span>
+                  <Droplets className="w-3.5 h-3.5 text-sky-500 mx-auto mb-0.5" />
+                  <span className="text-[11px] text-slate-500 block">Target</span>
+                  <span className="text-xs font-bold text-slate-800">{activeSession.petSnapshot?.hydrationTarget || 500}ml</span>
                 </div>
                 <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
                   <Activity className="w-3.5 h-3.5 text-teal-500 mx-auto mb-0.5" />
-                  <span className="text-[11px] text-slate-500 block">Activity</span>
-                  <span className="text-xs font-bold text-slate-800">Normal</span>
+                  <span className="text-[11px] text-slate-500 block">Telemetry</span>
+                  <span className="text-xs font-bold text-slate-800">Active</span>
                 </div>
               </div>
             </div>

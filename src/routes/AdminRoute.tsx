@@ -22,10 +22,11 @@ import { AuthLoadingScreen } from '../components/auth/AuthLoadingScreen';
 
 interface AdminRouteProps {
   children: React.ReactNode;
+  requiredRole?: 'admin' | 'staff';
 }
 
-export const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
-  const { isLoading, isAuthenticated, isAdmin } = useAuth();
+export const AdminRoute: React.FC<AdminRouteProps> = ({ children, requiredRole = 'staff' }) => {
+  const { isLoading, isAuthenticated, isAdmin, isStaff } = useAuth();
   const location = useLocation();
 
   // Show loader while session and profile are being resolved
@@ -35,7 +36,7 @@ export const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
 
   // Check if user is logged in as a pet owner
   const isOwnerLoggedIn = !!localStorage.getItem('hn_owner_email');
-  if (isOwnerLoggedIn && !isAdmin) {
+  if (isOwnerLoggedIn && !isAdmin && !isStaff) {
     return <Navigate to="/owner" replace />;
   }
 
@@ -44,9 +45,15 @@ export const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
     return <Navigate to="/admin/login" state={{ from: location }} replace />;
   }
 
-  // Session exists but not a valid active admin → unauthorized page
-  if (!isAdmin) {
+  // Must be active admin or staff
+  if (!isAdmin && !isStaff) {
     return <Navigate to="/unauthorized" replace />;
+  }
+
+  // If this specific route requires admin privileges (e.g. /app/users or /app/settings),
+  // block staff accounts and redirect to /app
+  if (requiredRole === 'admin' && !isAdmin) {
+    return <Navigate to="/app" replace />;
   }
 
   return <>{children}</>;

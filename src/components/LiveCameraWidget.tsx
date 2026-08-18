@@ -44,6 +44,7 @@ interface LiveCameraWidgetProps {
   defaultIp?: string;
   className?: string;
   allowIpChange?: boolean;
+  isOnline?: boolean;
   petContext?: { name?: string; species?: string; weightKg?: number };
 }
 
@@ -290,7 +291,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const handlePairCameraWifi = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!wifiSsid.trim()) {
-      showToast('alert', 'Missing SSID', 'Please enter or select a Wi-Fi network.');
+      showToast('warning', 'Missing SSID', 'Please enter or select a Wi-Fi network.');
       return;
     }
 

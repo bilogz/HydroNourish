@@ -79,9 +79,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      if (profile.role !== 'admin' && profile.role !== 'super_admin') {
-        // Wrong role — sign out
-        logAuthError('loadAdminProfile', 'User does not have admin role');
+      const validRoles: AdminProfile['role'][] = ['admin', 'super_admin', 'veterinarian', 'staff', 'clinic_staff'];
+      if (!validRoles.includes(profile.role)) {
+        // Unknown role — sign out
+        logAuthError('loadAdminProfile', `User has unrecognized role: ${profile.role}`);
         await adminSignOut();
         setUser(null);
         setSession(null);
@@ -240,14 +241,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: statusMsg };
       }
 
-      if (profile.role !== 'admin' && profile.role !== 'super_admin') {
+      const validRoles: AdminProfile['role'][] = ['admin', 'super_admin', 'veterinarian', 'staff', 'clinic_staff'];
+      if (!validRoles.includes(profile.role)) {
         await adminSignOut();
         setUser(null);
         setSession(null);
         setAdminProfile(null);
         return {
           success: false,
-          error: 'This account is not authorized to access the administrator portal.',
+          error: 'This account does not have a recognized clinic access role.',
         };
       }
 
@@ -288,6 +290,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     !!adminProfile &&
     (adminProfile.role === 'admin' || adminProfile.role === 'super_admin') &&
     adminProfile.status === 'active';
+  const isStaff =
+    isAuthenticated &&
+    !!adminProfile &&
+    (adminProfile.role === 'staff' || adminProfile.role === 'veterinarian' || adminProfile.role === 'clinic_staff') &&
+    adminProfile.status === 'active';
 
   // ─── Context Value ─────────────────────────────────────────────────────
 
@@ -298,6 +305,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isLoading,
     isAuthenticated,
     isAdmin,
+    isStaff,
     requestOtp,
     verifyOtp,
     signOut,

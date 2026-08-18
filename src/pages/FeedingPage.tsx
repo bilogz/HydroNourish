@@ -135,7 +135,7 @@ export const FeedingPage: React.FC = () => {
           iconBgColor={isDeviceConnected ? "bg-teal-50" : "bg-slate-100"}
           iconTextColor={isDeviceConnected ? "text-teal-600" : "text-slate-400"}
           badgeText={isDeviceConnected ? "Active" : "Offline"}
-          badgeType={isDeviceConnected ? "success" : "neutral"}
+          badgeType={isDeviceConnected ? "success" : "info"}
         />
         <StatCard
           title="Pending Schedules"
@@ -145,7 +145,7 @@ export const FeedingPage: React.FC = () => {
           iconBgColor={isDeviceConnected ? "bg-amber-50" : "bg-slate-100"}
           iconTextColor={isDeviceConnected ? "text-amber-600" : "text-slate-400"}
           badgeText={isDeviceConnected ? "Automated" : "Offline"}
-          badgeType={isDeviceConnected ? "warning" : "neutral"}
+          badgeType={isDeviceConnected ? "warning" : "info"}
         />
         <StatCard
           title="Feeder Hopper Container Level"
@@ -155,7 +155,7 @@ export const FeedingPage: React.FC = () => {
           iconBgColor={isDeviceConnected ? "bg-emerald-50" : "bg-slate-100"}
           iconTextColor={isDeviceConnected ? "text-emerald-600" : "text-slate-400"}
           badgeText={isDeviceConnected ? (selectedDevice && selectedDevice.foodLevelPct > 30 ? "Sufficient" : "Low") : "Offline"}
-          badgeType={isDeviceConnected ? (selectedDevice && selectedDevice.foodLevelPct > 30 ? "success" : "alert") : "neutral"}
+          badgeType={isDeviceConnected ? (selectedDevice && selectedDevice.foodLevelPct > 30 ? "success" : "alert") : "info"}
         />
       </div>
 

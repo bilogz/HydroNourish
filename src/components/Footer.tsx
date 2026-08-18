@@ -17,7 +17,7 @@ export const Footer: React.FC = () => {
               <Logo size="md" />
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Automated pet feeding, smart hydration tracking, and AI-assisted vital sign observations tailored for Heritage Animal Clinic.
+              Automated pet feeding, smart hydration tracking, and AI-assisted consumption telemetry tailored for Heritage Animal Clinic.
             </p>
             <div className="flex items-center gap-2 text-xs text-teal-400 font-semibold pt-1">
               <Heart className="w-4 h-4 fill-teal-400" />
@@ -98,7 +98,7 @@ export const Footer: React.FC = () => {
       >
         <div className="space-y-3 text-xs text-slate-600 leading-relaxed max-h-96 overflow-y-auto pr-1">
           <p className="font-semibold text-slate-900">1. Data Collection</p>
-          <p>HydroNourish collects telemetry data transmitted by connected smart feeders, hydration fountains, and vital sensor collars (including weight, food consumption, water intake, body temperature, and heart rate).</p>
+          <p>HydroNourish collects telemetry data transmitted by connected smart feeders and hydration fountains (including weight, food consumption, and water intake).</p>
           <p className="font-semibold text-slate-900">2. Medical Use Only</p>
           <p>All collected telemetry is strictly restricted to authorized Heritage Animal Clinic veterinary staff and pet owners for healthcare evaluation.</p>
           <p className="font-semibold text-slate-900">3. Local Mock Demonstration</p>

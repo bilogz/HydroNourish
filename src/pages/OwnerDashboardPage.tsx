@@ -36,19 +36,14 @@ import {
   Plus,
   FileText,
   History,
-  Dog,
-  Cat,
-  LogOut,
   Sparkles,
   Camera,
   CheckCircle2,
   Trash2,
   Edit3,
-  Clock,
   Zap,
   Image as ImageIcon,
   Upload,
-  User,
   Phone,
   Mail,
   MapPin,
@@ -61,6 +56,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { compressImageFile } from '../utils/imageCompressor';
+import { ChatMessageItem } from '../types';
 
 type OwnerTab = 'monitoring' | 'pets' | 'intake' | 'sessions' | 'messages';
 

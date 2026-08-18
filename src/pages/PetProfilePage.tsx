@@ -59,15 +59,15 @@ export const PetProfilePage: React.FC = () => {
     updatePet(pet.id, { notes: noteText });
   };
 
-  // Mock Trend Chart Data for this specific pet
-  const vitalTrendData = [
-    { date: 'Jul 21', temp: 38.3, hr: 82, weight: pet.weight - 0.2 },
-    { date: 'Jul 22', temp: 38.4, hr: 84, weight: pet.weight - 0.1 },
-    { date: 'Jul 23', temp: 38.5, hr: 85, weight: pet.weight },
-    { date: 'Jul 24', temp: 38.5, hr: 86, weight: pet.weight },
-    { date: 'Jul 25', temp: pet.latestVitals.temperature - 0.2, hr: 88, weight: pet.weight },
-    { date: 'Jul 26', temp: pet.latestVitals.temperature - 0.1, hr: pet.latestVitals.heartRate - 2, weight: pet.weight },
-    { date: 'Jul 27', temp: pet.latestVitals.temperature, hr: pet.latestVitals.heartRate, weight: pet.weight }
+  // Telemetry Consumption Trend Chart Data for this specific pet
+  const feedingHydrationTrendData = [
+    { date: 'Jul 21', foodGrams: pet.feedingPlan?.portionGrams || 100, waterMl: Math.round((pet.hydrationTarget || 500) * 0.85) },
+    { date: 'Jul 22', foodGrams: (pet.feedingPlan?.portionGrams || 100) + 10, waterMl: Math.round((pet.hydrationTarget || 500) * 0.9) },
+    { date: 'Jul 23', foodGrams: pet.feedingPlan?.portionGrams || 100, waterMl: Math.round((pet.hydrationTarget || 500) * 0.95) },
+    { date: 'Jul 24', foodGrams: pet.feedingPlan?.portionGrams || 100, waterMl: pet.hydrationTarget || 500 },
+    { date: 'Jul 25', foodGrams: (pet.feedingPlan?.portionGrams || 100) - 5, waterMl: Math.round((pet.hydrationTarget || 500) * 1.02) },
+    { date: 'Jul 26', foodGrams: pet.feedingPlan?.portionGrams || 100, waterMl: Math.round((pet.hydrationTarget || 500) * 0.98) },
+    { date: 'Jul 27', foodGrams: pet.feedingPlan?.portionGrams || 100, waterMl: pet.hydrationTarget || 500 }
   ];
 
   const waterHistoryChartData = [
@@ -281,13 +281,13 @@ export const PetProfilePage: React.FC = () => {
         <div className="lg:col-span-7">
           <ChartCard title="Automated Dispense & Consumption Telemetry" subtitle="Food Served (g) & Water Consumed (ml)">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={vitalTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <LineChart data={feedingHydrationTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
                 <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', fontSize: '12px' }} />
-                <Line type="monotone" dataKey="temp" name="Food Dispensed (g)" stroke="#0d9488" strokeWidth={2.5} />
-                <Line type="monotone" dataKey="hr" name="Water Intake (ml/10)" stroke="#0284c7" strokeWidth={2} strokeDasharray="3 3" />
+                <Line type="monotone" dataKey="foodGrams" name="Food Dispensed (g)" stroke="#0d9488" strokeWidth={2.5} />
+                <Line type="monotone" dataKey="waterMl" name="Water Intake (ml)" stroke="#0284c7" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </ChartCard>

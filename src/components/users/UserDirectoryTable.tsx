@@ -283,7 +283,9 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                           <span className="font-extrabold text-slate-900 flex items-center gap-1.5 truncate text-xs sm:text-sm">
                             {displayName}
                             {isPrimarySuperAdmin && (
-                              <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" title="Super Admin Master" />
+                              <span title="Super Admin Master">
+                                <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                              </span>
                             )}
                           </span>
                           <span className="block text-[11px] text-slate-400 font-mono truncate">{user.email}</span>

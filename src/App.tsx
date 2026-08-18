@@ -33,7 +33,6 @@ import { PetOwnersPage } from './pages/PetOwnersPage';
 import { PetProfilePage } from './pages/PetProfilePage';
 import { FeedingPage } from './pages/FeedingPage';
 import { HydrationPage } from './pages/HydrationPage';
-import { VitalSignsPage } from './pages/VitalSignsPage';
 import { AIAlertsPage } from './pages/AIAlertsPage';
 import { DevicesPage } from './pages/DevicesPage';
 import { ReportsPage } from './pages/ReportsPage';
@@ -153,7 +152,7 @@ export const App: React.FC = () => {
               <Route
                 path="/app/users"
                 element={
-                  <AdminRoute>
+                  <AdminRoute requiredRole="admin">
                     <UsersPage />
                   </AdminRoute>
                 }
@@ -161,7 +160,7 @@ export const App: React.FC = () => {
               <Route
                 path="/app/settings"
                 element={
-                  <AdminRoute>
+                  <AdminRoute requiredRole="admin">
                     <SettingsPage />
                   </AdminRoute>
                 }

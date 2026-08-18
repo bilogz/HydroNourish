@@ -59,14 +59,29 @@ export async function verifyAdminOtp(
 }
 
 /**
+ * Known Super Admin Emails
+ */
+const SUPER_ADMIN_EMAILS = [
+  'joecelgarcia1@gmail.com',
+  'marcgermineganan05@gmail.com',
+  'marcgermineganan03@gmail.com',
+  'heritagelink45@gmail.com',
+];
+
+/**
  * Helper to generate default AdminProfile fallback for verified users.
  */
-function createFallbackProfile(userId: string, email?: string, fullName?: string): AdminProfile {
+function createFallbackProfile(userId: string, email?: string, fullName?: string, role?: AdminProfile['role']): AdminProfile {
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(normalizedEmail);
+
+  let resolvedRole: AdminProfile['role'] = role || (isSuperAdmin ? 'super_admin' : 'staff');
+
   return {
     id: userId,
-    email: email || 'joecelgarcia1@gmail.com',
-    full_name: fullName || 'System Super Administrator',
-    role: 'super_admin',
+    email: normalizedEmail || 'joecelgarcia1@gmail.com',
+    full_name: fullName || (isSuperAdmin ? 'System Super Administrator' : 'Clinic Staff Member'),
+    role: resolvedRole,
     status: 'active',
     avatar_url: null,
     last_login_at: new Date().toISOString(),
@@ -77,34 +92,67 @@ function createFallbackProfile(userId: string, email?: string, fullName?: string
 
 /**
  * Fetches the admin_profiles record for the authenticated user.
- * Provides a seamless fallback profile if admin_profiles table does not exist yet.
+ * Provides role resolution from clinic_users or super admin emails.
  */
 export async function fetchAdminProfile(userId: string): Promise<AdminProfile | null> {
   try {
-    // Query Supabase admin_profiles directly
-
+    // 1. Query Supabase admin_profiles directly
     const { data, error } = await supabase
       .from('admin_profiles')
       .select('*')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
-      logAuthError('fetchAdminProfile', error);
-
-      // Fallback: If admin_profiles table has not been created or lacks this user,
-      // return an authenticated super_admin profile to complete sign-in seamlessly.
-      const { data: userData } = await supabase.auth.getUser();
-      const currentUser = userData?.user;
-
-      return createFallbackProfile(
-        userId,
-        currentUser?.email,
-        currentUser?.user_metadata?.full_name
-      );
+    if (!error && data) {
+      return data as AdminProfile;
     }
 
-    return data as AdminProfile;
+    // 2. Fetch current user from Supabase Auth
+    const { data: userData } = await supabase.auth.getUser();
+    const currentUser = userData?.user;
+    const userEmail = (currentUser?.email || '').trim().toLowerCase();
+
+    // 3. Check clinic_users table
+    if (userEmail) {
+      const { data: clinicUser } = await supabase
+        .from('clinic_users')
+        .select('*')
+        .ilike('email', userEmail)
+        .maybeSingle();
+
+      if (clinicUser) {
+        let mappedRole: AdminProfile['role'] = 'staff';
+        const rawRole = (clinicUser.role || '').toLowerCase();
+        if (rawRole.includes('super admin') || rawRole.includes('super_admin')) {
+          mappedRole = 'super_admin';
+        } else if (rawRole.includes('admin')) {
+          mappedRole = 'admin';
+        } else if (rawRole.includes('vet')) {
+          mappedRole = 'veterinarian';
+        } else {
+          mappedRole = 'staff';
+        }
+
+        return {
+          id: userId,
+          email: userEmail,
+          full_name: clinicUser.full_name || clinicUser.name || currentUser?.user_metadata?.full_name || 'Clinic Staff Member',
+          role: mappedRole,
+          status: clinicUser.status === 'Inactive' ? 'inactive' : 'active',
+          avatar_url: clinicUser.avatar_url || null,
+          last_login_at: new Date().toISOString(),
+          created_at: clinicUser.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+      }
+    }
+
+    // 4. Default fallback profile based on email / metadata
+    return createFallbackProfile(
+      userId,
+      currentUser?.email,
+      currentUser?.user_metadata?.full_name
+    );
   } catch (err) {
     logAuthError('fetchAdminProfile unexpected', err);
     const { data: userData } = await supabase.auth.getUser();

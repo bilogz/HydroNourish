@@ -184,7 +184,7 @@ export const HydrationPage: React.FC = () => {
           iconBgColor={isDeviceConnected ? 'bg-sky-50' : 'bg-slate-100'}
           iconTextColor={isDeviceConnected ? 'text-sky-600' : 'text-slate-400'}
           badgeText={isDeviceConnected ? 'Active Intake' : 'Offline'}
-          badgeType={isDeviceConnected ? 'info' : 'neutral'}
+          badgeType={isDeviceConnected ? 'info' : 'info'}
         />
         <StatCard
           title="Daily Hydration Target"
@@ -194,7 +194,7 @@ export const HydrationPage: React.FC = () => {
           iconBgColor={isDeviceConnected ? 'bg-teal-50' : 'bg-slate-100'}
           iconTextColor={isDeviceConnected ? 'text-teal-600' : 'text-slate-400'}
           badgeText={isDeviceConnected ? 'On Track' : 'Offline'}
-          badgeType={isDeviceConnected ? 'success' : 'neutral'}
+          badgeType={isDeviceConnected ? 'success' : 'info'}
         />
         <StatCard
           title="Avg Reservoir Level"
@@ -214,7 +214,7 @@ export const HydrationPage: React.FC = () => {
           iconBgColor={isDeviceConnected ? 'bg-amber-50' : 'bg-slate-100'}
           iconTextColor={isDeviceConnected ? 'text-amber-600' : 'text-slate-400'}
           badgeText={isDeviceConnected ? (lowWaterDevices.length > 0 ? 'Needs Refill' : 'All Clear') : 'Offline'}
-          badgeType={isDeviceConnected ? (lowWaterDevices.length > 0 ? 'warning' : 'success') : 'neutral'}
+          badgeType={isDeviceConnected ? (lowWaterDevices.length > 0 ? 'warning' : 'success') : 'info'}
         />
       </div>
 

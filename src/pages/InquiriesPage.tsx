@@ -9,7 +9,7 @@
 import React, { useState, useMemo } from 'react';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { useAppContext } from '../hooks/useAppContext';
-import { ContactInquiry, InquiryStatus } from '../types';
+import { ContactInquiry, InquiryStatus, ChatMessageItem } from '../types';
 import { StatCard } from '../components/StatCard';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
@@ -219,7 +219,7 @@ export const InquiriesPage: React.FC = () => {
             iconBgColor="bg-slate-100"
             iconTextColor="text-slate-700"
             badgeText="All Time"
-            badgeType="neutral"
+            badgeType="info"
           />
           <StatCard
             title="Unread Messages"

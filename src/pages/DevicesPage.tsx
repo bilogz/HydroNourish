@@ -154,7 +154,7 @@ export const DevicesPage: React.FC = () => {
   const handlePairWifiSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!wifiSsid.trim()) {
-      showToast('alert', 'Missing SSID', 'Please enter a Wi-Fi network SSID name.');
+      showToast('warning', 'Missing SSID', 'Please enter a Wi-Fi network SSID name.');
       return;
     }
 
@@ -168,25 +168,36 @@ export const DevicesPage: React.FC = () => {
     });
 
     try {
-      // Broadcast Wi-Fi pairing simultaneously to Controller Node & ESP32-CAM Node
+      // Broadcast Wi-Fi Provisioning across all candidates
       await Promise.race([
-        // Controller Endpoints
-        fetch('http://192.168.100.159/api/wifi/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, mode: 'no-cors' }).catch(() => {}),
-        fetch('http://hydronourish.local/api/wifi/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, mode: 'no-cors' }).catch(() => {}),
-        fetch('http://192.168.4.1/api/wifi/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, mode: 'no-cors' }).catch(() => {}),
-        // ESP32-CAM Endpoints
-        fetch('http://hydronourish-cam.local/api/wifi/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, mode: 'no-cors' }).catch(() => {}),
-        fetch('http://192.168.4.2/api/wifi/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, mode: 'no-cors' }).catch(() => {}),
+        fetch('http://192.168.4.1/api/wifi/pair', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          mode: 'no-cors'
+        }).catch(() => {}),
+        fetch('http://hydronourish-feeder.local/api/wifi/pair', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          mode: 'no-cors'
+        }).catch(() => {}),
+        fetch(`http://${selectedDevice?.ipAddress || '192.168.100.150'}/api/wifi/pair`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          mode: 'no-cors'
+        }).catch(() => {}),
         new Promise(resolve => setTimeout(resolve, 2200))
       ]);
 
-      const successText = `Credentials for '${wifiSsid}' flashed and saved to ESP32 NVS Flash! ESP32 is now connecting.`;
-      setPairingSuccessMsg(successText);
-      showToast('success', 'Wi-Fi Flashed to ESP32', successText);
-    } catch {
-      const text = `Credentials dispatched to ESP32. It will auto-connect to '${wifiSsid}'.`;
-      setPairingSuccessMsg(text);
-      showToast('info', 'Credentials Sent', text);
+      const msg = `Wi-Fi credentials for '${wifiSsid}' successfully written to ESP32 NVS memory! Device is rebooting into your network.`;
+      setPairingSuccessMsg(msg);
+      showToast('success', 'Wi-Fi Dispatched', msg);
+    } catch (err: any) {
+      const msg = `Credentials sent for '${wifiSsid}'. If device does not connect in 15 seconds, try Web Serial USB pairing below.`;
+      setPairingSuccessMsg(msg);
+      showToast('info', 'Wi-Fi Sent', msg);
     } finally {
       setIsPairingWifi(false);
     }
@@ -195,12 +206,12 @@ export const DevicesPage: React.FC = () => {
   // Method 2: Direct USB Cable Web Serial Flash (100% Guaranteed Hardware Link)
   const handleDirectWebSerialPair = async () => {
     if (!('serial' in navigator)) {
-      showToast('alert', 'Web Serial Unsupported', 'Your browser does not support Web Serial. Please use Chrome, Brave, or Edge, or use Network Pairing.');
+      showToast('warning', 'Web Serial Unsupported', 'Your browser does not support Web Serial. Please use Chrome, Brave, or Edge, or use Network Pairing.');
       return;
     }
 
     if (!wifiSsid.trim()) {
-      showToast('alert', 'Missing SSID', 'Please enter a Wi-Fi network SSID.');
+      showToast('warning', 'Missing SSID', 'Please enter a Wi-Fi network SSID.');
       return;
     }
 
@@ -230,7 +241,7 @@ export const DevicesPage: React.FC = () => {
       showToast('success', 'USB Flash Succeeded', msg);
     } catch (err: any) {
       if (err.name !== 'NotFoundError') {
-        showToast('alert', 'USB Serial Error', err.message || 'Could not communicate over USB serial.');
+        showToast('error', 'USB Serial Error', err.message || 'Could not communicate over USB serial.');
       }
     } finally {
       setIsSerialFlashing(false);

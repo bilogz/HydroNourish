@@ -13,7 +13,7 @@ import { XCircle, AlertTriangle } from 'lucide-react';
 interface CancelSessionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess?: () => void;
 }
 
 export const CancelSessionModal: React.FC<CancelSessionModalProps> = ({ isOpen, onClose, onSuccess }) => {
@@ -43,7 +43,7 @@ export const CancelSessionModal: React.FC<CancelSessionModalProps> = ({ isOpen, 
       showToast('warning', 'Session Cancelled', `${activeSession.petName}'s session has been cancelled. The hardware is now available.`);
       setReason('');
       setConfirmed(false);
-      onSuccess();
+      onSuccess?.();
     } else {
       showToast('error', 'Cancellation Failed', result.error || 'Unknown error.');
     }

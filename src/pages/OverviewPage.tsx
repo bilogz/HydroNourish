@@ -105,7 +105,7 @@ export const OverviewPage: React.FC = () => {
     { day: 'Sun', intake: 500, target: 500 },
   ];
 
-  const hasDeviceConnected = hardware && hardware.status !== 'No Device Connected';
+  const hasDeviceConnected = Boolean(hardware && hardware.status === 'Online');
 
   return (
     <DashboardLayout pageTitle="Clinical Operations Overview" breadcrumbs={[{ label: 'Dashboard' }]}>
@@ -166,14 +166,14 @@ export const OverviewPage: React.FC = () => {
         {/* ================= DEVICE LEVELS QUICK VIEW ================= */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <StatCard
-            title="Food Reservoir"
+            title="Feeder Hopper"
             value={hasDeviceConnected ? hardware.foodLevelPct + '%' : 'N/A'}
             subtitle={hasDeviceConnected ? 'Dispense container level' : 'No device active'}
             icon={Utensils}
             iconBgColor="bg-orange-50"
             iconTextColor="text-orange-600"
             badgeText={hasDeviceConnected ? (hardware.foodLevelPct > 30 ? 'OK' : 'Low') : 'Offline'}
-            badgeType={hasDeviceConnected ? (hardware.foodLevelPct > 30 ? 'success' : 'alert') : 'neutral'}
+            badgeType={hasDeviceConnected ? (hardware.foodLevelPct > 30 ? 'success' : 'alert') : 'info'}
           />
           <StatCard
             title="Water Reservoir"
@@ -183,7 +183,7 @@ export const OverviewPage: React.FC = () => {
             iconBgColor="bg-sky-50"
             iconTextColor="text-sky-600"
             badgeText={hasDeviceConnected ? (hardware.waterLevelPct > 30 ? 'OK' : 'Low') : 'Offline'}
-            badgeType={hasDeviceConnected ? (hardware.waterLevelPct > 30 ? 'success' : 'alert') : 'neutral'}
+            badgeType={hasDeviceConnected ? (hardware.waterLevelPct > 30 ? 'success' : 'alert') : 'info'}
           />
           <StatCard
             title="Device Connection"
@@ -411,21 +411,18 @@ export const OverviewPage: React.FC = () => {
       <AssignPetOwnerModal
         isOpen={assignModalOpen}
         onClose={() => setAssignModalOpen(false)}
-        adminName={adminName}
       />
 
       {/* Complete Session Modal */}
       <CompleteSessionModal
         isOpen={completeModalOpen}
         onClose={() => setCompleteModalOpen(false)}
-        adminName={adminName}
       />
 
       {/* Cancel Session Modal */}
       <CancelSessionModal
         isOpen={cancelModalOpen}
         onClose={() => setCancelModalOpen(false)}
-        adminName={adminName}
       />
     </DashboardLayout>
   );

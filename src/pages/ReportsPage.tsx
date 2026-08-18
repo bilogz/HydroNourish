@@ -115,31 +115,31 @@ export const ReportsPage: React.FC = () => {
       `;
     }
 
-    if (reportType === 'Vital Signs History' || reportType === 'Comprehensive Health') {
+    if (reportType === 'AI Health Alerts' || reportType === 'Comprehensive Health') {
       tableHtml += `
-        <h3 style="color:#0d9488; margin-top:24px;">Biometric Telemetry Summary</h3>
+        <h3 style="color:#d97706; margin-top:24px;">AI Health Observations Log</h3>
         <table>
           <thead>
             <tr>
-              <th>Record ID</th>
+              <th>Alert ID</th>
               <th>Pet Name</th>
-              <th>Body Temp</th>
-              <th>Heart Rate</th>
-              <th>Weight</th>
+              <th>Observed Reading</th>
+              <th>AI Observation</th>
+              <th>Severity</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            ${filteredVitals.length > 0 ? filteredVitals.map(v => `
+            ${filteredAlerts.length > 0 ? filteredAlerts.map(a => `
               <tr>
-                <td>${v.id}</td>
-                <td>${v.petName}</td>
-                <td>${v.temperature}°C</td>
-                <td>${v.heartRate} bpm</td>
-                <td>${v.weight} kg</td>
-                <td>${v.status}</td>
+                <td>${a.id}</td>
+                <td>${a.petName}</td>
+                <td>${a.observedReading}</td>
+                <td>${a.aiObservation}</td>
+                <td>${a.severity}</td>
+                <td>${a.reviewStatus}</td>
               </tr>
-            `).join('') : '<tr><td colspan="6">No vital signs telemetry recorded.</td></tr>'}
+            `).join('') : '<tr><td colspan="6">No AI health alerts recorded.</td></tr>'}
           </tbody>
         </table>
       `;
@@ -185,17 +185,16 @@ export const ReportsPage: React.FC = () => {
         Timestamp: h.timestamp,
         ReservoirLevelPct: h.reservoirLevelPct
       }));
-    } else if (reportType === 'Vital Signs History') {
-      rows = filteredVitals.map(v => ({
-        RecordID: v.id,
-        PetID: v.petId,
-        PetName: v.petName,
-        TemperatureC: v.temperature,
-        HeartRateBpm: v.heartRate,
-        WeightKg: v.weight,
-        ActivityMins: v.activityMins,
-        Status: v.status,
-        Timestamp: v.timestamp
+    } else if (reportType === 'AI Health Alerts') {
+      rows = filteredAlerts.map(a => ({
+        AlertID: a.id,
+        PetID: a.petId,
+        PetName: a.petName,
+        ObservedReading: a.observedReading,
+        AIObservation: a.aiObservation,
+        Severity: a.severity,
+        ReviewStatus: a.reviewStatus,
+        Timestamp: a.timestamp
       }));
     } else {
       // Comprehensive
@@ -209,10 +208,8 @@ export const ReportsPage: React.FC = () => {
         OwnerName: p.ownerName,
         AssignedUnit: p.assignedDeviceId || 'Cage 1',
         HealthStatus: p.healthStatus,
-        LatestTempC: p.latestVitals.temperature,
-        LatestHeartRateBpm: p.latestVitals.heartRate,
         DailyHydrationTargetMl: p.hydrationTarget,
-        DailyPortionGrams: p.feedingPlan.portionGrams
+        DailyPortionGrams: p.feedingPlan?.portionGrams || 100
       }));
     }
 
@@ -278,10 +275,10 @@ export const ReportsPage: React.FC = () => {
                 onChange={e => setReportType(e.target.value)}
                 className="px-3 py-2 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-teal-500 focus:outline-none"
               >
-                <option value="Comprehensive Health">Comprehensive Health</option>
+                <option value="Comprehensive Health">Comprehensive Care</option>
                 <option value="Feeding Summary">Feeding Summary</option>
                 <option value="Hydration Log">Hydration Log</option>
-                <option value="Vital Signs History">Vital Signs History</option>
+                <option value="AI Health Alerts">AI Observations Log</option>
               </select>
             </div>
           </div>
@@ -363,34 +360,26 @@ export const ReportsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Vital-Sign Summary */}
+        {/* Smart Telemetry Summary */}
         <div className="clinic-card p-5 space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <h3 className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-teal-600" />
-              Biometric Telemetry
+              <Cpu className="w-4 h-4 text-teal-600" />
+              Hardware Telemetry
             </h3>
             <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">
-              Stable
+              Online
             </span>
           </div>
 
           <div className="space-y-2 text-xs">
             <div className="flex justify-between">
-              <span className="text-slate-500">Avg Body Temperature:</span>
-              <span className="font-bold text-slate-900">
-                {filteredVitals.length > 0
-                  ? (filteredVitals.reduce((acc, v) => acc + v.temperature, 0) / filteredVitals.length).toFixed(1)
-                  : '38.5'}°C
-              </span>
+              <span className="text-slate-500">Active Nodes:</span>
+              <span className="font-bold text-slate-900">Cage 1 (Online)</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Avg Heart Rate:</span>
-              <span className="font-bold text-slate-900">
-                {filteredVitals.length > 0
-                  ? Math.round(filteredVitals.reduce((acc, v) => acc + v.heartRate, 0) / filteredVitals.length)
-                  : 85} bpm
-              </span>
+              <span className="text-slate-500">Telemetry Sync:</span>
+              <span className="font-bold text-emerald-600">Continuous Stream</span>
             </div>
           </div>
         </div>
@@ -403,7 +392,7 @@ export const ReportsPage: React.FC = () => {
               AI Observations
             </h3>
             <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-              Resolved
+              {filteredAlerts.length} Active
             </span>
           </div>
 
@@ -485,29 +474,29 @@ export const ReportsPage: React.FC = () => {
             </table>
           )}
 
-          {reportType === 'Vital Signs History' && (
+          {reportType === 'AI Health Alerts' && (
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="bg-slate-100/70 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-3">Record ID</th>
+                  <th className="px-4 py-3">Alert ID</th>
                   <th className="px-4 py-3">Pet Name</th>
-                  <th className="px-4 py-3">Body Temp</th>
-                  <th className="px-4 py-3">Heart Rate</th>
-                  <th className="px-4 py-3">Weight</th>
+                  <th className="px-4 py-3">Observed Reading</th>
+                  <th className="px-4 py-3">AI Observation</th>
+                  <th className="px-4 py-3">Severity</th>
                   <th className="px-4 py-3">Timestamp</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Review Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {filteredVitals.map(v => (
-                  <tr key={v.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-mono font-bold text-slate-600">{v.id}</td>
-                    <td className="px-4 py-3 font-bold text-slate-900">{v.petName}</td>
-                    <td className="px-4 py-3 font-bold text-slate-800">{v.temperature}°C</td>
-                    <td className="px-4 py-3 font-bold text-slate-800">{v.heartRate} bpm</td>
-                    <td className="px-4 py-3 text-slate-700">{v.weight} kg</td>
-                    <td className="px-4 py-3 text-slate-600">{v.timestamp}</td>
-                    <td className="px-4 py-3"><StatusBadge status={v.status} size="sm" /></td>
+                {filteredAlerts.map(a => (
+                  <tr key={a.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-mono font-bold text-slate-600">{a.id}</td>
+                    <td className="px-4 py-3 font-bold text-slate-900">{a.petName}</td>
+                    <td className="px-4 py-3 font-bold text-slate-800">{a.observedReading}</td>
+                    <td className="px-4 py-3 text-slate-700">{a.aiObservation}</td>
+                    <td className="px-4 py-3"><StatusBadge status={a.severity} size="sm" /></td>
+                    <td className="px-4 py-3 text-slate-600">{a.timestamp}</td>
+                    <td className="px-4 py-3"><StatusBadge status={a.reviewStatus} size="sm" /></td>
                   </tr>
                 ))}
               </tbody>

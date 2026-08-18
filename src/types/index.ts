@@ -1,5 +1,5 @@
 export type HealthStatus = 'Healthy' | 'Attention Needed' | 'Critical';
-export type DeviceStatus = 'Online' | 'Offline' | 'Warning';
+export type DeviceStatus = 'Online' | 'Offline' | 'Warning' | 'Connecting';
 export type AlertSeverity = 'Info' | 'Warning' | 'Critical';
 export type ReviewStatus = 'Unreviewed' | 'In Review' | 'Resolved';
 export type UserRole = 'Super Admin' | 'Administrator' | 'Veterinarian' | 'Clinic Staff';
@@ -31,7 +31,7 @@ export interface Pet {
     foodType: string;
   };
   hydrationTarget: number; // ml per day
-  latestVitals: {
+  latestVitals?: {
     temperature: number; // °C
     heartRate: number; // bpm
     activityLevel: 'Low' | 'Normal' | 'High';
@@ -111,6 +111,7 @@ export interface Device {
   wifiSignalDbm: number;
   foodLevelPct: number;
   waterLevelPct: number;
+  waterRawAdc?: number;
   foodBowlWeightGrams?: number;
   waterQualityPpm?: number;
   batteryPct: number;
@@ -122,6 +123,21 @@ export interface Device {
   isPumping?: boolean;
   autoRefillEnabled?: boolean;
   isPumpDeactivated?: boolean;
+  lastSeenAt?: string | null;
+  uptimeSeconds?: number;
+}
+
+export interface DeviceTelemetryPayload {
+  deviceId: string;
+  timestamp: string;
+  waterLevelPercent: number;
+  waterRawAdc?: number;
+  foodLevelPercent: number;
+  tdsPpm?: number;
+  wifiRssiDbm?: number;
+  pumpActive?: boolean;
+  firmwareVersion?: string;
+  uptimeSeconds?: number;
 }
 
 export interface ClinicUser {
@@ -130,7 +146,7 @@ export interface ClinicUser {
   fullName?: string;
   email: string;
   role: UserRole;
-  department: string;
+  department?: string | null;
   status: 'Active' | 'Inactive';
   lastActive: string;
   avatarUrl: string;

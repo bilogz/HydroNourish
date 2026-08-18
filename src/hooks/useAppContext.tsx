@@ -19,6 +19,7 @@ import {
   ClinicSettings,
   ToastMessage,
   ContactInquiry,
+  ChatMessageItem,
 } from '../types';
 
 import {
@@ -580,15 +581,14 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       const activePet = pets.find((p) => p.id === activeDev.assignedPetId) || pets[0];
       if (!activePet) return;
 
-      const reading = generateTelemetryDelta(activeDev, activePet);
+      const reading = generateTelemetryDelta(activeDev);
 
       await processTelemetryPayload(
         activePet,
         activeDev,
         reading,
-        (newVital) => setVitals((prev) => [newVital, ...prev.slice(0, 49)]),
         (newAlert) => setAlerts((prev) => [newAlert, ...prev]),
-        (devUpdate) =>
+        (devUpdate: Partial<Device>) =>
           setDevices((prev) =>
             prev.map((d) => (d.id === activeDev.id ? { ...d, ...devUpdate } : d))
           )
@@ -943,7 +943,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
 
     setSchedules((prev) => [newSch, ...prev]);
     showToast(
-      makeDeactivated ? 'alert' : 'success',
+      makeDeactivated ? 'warning' : 'success',
       makeDeactivated ? '🔒 Water Pump DEACTIVATED' : '🔓 Water Pump ACTIVATED',
       makeDeactivated
         ? 'Water pump is completely locked OFF. It will stay deactivated until you click Activate.'
@@ -1008,7 +1008,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
 
     setSchedules((prev) => [newSch, ...prev]);
     showToast(
-      deactivate ? 'alert' : 'success',
+      deactivate ? 'warning' : 'success',
       deactivate ? 'Water Pump Locked OFF' : 'Water Pump Activated',
       `Master safety lock ${deactivate ? 'engaged' : 'released'} for ${deviceId}.`
     );
@@ -1142,9 +1142,10 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
 
   // ─── Settings Handler ────────────────────────────────────────────────
   const updateSettings = async (newSet: Partial<ClinicSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSet }));
+    const updatedSettings = { ...settings, ...newSet };
+    setSettings(updatedSettings);
     showToast('success', 'Settings Saved', 'System preferences updated successfully.');
-    await updateSettingsInSupabase(newSet);
+    await updateSettingsInSupabase(updatedSettings);
   };
 
   // ─── Contact Inquiries & Chat Handlers ─────────────────────────────

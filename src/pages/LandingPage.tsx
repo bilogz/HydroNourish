@@ -66,7 +66,7 @@ export const LandingPage: React.FC = () => {
           </h1>
 
           <p className="text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal">
-            HydroNourish helps Heritage Animal Clinic monitor pet nutrition, water consumption, and vital signs through one connected platform.
+            HydroNourish helps Heritage Animal Clinic monitor pet nutrition and water consumption through one connected platform.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
@@ -126,7 +126,7 @@ export const LandingPage: React.FC = () => {
               Integrated Technology for Heritage Animal Clinic
             </p>
             <p className="text-sm text-slate-600">
-              Designed to connect hardware feeders, hydrators, and vital biometric sensors into a single dashboard.
+              Designed to connect hardware feeders and smart hydration dispensers into a single dashboard.
             </p>
           </div>
 
@@ -155,27 +155,16 @@ export const LandingPage: React.FC = () => {
 
             {/* Feature 3 */}
             <div className="clinic-card p-6 space-y-4">
-              <div className="p-3.5 rounded-2xl bg-teal-50 text-teal-600 w-fit">
-                <Activity className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 tracking-tight">Vital Signs Monitoring</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Record biometric metrics like body temperature, heart rate, weight trends, and activity duration.
-              </p>
-            </div>
-
-            {/* Feature 4 */}
-            <div className="clinic-card p-6 space-y-4">
               <div className="p-3.5 rounded-2xl bg-amber-50 text-amber-600 w-fit">
                 <Bot className="w-6 h-6" />
               </div>
               <h3 className="text-lg font-bold text-slate-900 tracking-tight">AI-Assisted Health Alerts</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Intelligent anomaly detection algorithms flag possible abnormal hydration or vital sign readings for veterinary review.
+                Intelligent anomaly detection algorithms flag possible abnormal hydration or dietary intake patterns for veterinary review.
               </p>
             </div>
 
-            {/* Feature 5 */}
+            {/* Feature 4 */}
             <div className="clinic-card p-6 space-y-4">
               <div className="p-3.5 rounded-2xl bg-slate-100 text-slate-700 w-fit">
                 <Cpu className="w-6 h-6" />
@@ -186,14 +175,25 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Feature 6 */}
+            {/* Feature 5 */}
             <div className="clinic-card p-6 space-y-4">
               <div className="p-3.5 rounded-2xl bg-indigo-50 text-indigo-600 w-fit">
                 <FileSpreadsheet className="w-6 h-6" />
               </div>
               <h3 className="text-lg font-bold text-slate-900 tracking-tight">Reports and Health History</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Generate printable clinical summaries, export CSV records, and analyze long-term health trends per patient.
+                Generate printable clinical summaries, export CSV records, and analyze long-term nutrition and intake trends per patient.
+              </p>
+            </div>
+
+            {/* Feature 6 */}
+            <div className="clinic-card p-6 space-y-4">
+              <div className="p-3.5 rounded-2xl bg-teal-50 text-teal-600 w-fit">
+                <Smartphone className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 tracking-tight">Owner Portal & Direct Inquiries</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Enable pet owners to view live intake telemetry, monitor patient recovery, and message veterinary clinic staff directly.
               </p>
             </div>
           </div>
@@ -227,7 +227,7 @@ export const LandingPage: React.FC = () => {
               </div>
               <h4 className="text-base font-bold text-slate-900">Connect Device</h4>
               <p className="text-xs text-slate-600">
-                Pair the smart feeder, hydration dispenser, and sensor collar node.
+                Pair the smart feeder and hydration dispenser units.
               </p>
             </div>
 
@@ -237,7 +237,7 @@ export const LandingPage: React.FC = () => {
               </div>
               <h4 className="text-base font-bold text-slate-900">Collect Readings</h4>
               <p className="text-xs text-slate-600">
-                Automated sensors transmit intake volumes and vital biometrics continuously.
+                Automated sensors transmit intake volumes and fluid telemetry continuously.
               </p>
             </div>
 
@@ -277,7 +277,7 @@ export const LandingPage: React.FC = () => {
                 Designed specifically for Heritage Animal Clinic
               </h3>
               <p className="text-sm text-slate-600 leading-relaxed">
-                HydroNourish was created as a capstone project to address real-world challenges in animal clinic patient care. In veterinary clinic wards and boarding facilities, tracking exact food intake, water consumption, and biometric vitals can be labor-intensive.
+                HydroNourish was created as a capstone project to address real-world challenges in animal clinic patient care. In veterinary clinic wards and boarding facilities, tracking exact food intake and water consumption can be labor-intensive.
               </p>
               <p className="text-sm text-slate-600 leading-relaxed">
                 By integrating smart hardware dispensers (powered by ESP32 microcontrollers) with a clean, centralized web application dashboard, HydroNourish empowers veterinary staff to make informed, data-driven decisions while ensuring patients maintain healthy hydration and nutrition.

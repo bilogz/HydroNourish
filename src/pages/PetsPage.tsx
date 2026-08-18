@@ -57,8 +57,6 @@ export const PetsPage: React.FC = () => {
     timesPerDay: 2,
     foodType: 'Standard Clinical Diet',
     hydrationTarget: 600,
-    temperature: 38.5,
-    heartRate: 90,
     notes: 'Registered patient.'
   });
 
@@ -80,8 +78,6 @@ export const PetsPage: React.FC = () => {
       timesPerDay: 2,
       foodType: 'High-Protein Recipe',
       hydrationTarget: 500,
-      temperature: 38.5,
-      heartRate: 95,
       notes: 'Initial checkup completed.'
     });
     setAddModalOpen(true);
@@ -106,8 +102,6 @@ export const PetsPage: React.FC = () => {
       timesPerDay: pet.feedingPlan?.timesPerDay || 2,
       foodType: pet.feedingPlan?.foodType || 'Standard Clinical Diet',
       hydrationTarget: pet.hydrationTarget || 500,
-      temperature: pet.latestVitals?.temperature || 38.5,
-      heartRate: pet.latestVitals?.heartRate || 90,
       notes: pet.notes || ''
     });
     setEditModalOpen(true);
@@ -139,12 +133,6 @@ export const PetsPage: React.FC = () => {
         foodType: formData.foodType
       },
       hydrationTarget: Number(formData.hydrationTarget),
-      latestVitals: {
-        temperature: Number(formData.temperature),
-        heartRate: Number(formData.heartRate),
-        activityLevel: 'Normal',
-        lastMeasured: 'Just registered'
-      },
       notes: formData.notes
     });
     setAddModalOpen(false);
@@ -331,12 +319,11 @@ export const PetsPage: React.FC = () => {
                       {pet.ownerEmail}
                     </p>
                   )}
-                  {pet.latestVitals && (
-                    <div className="flex items-center gap-4 text-[11px] font-mono text-slate-600 pt-1">
-                      <span>Temp: {formatTemperature(pet.latestVitals.temperature)}</span>
-                      <span>HR: {pet.latestVitals.heartRate} bpm</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3 text-[11px] font-medium text-slate-600 pt-1">
+                    <span className="text-emerald-700 font-bold">Meal: {pet.feedingPlan?.portionGrams || 100}g</span>
+                    <span>•</span>
+                    <span className="text-sky-700 font-bold">Target: {pet.hydrationTarget || 500}ml</span>
+                  </div>
                 </div>
               </div>
 
@@ -381,7 +368,7 @@ export const PetsPage: React.FC = () => {
                   <th className="p-4 font-bold">Owner Contact</th>
                   <th className="p-4 font-bold">Health Status</th>
                   <th className="p-4 font-bold">Hardware Unit</th>
-                  <th className="p-4 font-bold">Latest Vitals</th>
+                  <th className="p-4 font-bold">Diet &amp; Hydration</th>
                   <th className="p-4 font-bold text-right">Actions</th>
                 </tr>
               </thead>
@@ -417,16 +404,10 @@ export const PetsPage: React.FC = () => {
                         {!pet.assignedDeviceId || pet.assignedDeviceId.startsWith('HN-DEV') ? 'Cage 1' : pet.assignedDeviceId}
                       </span>
                     </td>
-                    <td className="p-4 font-mono text-[11px]">
-                      {pet.latestVitals ? (
-                        <>
-                          <span className="text-slate-700">{formatTemperature(pet.latestVitals.temperature)}</span>
-                          <span className="text-slate-400 mx-1">•</span>
-                          <span className="text-slate-700">{pet.latestVitals.heartRate} bpm</span>
-                        </>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
+                    <td className="p-4 text-[11px]">
+                      <span className="font-bold text-emerald-700">{pet.feedingPlan?.portionGrams || 100}g portion</span>
+                      <span className="text-slate-400 mx-1">•</span>
+                      <span className="font-bold text-sky-700">{pet.hydrationTarget || 500}ml target</span>
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-1">

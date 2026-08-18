@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { useAppContext } from '../hooks/useAppContext';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Building,
   Utensils,
@@ -10,15 +11,18 @@ import {
   Cpu,
   Save,
   Copy,
-  Check
+  Check,
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
   const { settings, updateSettings, showToast } = useAppContext();
+  const { adminProfile, isAdmin } = useAuth();
 
   const [activeTab, setActiveTab] = useState<
     'clinic' | 'feeding' | 'hydration' | 'notifications' | 'account' | 'api'
-  >('clinic');
+  >(isAdmin ? 'clinic' : 'account');
 
   // Form State initialized from settings
   const [form, setForm] = useState(settings);
@@ -26,6 +30,10 @@ export const SettingsPage: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin && activeTab !== 'account') {
+      showToast('error', 'Access Denied', 'Administrator privileges required to modify clinic configurations.');
+      return;
+    }
     updateSettings(form);
   };
 
@@ -38,31 +46,46 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <DashboardLayout pageTitle="Clinic & System Settings" breadcrumbs={[{ label: 'Settings' }]}>
+      {!isAdmin && (
+        <div className="p-4 mb-6 rounded-2xl bg-amber-500/10 border border-amber-200 text-amber-950 text-xs font-semibold flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>Staff View Mode:</strong> System configuration, clinic licensing, and device API keys require Administrator access. You can manage your personal Account Profile below.
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* ================= TAB NAVIGATION SIDEBAR ================= */}
         <div className="lg:col-span-3 space-y-1">
           {[
-            { id: 'clinic', label: 'Clinic Information', icon: Building },
-            { id: 'feeding', label: 'Feeding Defaults', icon: Utensils },
-            { id: 'hydration', label: 'Hydration Defaults', icon: Droplets },
-            { id: 'notifications', label: 'Notifications', icon: Bell },
-            { id: 'account', label: 'Account Profile', icon: User },
-            { id: 'api', label: 'Device API Configuration', icon: Cpu },
+            { id: 'clinic', label: 'Clinic Information', icon: Building, adminOnly: true },
+            { id: 'feeding', label: 'Feeding Defaults', icon: Utensils, adminOnly: true },
+            { id: 'hydration', label: 'Hydration Defaults', icon: Droplets, adminOnly: true },
+            { id: 'notifications', label: 'Notifications', icon: Bell, adminOnly: true },
+            { id: 'account', label: 'Account Profile', icon: User, adminOnly: false },
+            { id: 'api', label: 'Device API Configuration', icon: Cpu, adminOnly: true },
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
+            const isLocked = !isAdmin && tab.adminOnly;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left ${
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left ${
                   isActive
                     ? 'bg-teal-600 text-white shadow-md'
                     : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200/60'
                 }`}
               >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span>{tab.label}</span>
+                <div className="flex items-center gap-3">
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span>{tab.label}</span>
+                </div>
+                {isLocked && <Lock className="w-3.5 h-3.5 text-slate-400" />}
               </button>
             );
           })}

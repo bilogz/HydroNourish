@@ -71,8 +71,8 @@ export async function processTelemetryPayload(
       weightKg: pet.weight,
       temperatureC: 38.5,
       heartRateBpm: 80,
-      waterConsumedMl: (pet.dailyWaterConsumed || 0) + reading.waterConsumedMl,
-      waterTargetMl: pet.dailyWaterTarget || 500,
+      waterConsumedMl: reading.waterConsumedMl,
+      waterTargetMl: pet.hydrationTarget || 500,
     };
 
     try {
@@ -83,10 +83,10 @@ export async function processTelemetryPayload(
         petName: pet.name,
         timestamp,
         alertType: 'Hydration Intake Logged',
+        observedReading: `Water consumed: ${reading.waterConsumedMl} ml`,
         severity: observation.severity === 'Critical' ? 'Critical' : observation.severity === 'Warning' ? 'Warning' : 'Info',
-        message: observation.observationText,
+        aiObservation: observation.observationText,
         recommendedAction: observation.recommendedAction,
-        isRead: false,
         reviewStatus: 'Unreviewed',
       };
       onNewAlert(newAlert);

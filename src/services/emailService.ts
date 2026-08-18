@@ -17,6 +17,9 @@ export interface EmailDispatchResult {
   code?: string;
   sender: string;
   hasError?: boolean;
+  supabaseStatus?: number;
+  formSubmitStatus?: number;
+  errorMessage?: string;
 }
 
 /**

@@ -51,6 +51,7 @@ function loadFromStorage<T>(key: string, fallback: T): T {
   }
 }
 
+
 function saveToStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -108,7 +109,7 @@ const defaultEmptyHardware: Device = {
   assignedPetId: '',
   assignedPetName: '',
   status: 'Offline',
-  hardwareStatus: 'vacant',
+  hardwareStatus: 'available',
   wifiSignalDbm: 0,
   foodLevelPct: 0,
   waterLevelPct: 0,
@@ -249,7 +250,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // ─── Session Lifecycle ────────────────────────────────────────────────
   const canAssignPet = useCallback((): boolean => {
-    return !activeSession && hardware.status === 'Online' && (hardware.hardwareStatus === 'available' || hardware.hardwareStatus === 'vacant');
+    return !activeSession && hardware.status === 'Online' && hardware.hardwareStatus === 'available';
   }, [activeSession, hardware.status, hardware.hardwareStatus]);
 
   const assignPetAndOwner = useCallback((

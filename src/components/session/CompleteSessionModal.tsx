@@ -19,12 +19,13 @@ import {
   Activity,
   AlertTriangle,
   FileText,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface CompleteSessionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess?: () => void;
 }
 
 export const CompleteSessionModal: React.FC<CompleteSessionModalProps> = ({ isOpen, onClose, onSuccess }) => {
@@ -59,7 +60,7 @@ export const CompleteSessionModal: React.FC<CompleteSessionModalProps> = ({ isOp
       setReleaseDate(new Date().toISOString().slice(0, 16));
       setReleaseCondition('Healthy — cleared for discharge');
       setFinalNotes('');
-      onSuccess();
+      onSuccess?.();
     } else {
       showToast('error', 'Completion Failed', result.error || 'Unknown error.');
     }
@@ -94,7 +95,7 @@ export const CompleteSessionModal: React.FC<CompleteSessionModalProps> = ({ isOp
             <div className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-slate-400" /><span className="text-slate-500">Duration:</span><span className="font-extrabold text-indigo-700">{durationText}</span></div>
             <div className="flex items-center gap-2"><Utensils className="w-3.5 h-3.5 text-slate-400" /><span className="text-slate-500">Feedings:</span><span className="font-bold text-slate-800">{activeSession.feedingRecordCount} records</span></div>
             <div className="flex items-center gap-2"><Droplets className="w-3.5 h-3.5 text-slate-400" /><span className="text-slate-500">Hydration:</span><span className="font-bold text-slate-800">{activeSession.hydrationRecordCount} records</span></div>
-            <div className="flex items-center gap-2"><Activity className="w-3.5 h-3.5 text-slate-400" /><span className="text-slate-500">Vitals:</span><span className="font-bold text-slate-800">{activeSession.vitalSignRecordCount} records</span></div>
+            <div className="flex items-center gap-2"><ShieldAlert className="w-3.5 h-3.5 text-slate-400" /><span className="text-slate-500">Alerts:</span><span className="font-bold text-slate-800">{activeSession.alertCount} observations</span></div>
           </div>
         </div>
 

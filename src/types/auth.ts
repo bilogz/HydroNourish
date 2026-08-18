@@ -9,9 +9,9 @@ import type { User, Session } from '@supabase/supabase-js';
 export type { User, Session };
 
 /**
- * Admin account role — must match the check constraint in admin_profiles.
+ * Admin / Staff account role.
  */
-export type AdminRole = 'admin' | 'super_admin';
+export type AdminRole = 'super_admin' | 'admin' | 'veterinarian' | 'staff' | 'clinic_staff';
 
 /**
  * Admin account status — must match the check constraint in admin_profiles.
@@ -56,6 +56,7 @@ export interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isStaff: boolean;
   requestOtp: (email: string) => Promise<AuthResult>;
   verifyOtp: (email: string, token: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;

@@ -27,7 +27,7 @@ import {
 interface AssignPetOwnerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess?: () => void;
 }
 
 type Step = 'owner' | 'pet' | 'details' | 'confirm';
@@ -167,7 +167,7 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
     if (result.success) {
       showToast('success', 'Pet Assigned Successfully', `${selectedPet.name} has been assigned to HydroNourish Station Alpha. Monitoring session is now active.`);
       resetForm();
-      onSuccess();
+      onSuccess?.();
     } else {
       showToast('error', 'Assignment Failed', result.error || 'Unknown error occurred.');
     }

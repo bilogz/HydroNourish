@@ -16,10 +16,10 @@ export const UsersPage: React.FC = () => {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'staff' | 'owners'>('staff');
 
-  // Access Control check
-  const isSuperAdmin = adminProfile?.role === 'super_admin' || adminProfile?.role === 'admin' || adminProfile?.email === 'joecelgarcia1@gmail.com' || adminProfile?.email === 'marcgermineganan05@gmail.com' || adminProfile?.email === 'heritagelink45@gmail.com' || true;
-  const currentUserEmail = adminProfile?.email || 'marcgermineganan03@gmail.com';
-  const currentUserObj = (users ?? []).find(u => u.email === currentUserEmail);
+  // Access Control check — only Super Admin and Admin can manage clinic users
+  const isSuperAdmin = adminProfile?.role === 'super_admin' || adminProfile?.role === 'admin';
+  const currentUserEmail = adminProfile?.email || 'admin@heritageanimalclinic.com';
+  const currentUserObj = (users ?? []).find(u => u.email.toLowerCase() === currentUserEmail.toLowerCase());
  
   const handleAddUser = (userData: Omit<ClinicUser, 'id' | 'lastActive'>) => {
     addUser(userData);
@@ -47,16 +47,16 @@ export const UsersPage: React.FC = () => {
             <Lock className="w-8 h-8" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-xl font-extrabold text-slate-900">Super Admin Access Required</h2>
+            <h2 className="text-xl font-extrabold text-slate-900">Administrator Access Required</h2>
             <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
-              User account management and creation are restricted to the Super Admin role.
-              Standard admin accounts cannot modify clinic user permissions.
+              User account management and permission provisioning are restricted to Administrator and Super Admin accounts.
+              Clinic Staff accounts do not have access to view or modify other accounts.
             </p>
           </div>
           <div className="pt-2">
-            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-purple-100 text-purple-900 text-xs font-extrabold">
-              <Crown className="w-4 h-4 text-purple-600" />
-              Logged in as: {currentUserEmail} ({adminProfile?.role === 'super_admin' ? 'Super Admin' : 'Admin'})
+            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-200 text-slate-800 text-xs font-extrabold">
+              <Users className="w-4 h-4 text-slate-600" />
+              Logged in as: {currentUserEmail} ({adminProfile?.role === 'super_admin' ? 'Super Admin' : adminProfile?.role === 'admin' ? 'Admin' : 'Clinic Staff'})
             </span>
           </div>
         </div>

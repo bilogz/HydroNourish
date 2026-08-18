@@ -139,8 +139,8 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
     if (emailResult.hasError) {
       setDiagnosticData({
         recipientEmail: trimmedEmail,
-        supabaseStatus: emailResult.supabaseStatus,
-        formSubmitStatus: emailResult.formSubmitStatus,
+        supabaseStatus: emailResult.supabaseStatus !== undefined ? String(emailResult.supabaseStatus) : undefined,
+        formSubmitStatus: emailResult.formSubmitStatus !== undefined ? String(emailResult.formSubmitStatus) : undefined,
         errorMessage: emailResult.errorMessage,
         generatedCode: emailResult.code,
       });

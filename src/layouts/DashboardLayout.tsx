@@ -69,7 +69,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     unreadInquiriesCount,
   } = useAppContext();
 
-  const { adminProfile, signOut } = useAuth();
+  const { adminProfile, signOut, isAdmin, isStaff } = useAuth();
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -91,14 +91,20 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const totalNotificationCount = unreviewedAlerts.length + unreadInquiries.length;
 
   // ─── Derived admin display values from AuthContext ────────────────────
-  const adminName = adminProfile?.full_name ?? 'Administrator';
+  const adminName = adminProfile?.full_name ?? (isAdmin ? 'Administrator' : 'Clinic Staff Member');
   const adminEmail = adminProfile?.email ?? '';
   const adminRole =
     adminProfile?.role === 'super_admin'
       ? 'Super Admin'
       : adminProfile?.role === 'admin'
       ? 'Admin'
-      : 'Administrator';
+      : adminProfile?.role === 'veterinarian'
+      ? 'Veterinarian'
+      : adminProfile?.role === 'staff' || adminProfile?.role === 'clinic_staff'
+      ? 'Clinic Staff'
+      : isAdmin
+      ? 'Administrator'
+      : 'Clinic Staff';
   const adminAvatar = adminProfile?.avatar_url ?? null;
 
   // Generate initials for avatar fallback
@@ -118,24 +124,39 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     navigate('/admin/login', { replace: true });
   };
 
-  // ─── Navigation Items ─────────────────────────────────────────────────
-  const adminGroup = [
-    { label: 'Dashboard', path: '/app', icon: Home, color: 'text-blue-600' },
-    { label: 'Inquiries', path: '/app/inquiries', icon: Inbox, color: 'text-teal-600', badge: unreadInquiriesCount },
-    { label: 'Session History', path: '/app/sessions', icon: ClipboardList, color: 'text-violet-600' },
-    { label: 'Users', path: '/app/users', icon: Users, color: 'text-emerald-600' },
-    { label: 'Reports', path: '/app/reports', icon: FileText, color: 'text-purple-600' },
-    { label: 'Settings', path: '/app/settings', icon: Settings, color: 'text-slate-600' },
-  ];
+  interface NavItem {
+    label: string;
+    path: string;
+    icon: React.ElementType;
+    color?: string;
+    badge?: number;
+  }
 
-  const healthGroup = [
+  // ─── Navigation Items (Filtered by Admin vs Staff Permissions) ────────
+  const adminGroup: NavItem[] = isAdmin
+    ? [
+        { label: 'Dashboard', path: '/app', icon: Home, color: 'text-blue-600' },
+        { label: 'Inquiries', path: '/app/inquiries', icon: Inbox, color: 'text-teal-600', badge: unreadInquiriesCount },
+        { label: 'Session History', path: '/app/sessions', icon: ClipboardList, color: 'text-violet-600' },
+        { label: 'Users', path: '/app/users', icon: Users, color: 'text-emerald-600' },
+        { label: 'Reports', path: '/app/reports', icon: FileText, color: 'text-purple-600' },
+        { label: 'Settings', path: '/app/settings', icon: Settings, color: 'text-slate-600' },
+      ]
+    : [
+        { label: 'Dashboard', path: '/app', icon: Home, color: 'text-blue-600' },
+        { label: 'Inquiries', path: '/app/inquiries', icon: Inbox, color: 'text-teal-600', badge: unreadInquiriesCount },
+        { label: 'Session History', path: '/app/sessions', icon: ClipboardList, color: 'text-violet-600' },
+        { label: 'Reports', path: '/app/reports', icon: FileText, color: 'text-purple-600' },
+      ];
+
+  const healthGroup: NavItem[] = [
     { label: 'Pets', path: '/app/pets', icon: Dog, color: 'text-amber-600' },
     { label: 'Pet Owners', path: '/app/pet-owners', icon: HeartHandshake, color: 'text-teal-600' },
     { label: 'Feeding', path: '/app/feeding', icon: Utensils, color: 'text-orange-600' },
     { label: 'Hydration', path: '/app/hydration', icon: Droplets, color: 'text-sky-600' },
   ];
 
-  const automatedSubItems = [
+  const automatedSubItems: NavItem[] = [
     { label: 'Smart Devices', path: '/app/devices', icon: Cpu, color: 'text-teal-600' },
   ];
 
@@ -205,11 +226,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* Nav Body */}
         <div className="flex-1 py-4 px-3 space-y-5 overflow-y-auto">
-          {/* ADMIN Section */}
+          {/* ADMIN / WORKSPACE Section */}
           <div>
             {!sidebarCollapsed && (
               <div className="flex items-center gap-2 px-3 mb-2 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                <span>ADMIN</span>
+                <span>{isAdmin ? 'ADMINISTRATION' : 'CLINICAL WORKSPACE'}</span>
                 <span className="flex-1 h-px bg-slate-200/80" />
               </div>
             )}
@@ -308,10 +329,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </div>
 
             <div className="flex-1 py-4 px-3 space-y-4 overflow-y-auto">
-              {/* Admin Group */}
+              {/* Admin / Clinical Group */}
               <div>
                 <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-3 mb-2">
-                  ADMIN
+                  {isAdmin ? 'ADMINISTRATION' : 'CLINICAL WORKSPACE'}
                 </div>
                 <div className="space-y-1">
                   {adminGroup.map((item) => (

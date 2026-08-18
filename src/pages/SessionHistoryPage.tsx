@@ -205,7 +205,6 @@ export const SessionHistoryPage: React.FC = () => {
                       <div className="flex items-center justify-center gap-2.5 text-xs font-bold text-slate-600">
                         <span className="flex items-center gap-1 text-orange-600" title="Feeding Logs"><Utensils className="w-3.5 h-3.5" />{session.feedingRecordCount}</span>
                         <span className="flex items-center gap-1 text-sky-600" title="Hydration Logs"><Droplets className="w-3.5 h-3.5" />{session.hydrationRecordCount}</span>
-                        <span className="flex items-center gap-1 text-emerald-600" title="Vital Signs"><Activity className="w-3.5 h-3.5" />{session.vitalSignRecordCount}</span>
                         <span className="flex items-center gap-1 text-amber-600" title="AI Alerts"><ShieldAlert className="w-3.5 h-3.5" />{session.alertCount}</span>
                       </div>
                     </td>
@@ -274,21 +273,18 @@ export const SessionHistoryPage: React.FC = () => {
       <AssignPetOwnerModal
         isOpen={assignModalOpen}
         onClose={() => setAssignModalOpen(false)}
-        adminName={adminName}
       />
 
       {/* MODAL: COMPLETE SESSION */}
       <CompleteSessionModal
         isOpen={completeModalOpen}
         onClose={() => setCompleteModalOpen(false)}
-        adminName={adminName}
       />
 
       {/* MODAL: CANCEL SESSION */}
       <CancelSessionModal
         isOpen={cancelModalOpen}
         onClose={() => setCancelModalOpen(false)}
-        adminName={adminName}
       />
 
       {/* MODAL: VIEW FULL SESSION DETAILS */}
@@ -337,7 +333,7 @@ export const SessionHistoryPage: React.FC = () => {
             </div>
 
             {/* Record Counts */}
-            <div className="grid grid-cols-4 gap-3 text-center">
+            <div className="grid grid-cols-3 gap-3 text-center">
               <div className="p-3 rounded-xl bg-orange-50/70 border border-orange-200">
                 <Utensils className="w-4 h-4 mx-auto mb-1 text-orange-600" />
                 <p className="text-lg font-black text-slate-900">{viewSession.feedingRecordCount}</p>
@@ -347,11 +343,6 @@ export const SessionHistoryPage: React.FC = () => {
                 <Droplets className="w-4 h-4 mx-auto mb-1 text-sky-600" />
                 <p className="text-lg font-black text-slate-900">{viewSession.hydrationRecordCount}</p>
                 <p className="text-[10px] text-slate-500 font-bold uppercase">Hydration</p>
-              </div>
-              <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200">
-                <Activity className="w-4 h-4 mx-auto mb-1 text-emerald-600" />
-                <p className="text-lg font-black text-slate-900">{viewSession.vitalSignRecordCount}</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase">Vitals</p>
               </div>
               <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200">
                 <ShieldAlert className="w-4 h-4 mx-auto mb-1 text-amber-600" />
