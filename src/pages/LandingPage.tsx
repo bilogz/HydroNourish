@@ -93,31 +93,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ================= 2. SYSTEM STATISTICS ================= */}
-      <section className="py-12 bg-white border-y border-slate-200/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-            <div className="clinic-card p-6 text-center">
-              <span className="text-3xl sm:text-4xl font-extrabold text-teal-600 tracking-tight">24</span>
-              <p className="text-xs sm:text-sm font-bold text-slate-600 mt-1 uppercase tracking-wider">Pets Monitored</p>
-            </div>
-            <div className="clinic-card p-6 text-center">
-              <span className="text-3xl sm:text-4xl font-extrabold text-sky-600 tracking-tight">6</span>
-              <p className="text-xs sm:text-sm font-bold text-slate-600 mt-1 uppercase tracking-wider">Connected Devices</p>
-            </div>
-            <div className="clinic-card p-6 text-center">
-              <span className="text-3xl sm:text-4xl font-extrabold text-emerald-600 tracking-tight">98%</span>
-              <p className="text-xs sm:text-sm font-bold text-slate-600 mt-1 uppercase tracking-wider">Feeding Success Rate</p>
-            </div>
-            <div className="clinic-card p-6 text-center">
-              <span className="text-3xl sm:text-4xl font-extrabold text-amber-500 tracking-tight">3</span>
-              <p className="text-xs sm:text-sm font-bold text-slate-600 mt-1 uppercase tracking-wider">Active Health Alerts</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ================= 3. MAIN FEATURES ================= */}
+      {/* ================= 2. MAIN FEATURES ================= */}
       <section id="features" className="py-20 bg-slate-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16 space-y-3">

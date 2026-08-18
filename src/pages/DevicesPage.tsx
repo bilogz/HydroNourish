@@ -362,12 +362,16 @@ export const DevicesPage: React.FC = () => {
           </div>
         ) : (
           (() => {
-            const featuredDevice = (devices || []).find(d => d.id === 'HN-NODE-F778' || d.status === 'Online') || (devices || [])[0];
+            const featuredDevice = (devices || []).find(d => d.id === 'HN-NODE-F778') || (devices || [])[0];
             const isOnline = featuredDevice.status === 'Online';
             const isConnecting = featuredDevice.status === ('Connecting' as typeof featuredDevice.status);
             const isOffline = !isOnline && !isConnecting;
 
-            const badgeBg = isOnline ? 'bg-indigo-50 text-indigo-600' : isConnecting ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600';
+            const badgeBg = isOnline
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : isConnecting
+              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+              : 'bg-rose-50 text-rose-700 border border-rose-200';
             const dotColor = isOnline ? 'bg-emerald-500' : isConnecting ? 'bg-amber-400' : 'bg-rose-500';
             const pingColor = isOnline ? 'bg-emerald-400' : isConnecting ? 'bg-amber-300' : '';
 

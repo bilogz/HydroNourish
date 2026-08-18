@@ -436,7 +436,12 @@ function getHeartbeatStatus(
   dbStatus?: string,
   updatedAt?: string | null
 ): { status: Device['status']; ageSec: number } {
-  // If the record was updated or transmission timestamp exists
+  // If the record was explicitly marked offline or maintenance
+  if (dbStatus === 'Offline' || dbStatus === 'offline' || dbStatus === 'maintenance') {
+    return { status: 'Offline', ageSec: 9999 };
+  }
+
+  // Parse latest telemetry timestamp
   let parsed = NaN;
   if (updatedAt) {
     const raw = String(updatedAt).trim();
@@ -447,18 +452,25 @@ function getHeartbeatStatus(
     parsed = Date.parse(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
   }
 
-  // Active hardware nodes writing 'Online' or with telemetry are marked Online
-  if (dbStatus === 'Online' || dbStatus === 'occupied' || dbStatus === 'connected') {
-    return { status: 'Online', ageSec: isNaN(parsed) ? 0 : Math.min(Math.abs(Math.round((Date.now() - parsed) / 1000)), 5) };
-  }
-
+  // If no timestamp or unable to parse, mark as Offline
   if (isNaN(parsed)) {
-    return { status: 'Online', ageSec: 0 };
+    return { status: 'Offline', ageSec: 9999 };
   }
 
+  // Calculate telemetry age in seconds from current system time
   const ageSec = Math.abs(Math.round((Date.now() - parsed) / 1000));
-  if (ageSec <= 180) return { status: 'Online', ageSec };
-  if (ageSec <= 300) return { status: 'Connecting' as Device['status'], ageSec };
+
+  // Fresh heartbeat within 25 seconds -> Online
+  if (ageSec <= 25) {
+    return { status: 'Online', ageSec };
+  }
+
+  // Transitioning / Intermittent heartbeat (26 - 45s) -> Connecting
+  if (ageSec <= 45) {
+    return { status: 'Connecting' as Device['status'], ageSec };
+  }
+
+  // Older than 45 seconds without packet -> Offline
   return { status: 'Offline', ageSec };
 }
 

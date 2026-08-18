@@ -160,7 +160,7 @@ export const App: React.FC = () => {
               <Route
                 path="/app/settings"
                 element={
-                  <AdminRoute requiredRole="admin">
+                  <AdminRoute requiredRole="staff">
                     <SettingsPage />
                   </AdminRoute>
                 }
