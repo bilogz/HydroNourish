@@ -25,6 +25,9 @@ import {
   Zap,
   Lock,
   Unlock,
+  Trash2,
+  Power,
+  Calendar
 } from 'lucide-react';
 import {
   AreaChart,
@@ -43,8 +46,12 @@ export const HydrationPage: React.FC = () => {
   const {
     devices,
     pets,
+    schedules,
     hydrationLogs,
     refillWater,
+    addWaterSchedule,
+    deleteSchedule,
+    toggleSchedule,
     dispenseWaterDirect,
     startPumpDirect,
     stopPumpDirect,
@@ -54,8 +61,19 @@ export const HydrationPage: React.FC = () => {
 
   const [confirmRefillOpen, setConfirmRefillOpen] = useState(false);
   const [customWaterModalOpen, setCustomWaterModalOpen] = useState(false);
+  const [addWaterModalOpen, setAddWaterModalOpen] = useState(false);
   const [customWaterLevelPct, setCustomWaterLevelPct] = useState(75);
   const [logPage, setLogPage] = useState(1);
+  const [waterSchedulePage, setWaterSchedulePage] = useState(1);
+
+  // Add Water Schedule Form State
+  const [waterFormData, setWaterFormData] = useState({
+    petId: pets[0]?.id || '',
+    amountMl: 250,
+    scheduledTime: '08:05 AM',
+    days: 'Everyday',
+    deviceId: 'HN-NODE-F778'
+  });
 
   // Check if an active Online device is connected
   const selectedDevice = useMemo(() => {
@@ -156,6 +174,47 @@ export const HydrationPage: React.FC = () => {
       await dispenseWaterDirect(selectedDevice.id, volumeMl);
       setCustomWaterModalOpen(false);
     }
+  };
+
+  // Filter Water / Hydration Schedules
+  const waterSchedules = useMemo(() => {
+    return (schedules || []).filter(
+      (s) =>
+        s.type === 'water' ||
+        s.foodType?.toLowerCase().includes('water') ||
+        s.foodType?.toLowerCase().includes('pump')
+    );
+  }, [schedules]);
+
+  const totalWaterSchedulePages = Math.max(1, Math.ceil(waterSchedules.length / PAGE_SIZE));
+  const currentWaterSchedulePage = Math.min(waterSchedulePage, totalWaterSchedulePages);
+  const paginatedWaterSchedules = waterSchedules.slice(
+    (currentWaterSchedulePage - 1) * PAGE_SIZE,
+    currentWaterSchedulePage * PAGE_SIZE
+  );
+
+  const handleAddWaterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const pet = pets.find((p) => p.id === waterFormData.petId) || pets[0];
+    const fullTimeStr =
+      waterFormData.days && waterFormData.days !== 'Everyday'
+        ? `${waterFormData.scheduledTime} • ${waterFormData.days}`
+        : waterFormData.scheduledTime;
+
+    const devId = waterFormData.deviceId || selectedDevice?.id || 'HN-NODE-F778';
+
+    await addWaterSchedule({
+      petId: pet.id,
+      petName: pet.name,
+      foodType: 'Fresh Filtered Water (Pump)',
+      portionGrams: Number(waterFormData.amountMl),
+      scheduledTime: fullTimeStr,
+      days: waterFormData.days,
+      deviceId: devId,
+      enabled: true,
+      type: 'water',
+    });
+    setAddWaterModalOpen(false);
   };
 
   return (
@@ -408,6 +467,185 @@ export const HydrationPage: React.FC = () => {
         </div>
       </div>
 
+      {/* ================= AUTOMATED WATER & PUMP SCHEDULES ================= */}
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-sky-600" />
+              Automated Water & Pump Schedules
+            </h2>
+            <p className="text-xs text-slate-500">
+              Scheduled automated pump activation rules per patient (10 per page)
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAddWaterModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              Add Water Schedule
+            </button>
+          </div>
+        </div>
+
+        <div className="clinic-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider">
+                <tr>
+                  <th className="px-4 py-3">Patient</th>
+                  <th className="px-4 py-3">Dispense Target / Pump Duration</th>
+                  <th className="px-4 py-3">Scheduled Time & Days</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Device Node</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {waterSchedules.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-6 text-center text-slate-400 italic">
+                      No automated water pump schedules configured yet. Click "Add Water Schedule" above.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedWaterSchedules.map((sch) => (
+                    <tr key={sch.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-4 py-3 font-bold text-slate-900">{sch.petName}</td>
+                      <td className="px-4 py-3 font-bold text-sky-700">
+                        {sch.portionGrams} ml{' '}
+                        <span className="text-[11px] font-normal text-slate-500">
+                          (~{Math.round((sch.portionGrams / 100) * 1000)}ms pump)
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-800 flex items-center gap-1.5 pt-3.5">
+                        <Clock className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                        <span>{sch.scheduledTime}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                            sch.enabled === false
+                              ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              sch.enabled === false ? 'bg-slate-400' : 'bg-emerald-500 animate-pulse'
+                            }`}
+                          />
+                          {sch.enabled === false ? 'Paused' : 'Automated'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-mono font-bold text-sky-600">{sch.deviceId}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* 1. Pump Water Now */}
+                          <button
+                            onClick={() =>
+                              dispenseWaterDirect(
+                                sch.deviceId || selectedDevice?.id || 'HN-NODE-F778',
+                                sch.portionGrams || 250
+                              )
+                            }
+                            disabled={!isDeviceConnected}
+                            className={`px-2.5 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-all ${
+                              isDeviceConnected
+                                ? 'bg-sky-600 hover:bg-sky-700 text-white cursor-pointer active:scale-95 shadow-xs'
+                                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                            }`}
+                            title="Trigger Water Pump on ESP32 now"
+                          >
+                            <Play className="w-3 h-3 fill-white" />
+                            Pump Now
+                          </button>
+
+                          {/* 2. Toggle Active/Paused */}
+                          <button
+                            onClick={() => toggleSchedule(sch.id)}
+                            className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                              sch.enabled !== false
+                                ? 'border-slate-200 text-emerald-600 hover:bg-emerald-50'
+                                : 'border-slate-200 text-slate-400 hover:bg-slate-100'
+                            }`}
+                            title={sch.enabled !== false ? 'Pause Schedule' : 'Resume Schedule'}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 3. Delete Schedule */}
+                          <button
+                            onClick={() => deleteSchedule(sch.id)}
+                            className="p-1.5 rounded-lg border border-slate-200 text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-all cursor-pointer"
+                            title="Delete Water Schedule"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Carousel Bullet Pagination Footer */}
+          {waterSchedules.length > PAGE_SIZE && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-slate-200 text-xs">
+              <div className="text-slate-500 font-medium">
+                Showing{' '}
+                <span className="font-bold text-slate-800">
+                  {(currentWaterSchedulePage - 1) * PAGE_SIZE + 1}–
+                  {Math.min(currentWaterSchedulePage * PAGE_SIZE, waterSchedules.length)}
+                </span>{' '}
+                of <span className="font-bold text-slate-800">{waterSchedules.length}</span> water schedules
+              </div>
+
+              {/* Bullet Dots & Controls */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setWaterSchedulePage(Math.max(1, currentWaterSchedulePage - 1))}
+                  disabled={currentWaterSchedulePage === 1}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  title="Previous 10"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Interactive Carousel Bullets */}
+                <div className="flex items-center gap-1.5 px-2">
+                  {Array.from({ length: totalWaterSchedulePages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setWaterSchedulePage(page)}
+                      className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                        currentWaterSchedulePage === page
+                          ? 'w-6 bg-sky-600 shadow-xs'
+                          : 'w-2 bg-slate-300 hover:bg-slate-400'
+                      }`}
+                      title={`Page ${page}`}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setWaterSchedulePage(Math.min(totalWaterSchedulePages, currentWaterSchedulePage + 1))}
+                  disabled={currentWaterSchedulePage === totalWaterSchedulePages}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  title="Next 10"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* ================= LOW-WATER ALERTS & REFILL HISTORY ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Low Water Warning Panel */}
@@ -594,6 +832,149 @@ export const HydrationPage: React.FC = () => {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* ================= ADD WATER SCHEDULE MODAL ================= */}
+      <Modal
+        isOpen={addWaterModalOpen}
+        onClose={() => setAddWaterModalOpen(false)}
+        title="Add Automated Water & Pump Schedule"
+        subtitle="Heritage Animal Clinic Water Dispense Rule"
+      >
+        <form onSubmit={handleAddWaterSubmit} className="space-y-4 text-xs">
+          <div>
+            <label className="block font-bold text-slate-700 uppercase mb-1">Select Patient *</label>
+            <select
+              value={waterFormData.petId}
+              onChange={(e) => {
+                const selected = pets.find((p) => p.id === e.target.value);
+                setWaterFormData({
+                  ...waterFormData,
+                  petId: e.target.value,
+                  deviceId: selected?.assignedDeviceId || waterFormData.deviceId,
+                });
+              }}
+              className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-sky-500 focus:outline-none font-semibold"
+            >
+              {pets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.species} - {p.id})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 uppercase mb-1">
+              Water Dispense Amount / Volume *
+            </label>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="50"
+                  max="1000"
+                  step="25"
+                  required
+                  value={waterFormData.amountMl}
+                  onChange={(e) =>
+                    setWaterFormData({ ...waterFormData, amountMl: Number(e.target.value) })
+                  }
+                  className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-sky-500 focus:outline-none font-semibold"
+                />
+                <span className="font-bold text-slate-500 shrink-0">ml</span>
+              </div>
+              {/* Quick preset buttons */}
+              <div className="flex flex-wrap gap-1.5">
+                {[150, 200, 250, 350, 500].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setWaterFormData({ ...waterFormData, amountMl: preset })}
+                    className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                      waterFormData.amountMl === preset
+                        ? 'bg-sky-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {preset} ml (~{preset * 10}ms)
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Scheduled Time *</label>
+              <input
+                type="text"
+                required
+                value={waterFormData.scheduledTime}
+                onChange={(e) => setWaterFormData({ ...waterFormData, scheduledTime: e.target.value })}
+                placeholder="e.g. 08:05 AM or 14:35"
+                className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-sky-500 focus:outline-none font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">
+                Recurrence / Frequency
+              </label>
+              <select
+                value={waterFormData.days}
+                onChange={(e) => setWaterFormData({ ...waterFormData, days: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-sky-500 focus:outline-none font-semibold"
+              >
+                <option value="Everyday">Everyday (Daily)</option>
+                <option value="Weekdays">Weekdays (Mon – Fri)</option>
+                <option value="Weekends">Weekends (Sat – Sun)</option>
+                <option value="Mon, Wed, Fri">Mon, Wed, Fri</option>
+                <option value="Tue, Thu, Sat">Tue, Thu, Sat</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 uppercase mb-1">Assigned Hydrator Node</label>
+            <select
+              value={waterFormData.deviceId}
+              onChange={(e) => setWaterFormData({ ...waterFormData, deviceId: e.target.value })}
+              className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-sky-500 focus:outline-none font-semibold"
+            >
+              {devices.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.id} {d.assignedPetName ? `(${d.assignedPetName})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="p-3 bg-sky-50 rounded-xl border border-sky-200/60 text-sky-800 text-[11px] flex items-center gap-2">
+            <Droplets className="w-4 h-4 text-sky-600 shrink-0" />
+            <span>
+              The ESP32 water pump relay will autonomously trigger for{' '}
+              <strong>{waterFormData.amountMl} ml</strong> (~
+              {Math.max(500, waterFormData.amountMl * 10)} ms) at{' '}
+              <strong>{waterFormData.scheduledTime}</strong> ({waterFormData.days}).
+            </span>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setAddWaterModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-sm cursor-pointer active:scale-95"
+            >
+              Save Water Schedule
+            </button>
+          </div>
+        </form>
       </Modal>
 
       {/* ================= REFILL CONFIRM DIALOG ================= */}

@@ -43,6 +43,7 @@ import {
   fetchSchedulesFromSupabase,
   insertScheduleToSupabase,
   updateScheduleInSupabase,
+  deleteScheduleFromSupabase,
   fetchFeedingLogsFromSupabase,
   insertFeedingLogToSupabase,
   fetchHydrationLogsFromSupabase,
@@ -97,7 +98,12 @@ interface AppContextType {
   updatePet: (id: string, updated: Partial<Pet>) => void;
   deletePet: (id: string) => void;
 
-  addSchedule: (schedule: Omit<FeedingSchedule, 'id' | 'dispenseStatus'>) => void;
+  addSchedule: (schedule: Omit<FeedingSchedule, 'id' | 'dispenseStatus'>) => Promise<void>;
+  addFeedingSchedule: (schedule: Omit<FeedingSchedule, 'id' | 'dispenseStatus'>) => Promise<void>;
+  addWaterSchedule: (schedule: Omit<FeedingSchedule, 'id' | 'dispenseStatus'>) => Promise<void>;
+  updateSchedule: (id: string, updated: Partial<FeedingSchedule>) => Promise<void>;
+  deleteSchedule: (id: string) => Promise<void>;
+  toggleSchedule: (id: string) => Promise<void>;
   dispenseNow: (scheduleId: string) => void;
   dispenseDirect: (deviceId: string, grams?: number, foodType?: string) => void;
   dispenseWaterDirect: (deviceId: string, amountMl?: number) => void;
@@ -646,13 +652,66 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     await deletePetFromSupabase(id);
   };
 
-  // ─── Feeding Handlers ────────────────────────────────────────────────
+  // ─── Feeding & Hydration Unified Schedulers ─────────────────────────
   const addSchedule = async (data: Omit<FeedingSchedule, 'id' | 'dispenseStatus'>) => {
-    const newId = `SCH-${Date.now().toString().slice(-4)}`;
-    const newSch: FeedingSchedule = { ...data, id: newId, dispenseStatus: 'Pending' };
+    const isWater =
+      data.type === 'water' ||
+      data.foodType?.toLowerCase().includes('water') ||
+      data.foodType?.toLowerCase().includes('pump');
+    const prefix = isWater ? 'SCH-WTR' : 'SCH-FEED';
+    const newId = `${prefix}-${Date.now().toString().slice(-6)}`;
+    const newSch: FeedingSchedule = {
+      ...data,
+      id: newId,
+      type: isWater ? 'water' : 'food',
+      dispenseStatus: 'Dispensed',
+      enabled: data.enabled !== undefined ? data.enabled : true,
+    };
     setSchedules((prev) => [newSch, ...prev]);
-    showToast('success', 'Schedule Created', `New feeding rule added for ${data.petName}.`);
+    showToast(
+      'success',
+      isWater ? '💧 Automated Water Schedule Created' : '🍖 Automated Feeding Schedule Created',
+      `Scheduled ${data.portionGrams}${isWater ? 'ml' : 'g'} at ${data.scheduledTime} for ${data.petName}.`
+    );
     await insertScheduleToSupabase(newSch);
+  };
+
+  const addFeedingSchedule = async (data: Omit<FeedingSchedule, 'id' | 'dispenseStatus'>) => {
+    await addSchedule({ ...data, type: 'food' });
+  };
+
+  const addWaterSchedule = async (data: Omit<FeedingSchedule, 'id' | 'dispenseStatus'>) => {
+    await addSchedule({
+      ...data,
+      type: 'water',
+      foodType: data.foodType || 'Fresh Filtered Water (Pump)',
+    });
+  };
+
+  const updateSchedule = async (id: string, updated: Partial<FeedingSchedule>) => {
+    setSchedules((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
+    showToast('info', 'Schedule Updated', 'Schedule preferences synchronized.');
+    await updateScheduleInSupabase(id, updated);
+  };
+
+  const deleteSchedule = async (id: string) => {
+    const sch = (schedules ?? []).find((s) => s.id === id);
+    setSchedules((prev) => prev.filter((s) => s.id !== id));
+    showToast('info', 'Schedule Removed', `Schedule rule for ${sch?.petName || 'patient'} removed.`);
+    await deleteScheduleFromSupabase(id);
+  };
+
+  const toggleSchedule = async (id: string) => {
+    const sch = (schedules ?? []).find((s) => s.id === id);
+    if (!sch) return;
+    const newEnabled = sch.enabled === false ? true : false;
+    setSchedules((prev) => prev.map((s) => (s.id === id ? { ...s, enabled: newEnabled } : s)));
+    showToast(
+      newEnabled ? 'success' : 'warning',
+      newEnabled ? 'Schedule Resumed' : 'Schedule Paused',
+      `${sch.petName}'s schedule at ${sch.scheduledTime} is now ${newEnabled ? 'active' : 'paused'}.`
+    );
+    await updateScheduleInSupabase(id, { dispenseStatus: newEnabled ? 'Dispensed' : 'Failed' });
   };
 
   const dispenseNow = async (scheduleId: string) => {
@@ -1016,6 +1075,74 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     await updateDeviceInSupabase(deviceId, { firmwareVersion: newFw });
     await insertScheduleToSupabase(newSch);
   };
+
+  // ─── Automated Time & Day Cloud & Hardware Scheduler Engine ───────────────
+  useEffect(() => {
+    const executedMinutes = new Set<string>();
+
+    const schedulerTimer = setInterval(async () => {
+      const now = new Date();
+      const curH = now.getHours();
+      const curM = now.getMinutes();
+      const curDay = now.getDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
+      const minKey = `${now.toDateString()}-${curH}:${curM}`;
+
+      for (const sch of schedules) {
+        if (sch.enabled === false) continue;
+        if (!sch.scheduledTime || sch.scheduledTime === 'Instant Manual') continue;
+
+        // Parse scheduled time e.g. "08:00 AM", "02:30 PM", "8:00 AM • Everyday"
+        const match = sch.scheduledTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+        if (!match) continue;
+
+        let schHour = parseInt(match[1], 10);
+        const schMin = parseInt(match[2], 10);
+        const ampm = match[3]?.toUpperCase();
+
+        if (ampm === 'PM' && schHour < 12) schHour += 12;
+        if (ampm === 'AM' && schHour === 12) schHour = 0;
+
+        if (schHour === curH && schMin === curM) {
+          const runKey = `${sch.id}-${minKey}`;
+          if (executedMinutes.has(runKey)) continue;
+          executedMinutes.add(runKey);
+
+          // Day match check
+          const daysStr = (sch.days || sch.scheduledTime).toLowerCase();
+          let dayMatches = true;
+          if (daysStr.includes('weekday') && (curDay === 0 || curDay === 6)) dayMatches = false;
+          if (daysStr.includes('weekend') && curDay >= 1 && curDay <= 5) dayMatches = false;
+
+          // Day token check
+          if (daysStr.includes(',') || daysStr.includes('mon') || daysStr.includes('tue') || daysStr.includes('wed') || daysStr.includes('thu') || daysStr.includes('fri') || daysStr.includes('sat') || daysStr.includes('sun')) {
+            const dayTokens = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+            const tokenMatched = dayTokens.some((tok, idx) => daysStr.includes(tok) && curDay === idx);
+            if (tokenMatched) dayMatches = true;
+          }
+
+          if (dayMatches) {
+            const isWater =
+              sch.type === 'water' ||
+              sch.foodType?.toLowerCase().includes('water') ||
+              sch.foodType?.toLowerCase().includes('pump');
+            const targetDev = sch.deviceId || 'HN-NODE-F778';
+
+            if (isWater) {
+              await dispenseWaterDirect(targetDev, sch.portionGrams || 250);
+              playNotificationChime();
+              showToast('success', '💧 Scheduled Water Refill Executed', `Dispensed ${sch.portionGrams || 250}ml water for ${sch.petName}.`);
+            } else {
+              await dispenseDirect(targetDev, sch.portionGrams || 75, sch.foodType || 'Scheduled Feeder Dispense');
+              playNotificationChime();
+              showToast('success', '🍖 Scheduled Meal Dispensed', `Dispensed ${sch.portionGrams || 75}g kibble for ${sch.petName}.`);
+            }
+          }
+        }
+      }
+    }, 12000);
+
+    return () => clearInterval(schedulerTimer);
+  }, [schedules]);
 
   // ─── Hydration Handlers ──────────────────────────────────────────────
   const refillWater = async (deviceId: string) => {
@@ -1385,6 +1512,11 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         updatePet,
         deletePet,
         addSchedule,
+        addFeedingSchedule,
+        addWaterSchedule,
+        updateSchedule,
+        deleteSchedule,
+        toggleSchedule,
         dispenseNow,
         dispenseDirect,
         dispenseWaterDirect,

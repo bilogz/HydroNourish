@@ -47,10 +47,14 @@ export interface FeedingSchedule {
   petName: string;
   foodType: string;
   portionGrams: number;
-  scheduledTime: string; // e.g. "08:00 AM"
+  scheduledTime: string; // e.g. "08:00 AM" or "08:00 AM • Everyday"
   dispenseStatus: 'Dispensed' | 'Pending' | 'Failed';
   deviceId: string;
   lastDispensedAt?: string;
+  type?: 'food' | 'water';
+  days?: string;
+  enabled?: boolean;
+  durationMs?: number;
 }
 
 export interface FeedingLog {

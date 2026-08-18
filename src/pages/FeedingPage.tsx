@@ -17,13 +17,27 @@ import {
   Sliders,
   Sparkles,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Trash2,
+  Power,
+  Calendar
 } from 'lucide-react';
 
 const PAGE_SIZE = 10;
 
 export const FeedingPage: React.FC = () => {
-  const { pets, devices, schedules, feedingLogs, addSchedule, dispenseNow, dispenseDirect, showToast } = useAppContext();
+  const {
+    pets,
+    devices,
+    schedules,
+    feedingLogs,
+    addFeedingSchedule,
+    deleteSchedule,
+    toggleSchedule,
+    dispenseNow,
+    dispenseDirect,
+    showToast
+  } = useAppContext();
 
   // Derive active featured device
   const selectedDevice = (devices && devices.length > 0)
@@ -35,6 +49,11 @@ export const FeedingPage: React.FC = () => {
     selectedDevice.status === 'Online' &&
     selectedDevice.id !== 'No Device Connected' &&
     selectedDevice.id !== 'Unassigned'
+  );
+
+  // Filter Feeder schedules only
+  const feederSchedules = schedules.filter(
+    s => s.type === 'food' || !s.foodType?.toLowerCase().includes('water')
   );
 
   // Pagination state for Schedules and Logs
@@ -51,19 +70,20 @@ export const FeedingPage: React.FC = () => {
   const [customPortion, setCustomPortion] = useState(75);
   const [customPetId, setCustomPetId] = useState(pets[0]?.id || 'PET-001');
 
-  // Add Schedule Form
+  // Add Schedule Form State
   const [formData, setFormData] = useState({
     petId: pets[0]?.id || '',
     foodType: 'High-Protein Kibble',
     portionGrams: 75,
     scheduledTime: '08:00 AM',
+    days: 'Everyday',
     deviceId: isDeviceConnected && selectedDevice ? selectedDevice.id : 'HN-NODE-F778'
   });
 
   // Calculate Paginated Schedules (10 per page)
-  const totalSchedulePages = Math.max(1, Math.ceil(schedules.length / PAGE_SIZE));
+  const totalSchedulePages = Math.max(1, Math.ceil(feederSchedules.length / PAGE_SIZE));
   const currentSchedulePage = Math.min(schedulePage, totalSchedulePages);
-  const paginatedSchedules = schedules.slice(
+  const paginatedSchedules = feederSchedules.slice(
     (currentSchedulePage - 1) * PAGE_SIZE,
     currentSchedulePage * PAGE_SIZE
   );
@@ -81,9 +101,11 @@ export const FeedingPage: React.FC = () => {
     setConfirmDispenseModalOpen(true);
   };
 
-  const handleConfirmDispense = () => {
+  const handleConfirmDispense = async () => {
     if (selectedSchedule) {
-      dispenseNow(selectedSchedule.id);
+      const devId = selectedSchedule.deviceId || selectedDevice?.id || 'HN-NODE-F778';
+      await dispenseDirect(devId, selectedSchedule.portionGrams || 75, selectedSchedule.foodType || 'High-Protein Kibble');
+      setConfirmDispenseModalOpen(false);
     }
   };
 
@@ -94,19 +116,25 @@ export const FeedingPage: React.FC = () => {
     setCustomManualModalOpen(false);
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const pet = pets.find(p => p.id === formData.petId) || pets[0];
-    addSchedule({
+    const fullTimeStr = formData.days && formData.days !== 'Everyday'
+      ? `${formData.scheduledTime} • ${formData.days}`
+      : formData.scheduledTime;
+
+    await addFeedingSchedule({
       petId: pet.id,
       petName: pet.name,
       foodType: formData.foodType,
       portionGrams: Number(formData.portionGrams),
-      scheduledTime: formData.scheduledTime,
-      deviceId: formData.deviceId
+      scheduledTime: fullTimeStr,
+      days: formData.days,
+      deviceId: formData.deviceId,
+      enabled: true,
+      type: 'food'
     });
     setAddModalOpen(false);
-    showToast('success', 'Automated Schedule Created', `Scheduled ${formData.portionGrams}g at ${formData.scheduledTime} for ${pet.name}.`);
   };
 
   return (
@@ -198,17 +226,17 @@ export const FeedingPage: React.FC = () => {
                   <th className="px-4 py-3">Pet</th>
                   <th className="px-4 py-3">Formula / Food Type</th>
                   <th className="px-4 py-3">Portion Size</th>
-                  <th className="px-4 py-3">Scheduled Time</th>
+                  <th className="px-4 py-3">Scheduled Time & Days</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Device Node</th>
-                  <th className="px-4 py-3 text-right">Mode</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {schedules.length === 0 ? (
+                {feederSchedules.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-6 text-center text-slate-400 italic">
-                      No automated schedules configured yet. Click "Add Schedule" above.
+                      No automated feeder schedules configured yet. Click "Add Schedule" above.
                     </td>
                   </tr>
                 ) : (
@@ -217,16 +245,60 @@ export const FeedingPage: React.FC = () => {
                       <td className="px-4 py-3 font-bold text-slate-900">{sch.petName}</td>
                       <td className="px-4 py-3 text-slate-600">{sch.foodType}</td>
                       <td className="px-4 py-3 font-bold text-teal-700">{sch.portionGrams} grams</td>
-                      <td className="px-4 py-3 font-semibold text-slate-800">{sch.scheduledTime}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-800 flex items-center gap-1.5 pt-3.5">
+                        <Clock className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <span>{sch.scheduledTime}</span>
+                      </td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={sch.dispenseStatus} size="sm" />
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                          sch.enabled === false
+                            ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${sch.enabled === false ? 'bg-slate-400' : 'bg-emerald-500 animate-pulse'}`} />
+                          {sch.enabled === false ? 'Paused' : 'Automated'}
+                        </span>
                       </td>
                       <td className="px-4 py-3 font-mono font-bold text-teal-600">{sch.deviceId}</td>
                       <td className="px-4 py-3 text-right">
-                        <span className="px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 font-bold text-[11px] inline-flex items-center gap-1.5 border border-teal-200/60">
-                          <Cpu className="w-3 h-3 text-teal-600" />
-                          Automated
-                        </span>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* 1. Feed Now Instant Trigger */}
+                          <button
+                            onClick={() => handleOpenDispenseConfirm(sch)}
+                            disabled={!isDeviceConnected}
+                            className={`px-2.5 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-all ${
+                              isDeviceConnected
+                                ? 'bg-teal-600 hover:bg-teal-700 text-white cursor-pointer active:scale-95 shadow-xs'
+                                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                            }`}
+                            title="Trigger 90° Stepper Gate Cycle on ESP32 now"
+                          >
+                            <Play className="w-3 h-3 fill-white" />
+                            Feed Now
+                          </button>
+
+                          {/* 2. Toggle Active/Paused */}
+                          <button
+                            onClick={() => toggleSchedule(sch.id)}
+                            className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                              sch.enabled !== false
+                                ? 'border-slate-200 text-emerald-600 hover:bg-emerald-50'
+                                : 'border-slate-200 text-slate-400 hover:bg-slate-100'
+                            }`}
+                            title={sch.enabled !== false ? 'Pause Schedule' : 'Resume Schedule'}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 3. Delete Schedule */}
+                          <button
+                            onClick={() => deleteSchedule(sch.id)}
+                            className="p-1.5 rounded-lg border border-slate-200 text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-all cursor-pointer"
+                            title="Delete Schedule Rule"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -496,47 +568,63 @@ export const FeedingPage: React.FC = () => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block font-bold text-slate-700 uppercase mb-1">Portion Size (Grams)</label>
-              <input
-                type="number"
-                min="10"
-                max="500"
-                value={formData.portionGrams}
-                onChange={e => setFormData({ ...formData, portionGrams: Number(e.target.value) })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="10"
+                  max="500"
+                  value={formData.portionGrams}
+                  onChange={e => setFormData({ ...formData, portionGrams: Number(e.target.value) })}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
+                />
+                <span className="font-bold text-slate-500">g</span>
+              </div>
             </div>
             <div>
               <label className="block font-bold text-slate-700 uppercase mb-1">Scheduled Time</label>
-              <select
+              <input
+                type="text"
+                required
                 value={formData.scheduledTime}
                 onChange={e => setFormData({ ...formData, scheduledTime: e.target.value })}
+                placeholder="e.g. 08:00 AM or 14:30"
                 className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-semibold"
-              >
-                <option value="07:00 AM">07:00 AM</option>
-                <option value="08:00 AM">08:00 AM</option>
-                <option value="12:00 PM">12:00 PM</option>
-                <option value="06:00 PM">06:00 PM</option>
-                <option value="08:00 PM">08:00 PM</option>
-              </select>
+              />
             </div>
           </div>
 
-          <div>
-            <label className="block font-bold text-slate-700 uppercase mb-1">Assigned Feeder Unit</label>
-            <select
-              value={formData.deviceId}
-              onChange={e => setFormData({ ...formData, deviceId: e.target.value })}
-              className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-semibold"
-            >
-              {devices.map(d => (
-                <option key={d.id} value={d.id}>
-                  {d.id}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Recurrence / Frequency</label>
+              <select
+                value={formData.days}
+                onChange={e => setFormData({ ...formData, days: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-semibold"
+              >
+                <option value="Everyday">Everyday (Daily)</option>
+                <option value="Weekdays">Weekdays (Mon – Fri)</option>
+                <option value="Weekends">Weekends (Sat – Sun)</option>
+                <option value="Mon, Wed, Fri">Mon, Wed, Fri</option>
+                <option value="Tue, Thu, Sat">Tue, Thu, Sat</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 uppercase mb-1">Assigned Feeder Unit</label>
+              <select
+                value={formData.deviceId}
+                onChange={e => setFormData({ ...formData, deviceId: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-semibold"
+              >
+                {devices.map(d => (
+                  <option key={d.id} value={d.id}>
+                    {d.id}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">

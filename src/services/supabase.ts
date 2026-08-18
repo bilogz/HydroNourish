@@ -237,10 +237,22 @@ export async function updateScheduleInSupabase(id: string, updated: Partial<Feed
     if (updated.dispenseStatus !== undefined) payload.dispense_status = updated.dispenseStatus;
     if (updated.portionGrams !== undefined) payload.portion_grams = updated.portionGrams;
     if (updated.scheduledTime !== undefined) payload.scheduled_time = updated.scheduledTime;
+    if (updated.foodType !== undefined) payload.food_type = updated.foodType;
 
     const { error } = await (supabase.from('feeding_schedules') as any).update(payload).eq('id', id);
     return !error;
   } catch {
+    return false;
+  }
+}
+
+export async function deleteScheduleFromSupabase(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('feeding_schedules').delete().eq('id', id);
+    return !error;
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase schedule delete error:', err);
     return false;
   }
 }
