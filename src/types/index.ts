@@ -142,6 +142,7 @@ export interface DeviceTelemetryPayload {
   wifiRssiDbm?: number;
   pumpActive?: boolean;
   firmwareVersion?: string;
+  cameraIp?: string;
   uptimeSeconds?: number;
 }
 

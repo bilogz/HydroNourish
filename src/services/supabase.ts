@@ -1081,3 +1081,46 @@ export function subscribeToSupabaseRealtime(
     return () => {};
   }
 }
+
+/**
+ * Dedicated Realtime subscriber for device telemetry and camera IP updates
+ */
+export function subscribeToDeviceUpdates(
+  deviceId: string = 'HN-NODE-F778',
+  onUpdate: (device: Device) => void
+) {
+  if (!isSupabaseConfigured()) return () => {};
+
+  const channelName = `hn_device_${deviceId}_${Math.random().toString(36).substring(2, 7)}`;
+  try {
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'devices',
+          filter: `id=eq.${deviceId}`,
+        },
+        async () => {
+          const devices = await fetchDevicesFromSupabase();
+          if (devices && devices.length > 0) {
+            const matched = devices.find((d) => d.id === deviceId) || devices[0];
+            if (matched) onUpdate(matched);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
+    };
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('[HydroNourish] Device realtime channel error:', err);
+    return () => {};
+  }
+}
+

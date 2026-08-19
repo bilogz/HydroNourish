@@ -167,10 +167,29 @@ export const DevicesPage: React.FC = () => {
       password: wifiPassword.trim()
     });
 
+    const queryStr = `ssid=${encodeURIComponent(wifiSsid.trim())}&password=${encodeURIComponent(wifiPassword.trim())}&_t=${Date.now()}`;
+
+    // Image Beacon Pings (Immune to HTTPS mixed-content blocks)
+    const targets = ['192.168.4.1', 'hydronourish-cam.local', 'hydronourish-feeder.local', selectedDevice?.ipAddress || ''];
+    for (const t of targets) {
+      if (t) {
+        try {
+          const ping = new Image();
+          ping.src = `http://${t}/api/wifi/pair?${queryStr}`;
+        } catch {}
+      }
+    }
+
     try {
       // Broadcast Wi-Fi Provisioning across all candidates
       await Promise.race([
         fetch('http://192.168.4.1/api/wifi/pair', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          mode: 'no-cors'
+        }).catch(() => {}),
+        fetch('http://hydronourish-cam.local/api/wifi/pair', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: payload,
@@ -191,7 +210,7 @@ export const DevicesPage: React.FC = () => {
         new Promise(resolve => setTimeout(resolve, 2200))
       ]);
 
-      const msg = `Wi-Fi credentials for '${wifiSsid}' successfully written to ESP32 NVS memory! Device is rebooting into your network.`;
+      const msg = `Wi-Fi credentials for '${wifiSsid}' successfully written to ESP32 / ESP32-CAM NVS memory! Device is connecting to your network.`;
       setPairingSuccessMsg(msg);
       showToast('success', 'Wi-Fi Dispatched', msg);
     } catch (err: any) {
@@ -390,6 +409,7 @@ export const DevicesPage: React.FC = () => {
                     <LiveCameraWidget
                       title={`${featuredDevice.id} Live Vision Node`}
                       subtitle={`Node ${featuredDevice.macAddress} • 30 FPS Stream`}
+                      device={featuredDevice}
                       defaultIp={autoCamIp}
                       className="rounded-none border-0 shadow-none bg-transparent"
                       petContext={{

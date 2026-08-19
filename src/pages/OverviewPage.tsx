@@ -273,6 +273,7 @@ export const OverviewPage: React.FC = () => {
         <LiveCameraWidget
           title="Live Clinic Ward & Bowl Camera Feed"
           subtitle="Real-Time 30 FPS Stream • ESP32-CAM Node"
+          device={hardware}
         />
 
         {/* ================= CHARTS SECTION ================= */}

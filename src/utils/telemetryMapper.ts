@@ -27,9 +27,12 @@ export function validateTelemetryPayload(body: any): { valid: boolean; error?: s
   const wifiRssi = Number(body.wifiRssiDbm ?? body.wifi_signal_dbm ?? -65);
   const waterRawAdc = body.waterRawAdc !== undefined ? Number(body.waterRawAdc) : (body.water_raw_adc !== undefined ? Number(body.water_raw_adc) : 0);
   const pumpActive = Boolean(body.pumpActive ?? body.pump_active ?? body.is_pumping ?? false);
-  const firmwareVersion = String(body.firmwareVersion || body.firmware_version || 'v2.5.0-ESP32');
-  const uptimeSeconds = Number(body.uptimeSeconds ?? body.uptime_seconds ?? 0);
-  const timestamp = String(body.timestamp || new Date().toISOString());
+  const rawFwOriginal = String(body.firmwareVersion || body.firmware_version || 'v2.5.0-ESP32');
+  let cameraIp = body.cameraIp || body.camera_ip || body.sta_ip || '';
+  if (!cameraIp && rawFwOriginal.includes('CAM:')) {
+    const match = rawFwOriginal.match(/CAM:([0-9.]+)/i);
+    if (match && match[1]) cameraIp = match[1];
+  }
 
   const data: DeviceTelemetryPayload = {
     deviceId,
@@ -40,7 +43,8 @@ export function validateTelemetryPayload(body: any): { valid: boolean; error?: s
     tdsPpm: Math.max(0, Math.round(tdsPpm)),
     wifiRssiDbm: Math.min(0, Math.round(wifiRssi)),
     pumpActive,
-    firmwareVersion,
+    firmwareVersion: rawFwOriginal,
+    cameraIp,
     uptimeSeconds: Math.max(0, uptimeSeconds),
   };
 
@@ -63,6 +67,7 @@ export function mapPayloadToDeviceRow(payload: DeviceTelemetryPayload, receivedA
     last_transmission: payload.timestamp,
     last_seen_at: receivedAt,
     firmware_version: payload.firmwareVersion || 'v2.5.0-ESP32',
+    camera_ip: payload.cameraIp || null,
     uptime_seconds: payload.uptimeSeconds ?? 0,
   };
 }
@@ -114,12 +119,15 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
     displayTransmission = ageSec < 60 ? `Offline (${ageSec}s ago)` : (ageSec < 3600 ? `Offline (${Math.round(ageSec / 60)}m ago)` : 'Offline');
   }
 
-  let fw = item.firmware_version || 'v2.5.0-ESP32';
+  const rawFw = item.firmware_version || 'v2.5.0-ESP32';
+  let fw = rawFw;
   let parsedTds = item.water_quality_ppm !== null && item.water_quality_ppm !== undefined ? Number(item.water_quality_ppm) : 0;
   let parsedWeight = Number(item.food_bowl_weight_grams) || 0.0;
+  let parsedIp = item.ip_address || '';
+  let parsedCamIp = item.camera_ip || item.sta_ip || '';
 
-  if (fw && fw.includes('|')) {
-    const parts = fw.split('|');
+  if (rawFw && rawFw.includes('|')) {
+    const parts = rawFw.split('|');
     fw = parts[0];
     for (const p of parts) {
       if (p.startsWith('TDS:')) {
@@ -130,7 +138,26 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
         const val = Number(p.replace('WT:', ''));
         if (!isNaN(val)) parsedWeight = val;
       }
+      if (p.startsWith('IP:')) {
+        parsedIp = p.replace('IP:', '').trim();
+      }
+      if (p.startsWith('CAM:')) {
+        parsedCamIp = p.replace('CAM:', '').trim();
+      }
     }
+  }
+
+  // Regex fallback for CAM:<ip> anywhere in firmware string
+  if (!parsedCamIp && rawFw && rawFw.includes('CAM:')) {
+    const camMatch = rawFw.match(/CAM:([0-9.]+)/i);
+    if (camMatch && camMatch[1]) {
+      parsedCamIp = camMatch[1].trim();
+    }
+  }
+
+  // If no explicit cam IP, check if ipAddress is valid
+  if (!parsedCamIp && parsedIp && !parsedIp.includes('192.168.100.159')) {
+    parsedCamIp = parsedIp;
   }
 
   return {
@@ -151,6 +178,8 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
     lastTransmission: displayTransmission,
     firmwareVersion: fw,
     macAddress: item.mac_address || '1C:C3:AB:F9:F7:78',
+    ipAddress: parsedIp || undefined,
+    cameraIp: parsedCamIp || undefined,
     isPumping: Boolean(item.is_pumping),
     lastSeenAt: item.last_seen_at || item.last_transmission || null,
     uptimeSeconds: Number(item.uptime_seconds) || 0,

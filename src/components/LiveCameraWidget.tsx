@@ -46,6 +46,7 @@ interface LiveCameraWidgetProps {
   className?: string;
   allowIpChange?: boolean;
   isOnline?: boolean;
+  device?: Device;
   petContext?: { name?: string; species?: string; weightKg?: number };
 }
 
@@ -61,27 +62,45 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   defaultIp = '192.168.100.159',
   className = '',
   allowIpChange = true,
+  device,
   petContext,
 }) => {
   const { devices, showToast } = useAppContext();
 
-  // Auto-discover camera IP from Supabase device telemetry
+  // Auto-discover camera IP from passed device prop or Supabase device telemetry
   const discoveredIp = React.useMemo(() => {
-    if (!devices || devices.length === 0) return null;
-    for (const d of devices) {
-      if (d.cameraIp && d.cameraIp.trim().length > 0) {
-        return d.cameraIp.trim();
+    // 1. Check directly from the passed device prop (highest priority)
+    if (device) {
+      if (device.cameraIp && device.cameraIp.trim().length > 0) {
+        return device.cameraIp.trim();
       }
-      if (d.firmwareVersion) {
-        const match = d.firmwareVersion.match(/CAM:([0-9.]+)/i);
+      if (device.firmwareVersion) {
+        const match = device.firmwareVersion.match(/CAM:([0-9.]+)/i);
         if (match && match[1]) return match[1].trim();
       }
-      if (d.ipAddress && d.ipAddress.trim().length > 0 && d.ipAddress.startsWith('192.')) {
-        return d.ipAddress.trim();
+      if (device.ipAddress && device.ipAddress.trim().length > 0 && !device.ipAddress.includes('192.168.100.159')) {
+        return device.ipAddress.trim();
       }
     }
-    return null;
-  }, [devices]);
+
+    // 2. Check all devices in context
+    if (devices && devices.length > 0) {
+      for (const d of devices) {
+        if (d.cameraIp && d.cameraIp.trim().length > 0) {
+          return d.cameraIp.trim();
+        }
+        if (d.firmwareVersion) {
+          const match = d.firmwareVersion.match(/CAM:([0-9.]+)/i);
+          if (match && match[1]) return match[1].trim();
+        }
+        if (d.ipAddress && d.ipAddress.trim().length > 0 && !d.ipAddress.includes('192.168.100.159')) {
+          return d.ipAddress.trim();
+        }
+      }
+    }
+
+    return defaultIp && defaultIp !== '192.168.100.159' ? defaultIp : null;
+  }, [device, devices, defaultIp]);
 
   const [cameraIp, setCameraIp] = useState<string>(() => {
     return discoveredIp || defaultIp;
@@ -470,13 +489,18 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-sm text-slate-100">{title}</h3>
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all ${
                 streamError
                   ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-                  : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
               }`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${streamError ? 'bg-rose-400' : 'bg-emerald-400 animate-pulse'}`}></span>
-                {streamError ? 'STANDBY' : 'LIVE HD'}
+                <span>{streamError ? 'STANDBY' : 'LIVE HD'}</span>
+                {!streamError && cleanIp && (
+                  <span className="font-mono text-[9px] text-emerald-200/90 pl-1 border-l border-emerald-500/30">
+                    {cleanIp}
+                  </span>
+                )}
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-mono">
