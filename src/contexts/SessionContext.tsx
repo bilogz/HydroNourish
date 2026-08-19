@@ -167,7 +167,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     syncSessionData();
   }, []);
 
-  // ─── Realtime Subscriptions ──────────────────────────────────────────
+  // ─── Realtime Subscriptions & Heartbeat Polling ─────────────────────
   useEffect(() => {
     const unsubscribe = subscribeToSupabaseRealtime(async (tableName) => {
       if (tableName === 'pet_owners') {
@@ -182,7 +182,16 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }, 'session_context');
 
+    const hwInterval = setInterval(async () => {
+      const remoteDevices = await fetchDevicesFromSupabase();
+      if (remoteDevices && remoteDevices.length > 0) {
+        const activeNode = remoteDevices.find(d => d.id === 'HN-NODE-F778' || d.status === 'Online') || remoteDevices[0];
+        setHardware(activeNode);
+      }
+    }, 1500);
+
     return () => {
+      clearInterval(hwInterval);
       if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, []);

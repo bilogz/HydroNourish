@@ -472,9 +472,6 @@ function getHeartbeatStatus(
 
   // If no timestamp or unable to parse
   if (candidates.length === 0) {
-    if (dbStatus === 'Online' || dbStatus === 'online' || dbStatus === 'occupied') {
-      return { status: 'Online', ageSec: 0 };
-    }
     return { status: 'Offline', ageSec: 9999 };
   }
 
@@ -483,25 +480,18 @@ function getHeartbeatStatus(
   const nowMs = Date.now();
   const ageSec = Math.max(0, Math.round((nowMs - latestParsed) / 1000));
 
-  // If hardware or db explicitly marked status as Online
-  if (dbStatus === 'Online' || dbStatus === 'online' || dbStatus === 'occupied') {
-    if (ageSec <= 120) {
-      return { status: 'Online', ageSec };
-    }
-    if (ageSec <= 240) {
-      return { status: 'Connecting' as Device['status'], ageSec };
-    }
-    return { status: 'Offline', ageSec };
-  }
-
-  // Default heartbeat threshold
-  if (ageSec <= 60) {
+  // The ESP32 pushes telemetry every 3.5s.
+  // Fresh heartbeat within 12s -> Online
+  if (ageSec <= 12) {
     return { status: 'Online', ageSec };
   }
-  if (ageSec <= 120) {
+
+  // Signal lost / transitioning (13s - 25s) -> Connecting
+  if (ageSec <= 25) {
     return { status: 'Connecting' as Device['status'], ageSec };
   }
 
+  // Older than 25s without packet -> Offline (Unplugged or powered down)
   return { status: 'Offline', ageSec };
 }
 

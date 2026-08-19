@@ -92,23 +92,17 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
   if (validParsed.length > 0) {
     const latestParsed = Math.max(...validParsed);
     ageSec = Math.max(0, Math.round((nowMs - latestParsed) / 1000));
-    if (item.status === 'Online' || item.status === 'occupied') {
-      if (ageSec <= 120) {
-        computedStatus = 'Online';
-      } else if (ageSec <= 240) {
-        computedStatus = 'Connecting' as Device['status'];
-      } else {
-        computedStatus = 'Offline';
-      }
-    } else if (ageSec <= 60) {
+    if (item.status === 'Offline' || item.status === 'offline' || item.status === 'maintenance') {
+      computedStatus = 'Offline';
+    } else if (ageSec <= 12) {
       computedStatus = 'Online';
-    } else if (ageSec <= 120) {
+    } else if (ageSec <= 25) {
       computedStatus = 'Connecting' as Device['status'];
     } else {
       computedStatus = 'Offline';
     }
-  } else if (item.status === 'Online' || item.status === 'occupied') {
-    computedStatus = 'Online';
+  } else {
+    computedStatus = 'Offline';
   }
 
   let displayTransmission = 'Live — Synchronized';
