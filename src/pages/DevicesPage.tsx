@@ -376,7 +376,7 @@ export const DevicesPage: React.FC = () => {
             const pingColor = isOnline ? 'bg-emerald-400' : isConnecting ? 'bg-amber-300' : '';
 
             const assignedPet = pets.find(p => p.id === featuredDevice.assignedPetId || p.name === featuredDevice.assignedPetName);
-            const autoCamIp = featuredDevice.firmwareVersion?.match(/CAM:([0-9.]+)/)?.[1];
+            const autoCamIp = featuredDevice.cameraIp || featuredDevice.firmwareVersion?.match(/CAM:([0-9.]+)/)?.[1];
             const isPumpDeactivated = Boolean(
               featuredDevice.firmwareVersion?.includes('PUMP:DISABLED') ||
               featuredDevice.firmwareVersion?.includes('PUMP:LOCKED')

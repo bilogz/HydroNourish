@@ -124,6 +124,7 @@ export interface Device {
   firmwareVersion: string;
   macAddress: string;
   ipAddress?: string;
+  cameraIp?: string;
   isPumping?: boolean;
   autoRefillEnabled?: boolean;
   isPumpDeactivated?: boolean;

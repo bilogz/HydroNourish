@@ -522,6 +522,7 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
       let parsedTds = (item.water_quality_ppm !== null && item.water_quality_ppm !== undefined) ? Number(item.water_quality_ppm) : 0;
       let parsedWeight = Number(item.food_bowl_weight_grams) || 0.0;
       let parsedIp = item.ip_address || '192.168.100.159';
+      let parsedCamIp = item.camera_ip || '';
 
       if (rawFw && rawFw.includes('|')) {
         const parts = rawFw.split('|');
@@ -537,6 +538,16 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
           if (p.startsWith('IP:')) {
             parsedIp = p.replace('IP:', '').trim();
           }
+          if (p.startsWith('CAM:')) {
+            parsedCamIp = p.replace('CAM:', '').trim();
+          }
+        }
+      }
+
+      if (!parsedCamIp && rawFw && rawFw.includes('CAM:')) {
+        const match = rawFw.match(/CAM:([0-9.]+)/i);
+        if (match && match[1]) {
+          parsedCamIp = match[1];
         }
       }
 
@@ -566,6 +577,7 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
         firmwareVersion: rawFw,
         macAddress: item.mac_address || '1C:C3:AB:F9:F7:78',
         ipAddress: parsedIp,
+        cameraIp: parsedCamIp,
         isPumping,
         autoRefillEnabled,
         isPumpDeactivated,

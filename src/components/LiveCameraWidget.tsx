@@ -33,7 +33,8 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Radio
+  Radio,
+  Usb
 } from 'lucide-react';
 import { analyzePetVisionScan, PetVisionScanResult } from '../services/aiService';
 import { useAppContext } from '../hooks/useAppContext';
@@ -68,21 +69,33 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const discoveredIp = React.useMemo(() => {
     if (!devices || devices.length === 0) return null;
     for (const d of devices) {
+      if (d.cameraIp && d.cameraIp.trim().length > 0) {
+        return d.cameraIp.trim();
+      }
       if (d.firmwareVersion) {
         const match = d.firmwareVersion.match(/CAM:([0-9.]+)/i);
-        if (match && match[1]) return match[1];
+        if (match && match[1]) return match[1].trim();
+      }
+      if (d.ipAddress && d.ipAddress.trim().length > 0 && d.ipAddress.startsWith('192.')) {
+        return d.ipAddress.trim();
       }
     }
     return null;
   }, [devices]);
 
   const [cameraIp, setCameraIp] = useState<string>(() => {
-    return localStorage.getItem('hn_camera_ip') || discoveredIp || defaultIp;
+    return discoveredIp || defaultIp;
   });
 
+  // Whenever a new camera IP is announced from Supabase, switch the stream immediately!
   useEffect(() => {
-    if (discoveredIp && !localStorage.getItem('hn_camera_ip')) {
+    if (discoveredIp && discoveredIp !== cameraIp) {
       setCameraIp(discoveredIp);
+      setInputIp(discoveredIp);
+      setStreamPortIndex(0);
+      setStreamKey(Date.now());
+      setIsStreamLoading(true);
+      setStreamError(false);
     }
   }, [discoveredIp]);
 
@@ -103,6 +116,8 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [isScanningWifi, setIsScanningWifi] = useState(false);
   const [isPairingWifi, setIsPairingWifi] = useState(false);
+  const [isSerialPairing, setIsSerialPairing] = useState(false);
+  const [serialLogs, setSerialLogs] = useState<string[]>([]);
   const [scannedNetworks, setScannedNetworks] = useState<ScannedNetwork[]>([]);
   const [wifiPairResult, setWifiPairResult] = useState<{ success: boolean; msg: string } | null>(null);
 
@@ -287,7 +302,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     }
   };
 
-  // ── Pair Wi-Fi to Camera Over REST ──────────────────────────────────────────
+  // ── Pair Wi-Fi to Camera Over REST & Image Beacons with Auto-Sync ───────────
   const handlePairCameraWifi = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!wifiSsid.trim()) {
@@ -303,38 +318,142 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       password: wifiPassword.trim()
     });
 
-    try {
-      await Promise.race([
-        fetch(`http://${cleanIp}/api/wifi/pair`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          mode: 'no-cors'
-        }).catch(() => {}),
-        fetch('http://hydronourish-cam.local/api/wifi/pair', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          mode: 'no-cors'
-        }).catch(() => {}),
-        fetch('http://192.168.4.1/api/wifi/pair', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          mode: 'no-cors'
-        }).catch(() => {}),
-        new Promise(resolve => setTimeout(resolve, 2000))
-      ]);
+    const queryStr = `ssid=${encodeURIComponent(wifiSsid.trim())}&password=${encodeURIComponent(wifiPassword.trim())}&_t=${Date.now()}`;
 
-      const msg = `Wi-Fi credentials for '${wifiSsid}' saved to camera NVS memory! Camera is connecting now.`;
-      setWifiPairResult({ success: true, msg });
-      showToast('success', 'Wi-Fi Dispatched to Camera', msg);
-    } catch {
-      const msg = `Credentials sent for '${wifiSsid}'. The camera is linking to the network.`;
-      setWifiPairResult({ success: true, msg });
-      showToast('info', 'Wi-Fi Sent', msg);
-    } finally {
-      setIsPairingWifi(false);
+    // 1. Image Beacon Pings (Immune to HTTPS Mixed-Content block in browsers)
+    const targets = [cleanIp, '192.168.4.1', 'hydronourish-cam.local', '192.168.100.159', '192.168.100.157'];
+    for (const t of targets) {
+      if (t) {
+        try {
+          const ping = new Image();
+          ping.src = `http://${t}/api/wifi/pair?${queryStr}`;
+        } catch {}
+      }
+    }
+
+    // 2. Multi-Target REST POST & GET Dispatches
+    const endpoints = [
+      `http://${cleanIp}/api/wifi/pair`,
+      `http://${cleanIp}/wifi/pair`,
+      `http://192.168.4.1/api/wifi/pair`,
+      `http://hydronourish-cam.local/api/wifi/pair`
+    ];
+
+    for (const url of endpoints) {
+      try {
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          mode: 'no-cors'
+        }).catch(() => {});
+        fetch(`${url}?${queryStr}`, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+      } catch {}
+    }
+
+    setWifiPairResult({
+      success: true,
+      msg: `Credentials dispatched for "${wifiSsid}"! Connecting camera now... Auto-detecting new camera IP.`
+    });
+    showToast('success', 'Wi-Fi Dispatched to Camera', `Pairing to ${wifiSsid}... Waiting for camera announcement.`);
+
+    // 3. Fast Watcher for New Camera IP announcement from Supabase
+    let attempts = 0;
+    const watcher = setInterval(() => {
+      attempts++;
+      if (discoveredIp && discoveredIp !== cleanIp) {
+        setCameraIp(discoveredIp);
+        setInputIp(discoveredIp);
+        setStreamKey(Date.now());
+        setStreamPortIndex(0);
+        setIsStreamLoading(true);
+        setStreamError(false);
+        setWifiPairResult({
+          success: true,
+          msg: `🎉 Camera connected successfully! IP: ${discoveredIp}. Video stream live!`
+        });
+        showToast('success', 'Camera Connected!', `Live video streaming on ${discoveredIp}`);
+        clearInterval(watcher);
+        setTimeout(() => setIsWifiModalOpen(false), 2000);
+      }
+      if (attempts >= 15) {
+        clearInterval(watcher);
+        setIsPairingWifi(false);
+      }
+    }, 1200);
+  };
+
+  // ── Web Serial USB 1-Click Pairing (For ESP32-CAM USB programmer) ───────────
+  const handleSerialPairCamera = async () => {
+    if (!('serial' in navigator)) {
+      showToast('warning', 'Web Serial Not Supported', 'Please use Google Chrome, Brave, or Microsoft Edge for USB pairing.');
+      return;
+    }
+
+    if (!wifiSsid.trim()) {
+      showToast('warning', 'Missing SSID', 'Please enter a Wi-Fi network name first.');
+      return;
+    }
+
+    setIsSerialPairing(true);
+    setSerialLogs(prev => [...prev, `[USB] Connecting to ESP32-CAM via Serial Port (115200 baud)...`]);
+
+    try {
+      const port = await (navigator as any).serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      setSerialLogs(prev => [...prev, `[USB] Port opened! Sending Wi-Fi credentials...`]);
+
+      const encoder = new TextEncoder();
+      const writer = port.writable.getWriter();
+      const cmd = `PAIR:${wifiSsid.trim()},${wifiPassword.trim()}\n`;
+      await writer.write(encoder.encode(cmd));
+      writer.releaseLock();
+
+      setSerialLogs(prev => [...prev, `[USB] ✅ Sent: PAIR:${wifiSsid.trim()},******`]);
+      setSerialLogs(prev => [...prev, `[USB] Camera flashing credentials and connecting to ${wifiSsid}...`]);
+
+      showToast('success', 'USB Flashed', `Wi-Fi credentials sent to camera via USB!`);
+
+      // Read serial response in background
+      const decoder = new TextDecoderStream();
+      port.readable.pipeTo(decoder.writable);
+      const reader = decoder.readable.getReader();
+
+      setTimeout(() => {
+        try { reader.cancel(); port.close(); } catch {}
+        setIsSerialPairing(false);
+      }, 9000);
+
+      (async () => {
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            if (value) {
+              const lines = value.split('\n');
+              for (const l of lines) {
+                if (l.trim().length > 0) {
+                  setSerialLogs(prev => [...prev.slice(-8), l.trim()]);
+                  const ipMatch = l.match(/Got IP:\s*([0-9.]+)/i) || l.match(/Camera IP:\s*http:\/\/([0-9.]+)/i);
+                  if (ipMatch && ipMatch[1]) {
+                    const newIp = ipMatch[1];
+                    setCameraIp(newIp);
+                    setInputIp(newIp);
+                    setStreamKey(Date.now());
+                    setStreamPortIndex(0);
+                    showToast('success', 'Camera Connected!', `Live IP: ${newIp}`);
+                    setWifiPairResult({ success: true, msg: `🎉 Camera paired via USB! Got IP: ${newIp}. Live streaming!` });
+                    setTimeout(() => setIsWifiModalOpen(false), 2000);
+                  }
+                }
+              }
+            }
+          }
+        } catch {}
+      })();
+    } catch (err: any) {
+      setSerialLogs(prev => [...prev, `[USB Error] ${err?.message || 'Connection cancelled'}`]);
+      setIsSerialPairing(false);
     }
   };
 
@@ -619,12 +738,12 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
         {/* Offline / Error Fallback Screen */}
         {streamError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 p-6 text-center z-10">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-3">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3">
               <AlertCircle className="w-6 h-6" />
             </div>
-            <h4 className="font-bold text-sm text-slate-200">Camera Feed Standby</h4>
+            <h4 className="font-bold text-sm text-slate-200">Camera Feed Connecting / Standby</h4>
             <p className="text-xs text-slate-400 max-w-sm mt-1">
-              Connect camera to your Wi-Fi or pair it via the button below.
+              Pair camera to your Wi-Fi or open direct stream link.
             </p>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
               <button
@@ -644,6 +763,15 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                 <Wifi className="w-3.5 h-3.5" />
                 Pair Camera Wi-Fi
               </button>
+              <a
+                href={`http://${cleanIp}:81/stream`}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Open Direct Stream
+              </a>
               <button
                 onClick={() => setIsEditingIp(true)}
                 className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs border border-slate-700 cursor-pointer"
@@ -657,7 +785,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
 
       {/* ================= WI-FI PAIRING MODAL ================= */}
       {isWifiModalOpen && (
-        <div className="fixed inset-0 z-[80] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[80] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 text-white animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="flex items-start justify-between pb-3 border-b border-slate-800">
@@ -670,7 +798,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                     ESP32-CAM Wi-Fi Pairing
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Connect camera to 2.4 GHz clinic or home Wi-Fi network
+                    Pair to any 2.4 GHz Wi-Fi — Live video displays immediately!
                   </p>
                 </div>
               </div>
@@ -687,7 +815,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-slate-300 flex items-center gap-1.5">
                   <Radio className="w-3.5 h-3.5 text-teal-400" />
-                  Nearby 2.4 GHz Wi-Fi Networks:
+                  Select Nearby 2.4 GHz Wi-Fi:
                 </span>
                 <button
                   type="button"
@@ -721,7 +849,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                   ))
                 ) : (
                   <p className="text-[11px] text-slate-500 italic py-1">
-                    Click "Scan Networks" above or type your SSID manually below.
+                    Click "Scan Networks" or enter any SSID manually below.
                   </p>
                 )}
               </div>
@@ -735,7 +863,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                   type="text"
                   value={wifiSsid}
                   onChange={(e) => setWifiSsid(e.target.value)}
-                  placeholder="Enter 2.4GHz Wi-Fi Name"
+                  placeholder="e.g. iPhone, MyHomeWifi, Garcia Wifi"
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-teal-500 font-mono"
                   required
                 />
@@ -748,7 +876,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                     type={showPassword ? 'text' : 'password'}
                     value={wifiPassword}
                     onChange={(e) => setWifiPassword(e.target.value)}
-                    placeholder="Enter Wi-Fi Password (if secured)"
+                    placeholder="Enter Wi-Fi Password (leave empty for open networks)"
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-3.5 pr-10 py-2 text-xs text-white focus:outline-none focus:border-teal-500 font-mono"
                   />
                   <button
@@ -771,17 +899,41 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="pt-2 flex items-center justify-between gap-2">
+              {/* Live Serial Logs Console (if USB flashing was used) */}
+              {serialLogs.length > 0 && (
+                <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-[10px] font-mono text-emerald-400 space-y-0.5 max-h-24 overflow-y-auto">
+                  {serialLogs.map((log, idx) => (
+                    <div key={idx} className="truncate">{log}</div>
+                  ))}
+                </div>
+              )}
+
+              {/* Alternative Pairing Links */}
+              <div className="p-3 bg-slate-950/40 rounded-xl border border-slate-800/80 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2">
+                <span>Direct Hotspot Link:</span>
                 <a
-                  href={`http://${cleanIp}/`}
+                  href="http://192.168.4.1/"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[11px] text-teal-400 hover:underline flex items-center gap-1"
+                  className="text-teal-400 hover:underline flex items-center gap-1 font-mono font-bold"
                 >
                   <ExternalLink className="w-3 h-3" />
-                  Open Camera Web Portal
+                  http://192.168.4.1 (Setup Portal)
                 </a>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleSerialPairCamera}
+                  disabled={isSerialPairing}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-300 border border-teal-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  title="Flash credentials directly over USB COM port"
+                >
+                  <Usb className="w-3.5 h-3.5 text-teal-400" />
+                  {isSerialPairing ? 'Flashing USB...' : 'Pair via USB Serial'}
+                </button>
 
                 <div className="flex items-center gap-2">
                   <button
@@ -794,10 +946,10 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                   <button
                     type="submit"
                     disabled={isPairingWifi}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-bold shadow-lg shadow-teal-500/20 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-bold shadow-lg shadow-teal-500/20 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    {isPairingWifi ? 'Saving to Camera...' : 'Save & Connect'}
+                    {isPairingWifi ? 'Pairing Camera...' : 'Save & Connect'}
                   </button>
                 </div>
               </div>
