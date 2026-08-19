@@ -71,25 +71,44 @@ export function mapPayloadToDeviceRow(payload: DeviceTelemetryPayload, receivedA
  * Maps Supabase `devices` database row to frontend `Device` model
  */
 export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Device {
-  const lastSeenStr = item.updated_at || item.last_seen_at || item.last_transmission;
+  const lastSeenCandidates = [
+    item.last_transmission,
+    item.last_seen_at,
+    item.updated_at,
+  ].filter(Boolean);
+
   let computedStatus: Device['status'] = item.status === 'Online' ? 'Online' : 'Offline';
   let ageSec = 0;
 
-  if (lastSeenStr) {
-    const raw = String(lastSeenStr).trim();
+  const validParsed: number[] = [];
+  for (const ts of lastSeenCandidates) {
+    const raw = String(ts).trim();
     const parsed = Date.parse(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
     if (!isNaN(parsed)) {
-      ageSec = Math.abs(Math.round((nowMs - parsed) / 1000));
-      if (item.status === 'Online' || item.status === 'occupied') {
+      validParsed.push(parsed);
+    }
+  }
+
+  if (validParsed.length > 0) {
+    const latestParsed = Math.max(...validParsed);
+    ageSec = Math.max(0, Math.round((nowMs - latestParsed) / 1000));
+    if (item.status === 'Online' || item.status === 'occupied') {
+      if (ageSec <= 120) {
         computedStatus = 'Online';
-      } else if (ageSec <= 90) {
-        computedStatus = 'Online';
-      } else if (ageSec <= 180) {
+      } else if (ageSec <= 240) {
         computedStatus = 'Connecting' as Device['status'];
       } else {
         computedStatus = 'Offline';
       }
+    } else if (ageSec <= 60) {
+      computedStatus = 'Online';
+    } else if (ageSec <= 120) {
+      computedStatus = 'Connecting' as Device['status'];
+    } else {
+      computedStatus = 'Offline';
     }
+  } else if (item.status === 'Online' || item.status === 'occupied') {
+    computedStatus = 'Online';
   }
 
   let displayTransmission = 'Live — Synchronized';

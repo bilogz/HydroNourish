@@ -446,43 +446,62 @@ export async function updateAIAlertStatusInSupabase(id: string, status: AIHealth
 function getHeartbeatStatus(
   lastTransmission: string | null | undefined,
   dbStatus?: string,
-  updatedAt?: string | null
+  updatedAt?: string | null,
+  lastSeenAt?: string | null
 ): { status: Device['status']; ageSec: number } {
   // If the record was explicitly marked offline or maintenance
   if (dbStatus === 'Offline' || dbStatus === 'offline' || dbStatus === 'maintenance') {
     return { status: 'Offline', ageSec: 9999 };
   }
 
-  // Parse latest telemetry timestamp
-  let parsed = NaN;
-  if (updatedAt) {
-    const raw = String(updatedAt).trim();
-    parsed = Date.parse(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
-  }
-  if (isNaN(parsed) && lastTransmission) {
-    const raw = String(lastTransmission).trim();
-    parsed = Date.parse(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
-  }
+  // Parse all candidate timestamps
+  const candidates: number[] = [];
+  const parseTs = (val?: string | null) => {
+    if (!val) return;
+    const raw = String(val).trim();
+    if (!raw) return;
+    const p = Date.parse(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
+    if (!isNaN(p)) {
+      candidates.push(p);
+    }
+  };
 
-  // If no timestamp or unable to parse, mark as Offline
-  if (isNaN(parsed)) {
+  parseTs(lastTransmission);
+  parseTs(lastSeenAt);
+  parseTs(updatedAt);
+
+  // If no timestamp or unable to parse
+  if (candidates.length === 0) {
+    if (dbStatus === 'Online' || dbStatus === 'online' || dbStatus === 'occupied') {
+      return { status: 'Online', ageSec: 0 };
+    }
     return { status: 'Offline', ageSec: 9999 };
   }
 
-  // Calculate telemetry age in seconds from current system time
-  const ageSec = Math.abs(Math.round((Date.now() - parsed) / 1000));
+  // Pick the most recent valid timestamp
+  const latestParsed = Math.max(...candidates);
+  const nowMs = Date.now();
+  const ageSec = Math.max(0, Math.round((nowMs - latestParsed) / 1000));
 
-  // Fresh heartbeat within 25 seconds -> Online
-  if (ageSec <= 25) {
-    return { status: 'Online', ageSec };
+  // If hardware or db explicitly marked status as Online
+  if (dbStatus === 'Online' || dbStatus === 'online' || dbStatus === 'occupied') {
+    if (ageSec <= 120) {
+      return { status: 'Online', ageSec };
+    }
+    if (ageSec <= 240) {
+      return { status: 'Connecting' as Device['status'], ageSec };
+    }
+    return { status: 'Offline', ageSec };
   }
 
-  // Transitioning / Intermittent heartbeat (26 - 45s) -> Connecting
-  if (ageSec <= 45) {
+  // Default heartbeat threshold
+  if (ageSec <= 60) {
+    return { status: 'Online', ageSec };
+  }
+  if (ageSec <= 120) {
     return { status: 'Connecting' as Device['status'], ageSec };
   }
 
-  // Older than 45 seconds without packet -> Offline
   return { status: 'Offline', ageSec };
 }
 
@@ -496,12 +515,13 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
       const { status: computedStatus, ageSec } = getHeartbeatStatus(
         item.last_transmission,
         item.status,
-        item.updated_at || item.last_seen_at || item.created_at
+        item.updated_at,
+        item.last_seen_at
       );
 
       let displayTransmission = 'Live — Synchronized';
       if (computedStatus === 'Online') {
-        displayTransmission = ageSec <= 5 ? 'Live — Synchronized' : `${ageSec}s ago`;
+        displayTransmission = ageSec <= 10 ? 'Live — Synchronized' : `${ageSec}s ago`;
       } else if (computedStatus === 'Connecting') {
         displayTransmission = `Connecting (${ageSec}s ago)`;
       } else {
