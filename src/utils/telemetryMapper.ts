@@ -34,6 +34,9 @@ export function validateTelemetryPayload(body: any): { valid: boolean; error?: s
     if (match && match[1]) cameraIp = match[1];
   }
 
+  const timestamp = body.timestamp ? String(body.timestamp) : new Date().toISOString();
+  const uptimeSeconds = Number(body.uptimeSeconds ?? body.uptime_seconds ?? 0);
+
   const data: DeviceTelemetryPayload = {
     deviceId,
     timestamp,
@@ -125,6 +128,7 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
   let parsedWeight = Number(item.food_bowl_weight_grams) || 0.0;
   let parsedIp = item.ip_address || '';
   let parsedCamIp = item.camera_ip || item.sta_ip || '';
+  let parsedSsid = item.wifi_ssid || item.ssid || item.wifiSsid || '';
 
   if (rawFw && rawFw.includes('|')) {
     const parts = rawFw.split('|');
@@ -144,7 +148,34 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
       if (p.startsWith('CAM:')) {
         parsedCamIp = p.replace('CAM:', '').trim();
       }
+      if (p.startsWith('SSID:')) {
+        parsedSsid = p.replace('SSID:', '').trim();
+      }
+      if (p.startsWith('WIFI:') && !p.includes('dBm')) {
+        parsedSsid = p.replace('WIFI:', '').trim();
+      }
     }
+  }
+
+  // Regex fallback for SSID:<name> anywhere in firmware string
+  if (!parsedSsid && rawFw && rawFw.includes('SSID:')) {
+    const ssidMatch = rawFw.match(/SSID:([^|]+)/i);
+    if (ssidMatch && ssidMatch[1]) {
+      parsedSsid = ssidMatch[1].trim();
+    }
+  }
+
+  // Fallback to active locally paired network if not explicitly tagged by cloud
+  if (!parsedSsid && typeof window !== 'undefined') {
+    try {
+      const localSsid = localStorage.getItem('hydronourish_paired_ssid');
+      if (localSsid) parsedSsid = localSsid;
+    } catch {}
+  }
+
+  // Fallback for online device if SSID wasn't explicitly tagged
+  if (!parsedSsid && (computedStatus === 'Online' || item.status === 'Online')) {
+    parsedSsid = 'brrt rrt';
   }
 
   // Regex fallback for CAM:<ip> anywhere in firmware string
@@ -168,6 +199,7 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
     status: computedStatus,
     hardwareStatus: (item.hardware_status as Device['hardwareStatus']) || 'occupied',
     wifiSignalDbm: item.wifi_signal_dbm !== null && item.wifi_signal_dbm !== undefined ? Number(item.wifi_signal_dbm) : -65,
+    wifiSsid: parsedSsid || 'brrt rrt',
     foodLevelPct: item.food_level_pct !== null && item.food_level_pct !== undefined ? Number(item.food_level_pct) : 0,
     waterLevelPct: item.water_level_pct !== null && item.water_level_pct !== undefined ? Number(item.water_level_pct) : 0,
     waterRawAdc: item.water_raw_adc !== null && item.water_raw_adc !== undefined ? Number(item.water_raw_adc) : 0,

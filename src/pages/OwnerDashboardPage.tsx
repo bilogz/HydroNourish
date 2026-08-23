@@ -719,9 +719,14 @@ export const OwnerDashboardPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="p-3 bg-teal-50 rounded-xl border border-teal-200 text-xs text-teal-800 flex items-center gap-2">
-                  <Wifi className="w-4 h-4 text-teal-600 shrink-0" />
-                  <span>ESP32 Wi-Fi Signal: <strong>{hardware.wifiSignalDbm} dBm</strong></span>
+                <div className="p-3 bg-teal-50 rounded-xl border border-teal-200 text-xs text-teal-800 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Wifi className="w-4 h-4 text-teal-600 shrink-0" />
+                    <span>Connected Wi-Fi: <strong className="text-indigo-700">{hardware.wifiSsid || 'brrt rrt'}</strong></span>
+                  </div>
+                  <span className="text-[11px] font-bold text-teal-700 bg-white/80 px-2 py-0.5 rounded-lg border border-teal-300/60">
+                    {hardware.wifiSignalDbm} dBm
+                  </span>
                 </div>
               </div>
             </div>

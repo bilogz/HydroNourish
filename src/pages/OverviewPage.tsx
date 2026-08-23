@@ -39,6 +39,7 @@ import {
   CheckCircle2,
   Square,
   Play,
+  Wifi,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -360,7 +361,15 @@ export const OverviewPage: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-sm font-bold text-slate-900">{hardware.deviceName}</span>
-                    <p className="text-[11px] text-slate-500">Wi-Fi: {hardware.wifiSignalDbm} dBm • Battery: {hardware.batteryPct}%</p>
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                      <span className="inline-flex items-center gap-1 text-indigo-700 font-semibold bg-indigo-50 px-1.5 py-0.2 rounded text-[10px]">
+                        <Wifi className="w-3 h-3 text-indigo-600" />
+                        {hardware.wifiSsid || 'brrt rrt'}
+                      </span>
+                      <span>({hardware.wifiSignalDbm} dBm)</span>
+                      <span>•</span>
+                      <span>Battery: {hardware.batteryPct}%</span>
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">

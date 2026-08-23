@@ -113,6 +113,7 @@ export interface Device {
   status: DeviceStatus;
   hardwareStatus: HardwareStatus;
   wifiSignalDbm: number;
+  wifiSsid?: string;
   foodLevelPct: number;
   waterLevelPct: number;
   waterRawAdc?: number;
@@ -140,6 +141,7 @@ export interface DeviceTelemetryPayload {
   foodLevelPercent: number;
   tdsPpm?: number;
   wifiRssiDbm?: number;
+  wifiSsid?: string;
   pumpActive?: boolean;
   firmwareVersion?: string;
   cameraIp?: string;

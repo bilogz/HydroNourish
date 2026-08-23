@@ -119,6 +119,7 @@ interface AppContextType {
   resolveAlert: (alertId: string) => void;
 
   addDevice: (device: Omit<Device, 'id' | 'status' | 'lastTransmission'>) => void;
+  updateDevice: (id: string, updated: Partial<Device>) => Promise<void>;
   removeDevice: (id: string) => void;
   addUser: (user: Omit<ClinicUser, 'id' | 'lastActive'>) => void;
   updateUser: (id: string, updated: Partial<ClinicUser>) => void;
@@ -181,6 +182,25 @@ export const mergeChatThreads = (
   combined.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   return combined;
 };
+
+// Non-Destructive Device State Merger
+export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Device[] => {
+  if (!incoming || incoming.length === 0) return existing;
+  const map = new Map<string, Device>();
+  (existing || []).forEach((d) => map.set(d.id, d));
+  incoming.forEach((d) => {
+    const prev = map.get(d.id);
+    if (prev) {
+      map.set(d.id, { ...prev, ...d });
+    } else {
+      map.set(d.id, d);
+    }
+  });
+  return Array.from(map.values());
+};
+
+// Anti-bounce lock for manual hardware overrides
+const pendingUserOverrides = new Map<string, any>();
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [pets, setPets] = useState<Pet[]>(() => {
@@ -340,7 +360,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const devicePollInterval = setInterval(async () => {
       const devData = await fetchDevicesFromSupabase();
       if (devData) {
-        setDevices(devData);
+        setDevices((prev) => mergeDeviceUpdates(prev, devData));
       }
     }, 1500);
 
@@ -416,7 +436,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         if (data) setAlerts(data);
       } else if (tableName === 'devices') {
         const data = await fetchDevicesFromSupabase();
-        if (data) setDevices(data);
+        if (data) setDevices((prev) => mergeDeviceUpdates(prev, data));
       } else if (tableName === 'clinic_users') {
         const data = await fetchUsersFromSupabase();
         if (data) setUsers(data);
@@ -751,16 +771,21 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     setSchedules((prev) => [newSch, ...prev]);
     showToast('success', '90° Gate Cycle Triggered', `Opening +90° & closing -90° on node ${targetDeviceId}.`);
 
-    // ⚡ Ultra-Fast Parallel Dispatch: Direct LAN REST + Supabase Cloud Queue
+    // ⚡ Zero-Latency Parallel Dispatch: Direct LAN REST + Supabase Cloud Queue
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
     try {
-      fetch('http://192.168.100.159/api/dispense/food', { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      if (cleanIp) {
+        fetch(`http://${cleanIp}/api/dispense/food`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(`http://${cleanIp}/api/dispense/food`, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+      }
       fetch('http://hydronourish.local/api/dispense/food', { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      fetch('http://192.168.4.1/api/dispense/food', { method: 'POST', mode: 'no-cors' }).catch(() => {});
     } catch {}
 
     await insertScheduleToSupabase(newSch);
   };
 
-  const dispenseWaterDirect = async (deviceId: string, amountMl: number = 250) => {
+  const dispenseWaterDirect = async (deviceId: string, amountMl: number = 500) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
@@ -831,7 +856,20 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       });
     } catch {}
 
-    // 2. Supabase Cloud Remote Command
+    // 2. Immediate Optimistic update
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId
+          ? {
+              ...d,
+              isPumping: true,
+              isPumpDeactivated: false,
+            }
+          : d
+      )
+    );
+
+    // 3. Supabase Cloud Remote Command
     const newSch: FeedingSchedule = {
       id: `SCH-PUMPON-${Date.now()}`,
       deviceId: deviceId,
@@ -967,7 +1005,13 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       });
     } catch {}
 
-    // 2. Immediate Optimistic update on frontend
+    // 2. Lock anti-bounce override & Immediate Optimistic update
+    pendingUserOverrides.set(deviceId, {
+      ...pendingUserOverrides.get(deviceId),
+      pumpDeactivated: makeDeactivated,
+      time: Date.now()
+    });
+
     let newFw = dev?.firmwareVersion || 'v2.5.0-ESP32';
     if (makeDeactivated) {
       newFw = newFw.replace('PUMP:ACTIVE', 'PUMP:DISABLED').replace('PUMP:RUNNING', 'PUMP:DISABLED');
@@ -1199,6 +1243,11 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     setDevices((prev) => [newDev, ...prev.filter(d => d.id !== newId)]);
     showToast('success', 'Device Connected', `Smart ${newId} paired to ${devData.assignedPetName}.`);
     await insertDeviceToSupabase(newDev);
+  };
+
+  const updateDevice = async (id: string, updated: Partial<Device>) => {
+    setDevices((prev) => (prev ?? []).map((d) => (d.id === id ? { ...d, ...updated } : d)));
+    await updateDeviceInSupabase(id, updated);
   };
 
   const removeDevice = async (id: string) => {
@@ -1529,6 +1578,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         acknowledgeAlert,
         resolveAlert,
         addDevice,
+        updateDevice,
         removeDevice,
         addUser,
         updateUser,

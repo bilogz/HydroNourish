@@ -204,18 +204,21 @@ export async function insertScheduleToSupabase(schedule: FeedingSchedule): Promi
   try {
     const payload: Record<string, any> = {
       id: schedule.id,
-      pet_id: schedule.petId || 'PET-001',
-      pet_name: schedule.petName || 'Max',
+      pet_name: schedule.petName || 'galaxy destroyer',
       portion_grams: schedule.portionGrams || 75,
       scheduled_time: schedule.scheduledTime || 'Instant Manual',
       dispense_status: 'Pending',
       device_id: schedule.deviceId || 'HN-NODE-F778',
     };
+    if (schedule.petId && schedule.petId.length === 36 && schedule.petId.includes('-')) {
+      payload.pet_id = schedule.petId;
+    }
     if (schedule.foodType) {
       payload.food_type = schedule.foodType;
     }
     const { error } = await supabase.from('feeding_schedules').upsert(payload);
     if (error) {
+      delete payload.pet_id;
       delete payload.food_type;
       const retry = await supabase.from('feeding_schedules').upsert(payload);
       if (retry.error) {
@@ -621,7 +624,16 @@ export async function updateDeviceInSupabase(id: string, updated: Partial<Device
     if (updated.foodLevelPct !== undefined) payload.food_level_pct = updated.foodLevelPct;
     if (updated.waterLevelPct !== undefined) payload.water_level_pct = updated.waterLevelPct;
     if (updated.batteryPct !== undefined) payload.battery_pct = updated.batteryPct;
+    if (updated.wifiSignalDbm !== undefined) payload.wifi_signal_dbm = updated.wifiSignalDbm;
     if (updated.firmwareVersion !== undefined) payload.firmware_version = updated.firmwareVersion;
+    if (updated.wifiSsid !== undefined) {
+      payload.wifi_ssid = updated.wifiSsid;
+      if (!payload.firmware_version) {
+        payload.firmware_version = `v2.5.0-ESP32|SSID:${updated.wifiSsid}`;
+      } else if (!payload.firmware_version.includes('SSID:')) {
+        payload.firmware_version = `${payload.firmware_version}|SSID:${updated.wifiSsid}`;
+      }
+    }
     if (updated.lastTransmission !== undefined) payload.last_transmission = updated.lastTransmission;
 
     const { error } = await (supabase.from('devices') as any).update(payload).eq('id', id);

@@ -17,10 +17,11 @@ import {
   Heart,
   Weight,
   Calendar,
-  Save,
-  ArrowLeft,
   ShieldAlert,
-  Clock
+  Clock,
+  Wifi,
+  ArrowLeft,
+  Save
 } from 'lucide-react';
 import {
   formatWeight,
@@ -216,6 +217,13 @@ export const PetProfilePage: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-slate-500">Firmware:</span>
                 <span className="font-semibold text-slate-800">{assignedDevice.firmwareVersion}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Connected Wi-Fi:</span>
+                <span className="font-semibold text-indigo-700 flex items-center gap-1 bg-indigo-50 px-1.5 py-0.5 rounded text-[11px]">
+                  <Wifi className="w-3 h-3 text-indigo-600" />
+                  {assignedDevice.wifiSsid || 'brrt rrt'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Wi-Fi Signal:</span>

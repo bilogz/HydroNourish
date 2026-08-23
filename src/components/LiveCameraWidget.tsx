@@ -36,6 +36,7 @@ import {
   Radio,
   Usb
 } from 'lucide-react';
+import { Device } from '../types';
 import { analyzePetVisionScan, PetVisionScanResult } from '../services/aiService';
 import { useAppContext } from '../hooks/useAppContext';
 
@@ -183,17 +184,41 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   }, [isScannerEnabled, isPetDetected, streamError, isStreamLoading]);
 
   // Clean IP format
-  const cleanIp = cameraIp.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+  // Smart IP / Tunnel URL Parser
+  const rawInput = (cameraIp || '').trim();
+  const isHttps = rawInput.startsWith('https://');
+  const isDomainOrTunnel = rawInput.includes('.link') || 
+                           rawInput.includes('.io') || 
+                           rawInput.includes('.ngrok') || 
+                           rawInput.includes('.loca.lt') || 
+                           rawInput.includes('.trycloudflare.com') ||
+                           rawInput.includes('.app') ||
+                           rawInput.includes('.net') ||
+                           rawInput.includes('.org') ||
+                           rawInput.includes('.com');
 
-  // Multi-Port Fallback URIs: Port 81 (Dedicated Stream) -> Port 80 -> mDNS
-  const streamCandidates = [
-    `http://${cleanIp}:81/stream?t=${streamKey}`,
-    `http://${cleanIp}/stream?t=${streamKey}`,
-    `http://hydronourish-cam.local/stream?t=${streamKey}`
-  ];
+  const cleanIp = rawInput.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
 
+  // Multi-Port & Multi-Protocol Fallback URIs:
+  const streamCandidates = React.useMemo(() => {
+    if (isDomainOrTunnel) {
+      const proto = isHttps ? 'https:' : (typeof window !== 'undefined' ? window.location.protocol : 'https:');
+      return [
+        `${proto}//${cleanIp}/stream?t=${streamKey}`,
+        `https://${cleanIp}/stream?t=${streamKey}`,
+        `http://${cleanIp}/stream?t=${streamKey}`,
+        `${proto}//${cleanIp}/?t=${streamKey}`
+      ];
+    }
+    return [
+      `http://${cleanIp}:81/stream?t=${streamKey}`,
+      `http://${cleanIp}/stream?t=${streamKey}`,
+      `http://hydronourish-cam.local/stream?t=${streamKey}`,
+      `http://192.168.4.1/stream?t=${streamKey}`
+    ];
+  }, [cleanIp, isDomainOrTunnel, isHttps, streamKey]);
   const currentStreamUrl = streamCandidates[streamPortIndex] || streamCandidates[0];
-  const captureUrl = `http://${cleanIp}/capture?t=${Date.now()}`;
+  const captureUrl = isDomainOrTunnel ? `https://${cleanIp}/capture?t=${Date.now()}` : `http://${cleanIp}/capture?t=${Date.now()}`;
   const cameraPortalUrl = `http://${cleanIp}/`;
 
   useEffect(() => {
@@ -788,7 +813,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                 Pair Camera Wi-Fi
               </button>
               <a
-                href={`http://${cleanIp}:81/stream`}
+                href={isDomainOrTunnel ? `https://${cleanIp}/stream` : `http://${cleanIp}:81/stream`}
                 target="_blank"
                 rel="noreferrer"
                 className="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg cursor-pointer"
