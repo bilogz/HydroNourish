@@ -61,17 +61,17 @@ export const AdminLoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 flex items-center justify-center p-4 sm:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950 flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-md">
         {/* Card */}
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xl overflow-hidden">
           {/* Card Header */}
-          <div className="p-6 bg-gradient-to-r from-slate-50 to-teal-50/50 border-b border-slate-100 text-center space-y-2">
+          <div className="p-6 bg-gradient-to-r from-slate-50 to-rose-50/50 border-b border-slate-100 text-center space-y-2">
             <div className="flex justify-center">
               <Logo size="lg" />
             </div>
             <div className="space-y-0.5">
-              <p className="text-xs font-extrabold text-teal-700 uppercase tracking-widest">
+              <p className="text-xs font-extrabold text-rose-800 uppercase tracking-widest">
                 Administrator Portal
               </p>
               <p className="text-[10px] text-slate-500 font-medium">

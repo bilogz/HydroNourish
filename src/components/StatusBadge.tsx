@@ -44,8 +44,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
   }
   // Teal — completed
   else if (normalized === 'completed') {
-    badgeStyle = 'bg-teal-50 text-teal-700 border-teal-200';
-    dotColor = 'bg-teal-500';
+    badgeStyle = 'bg-rose-50 text-rose-700 border-rose-200';
+    dotColor = 'bg-rose-500';
   }
   // Slate — inactive
   else if (normalized === 'inactive') {

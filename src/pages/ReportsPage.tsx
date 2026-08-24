@@ -241,7 +241,7 @@ export const ReportsPage: React.FC = () => {
               <select
                 value={dateRange}
                 onChange={e => setDateRange(e.target.value)}
-                className="px-3 py-2 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-teal-500 focus:outline-none"
+                className="px-3 py-2 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-rose-500 focus:outline-none"
               >
                 <option value="Last 7 Days">Last 7 Days</option>
                 <option value="Last 30 Days">Last 30 Days</option>
@@ -256,7 +256,7 @@ export const ReportsPage: React.FC = () => {
               <select
                 value={selectedPetId}
                 onChange={e => setSelectedPetId(e.target.value)}
-                className="px-3 py-2 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-teal-500 focus:outline-none"
+                className="px-3 py-2 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-rose-500 focus:outline-none"
               >
                 <option value="All">All Patient Pets</option>
                 {(pets ?? []).map(p => (
@@ -273,7 +273,7 @@ export const ReportsPage: React.FC = () => {
               <select
                 value={reportType}
                 onChange={e => setReportType(e.target.value)}
-                className="px-3 py-2 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-teal-500 focus:outline-none"
+                className="px-3 py-2 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-rose-500 focus:outline-none"
               >
                 <option value="Comprehensive Health">Comprehensive Care</option>
                 <option value="Feeding Summary">Feeding Summary</option>
@@ -301,7 +301,7 @@ export const ReportsPage: React.FC = () => {
             </button>
             <button
               onClick={handleDownloadPDF}
-              className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5"
+              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5"
             >
               <Download className="w-4 h-4" />
               Download PDF
@@ -364,10 +364,10 @@ export const ReportsPage: React.FC = () => {
         <div className="clinic-card p-5 space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <h3 className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-teal-600" />
+              <Cpu className="w-4 h-4 text-rose-600" />
               Hardware Telemetry
             </h3>
-            <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">
+            <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
               Online
             </span>
           </div>
@@ -416,7 +416,7 @@ export const ReportsPage: React.FC = () => {
             <h3 className="text-sm font-extrabold text-slate-900">{reportType} Breakdown</h3>
             <p className="text-xs text-slate-500">Displaying filtered clinic telemetry data for {filteredPetName} ({dateRange})</p>
           </div>
-          <span className="px-3 py-1 rounded-full bg-teal-50 text-teal-700 font-bold text-xs border border-teal-200">
+          <span className="px-3 py-1 rounded-full bg-rose-50 text-rose-700 font-bold text-xs border border-rose-200">
             {reportType}
           </span>
         </div>
@@ -442,7 +442,7 @@ export const ReportsPage: React.FC = () => {
                     <td className="px-4 py-3 font-semibold text-slate-800">{log.portionGrams}g</td>
                     <td className="px-4 py-3 text-slate-600">{log.dispensedAt}</td>
                     <td className="px-4 py-3"><StatusBadge status={log.status} size="sm" /></td>
-                    <td className="px-4 py-3 font-bold text-teal-600">{log.deviceId || 'Cage 1'}</td>
+                    <td className="px-4 py-3 font-bold text-rose-600">{log.deviceId || 'Cage 1'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -539,7 +539,7 @@ export const ReportsPage: React.FC = () => {
                       <span className="font-semibold">{p.ownerName}</span>
                       <span className="block text-[10px] text-slate-400">{p.ownerPhone}</span>
                     </td>
-                    <td className="px-4 py-3 font-mono font-bold text-teal-600">
+                    <td className="px-4 py-3 font-mono font-bold text-rose-600">
                       {p.assignedDeviceId || 'Cage 1'}
                     </td>
                     <td className="px-4 py-3 font-semibold text-sky-600">

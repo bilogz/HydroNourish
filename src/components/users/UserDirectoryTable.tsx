@@ -165,7 +165,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
       case 'Veterinarian':
         return 'bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1 rounded-full text-xs border border-emerald-200 inline-flex items-center gap-1';
       case 'Pet Owner':
-        return 'bg-teal-100 text-teal-800 font-semibold px-2.5 py-1 rounded-full text-xs border border-teal-200 inline-flex items-center gap-1';
+        return 'bg-rose-100 text-rose-800 font-semibold px-2.5 py-1 rounded-full text-xs border border-rose-200 inline-flex items-center gap-1';
       case 'Clinic Staff':
       default:
         return 'bg-slate-100 text-slate-700 font-semibold px-2.5 py-1 rounded-full text-xs border border-slate-200 inline-flex items-center gap-1';
@@ -194,7 +194,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by name, email, role, or phone..."
-              className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all shadow-xs"
+              className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all shadow-xs"
             />
             {searchTerm && (
               <button
@@ -225,7 +225,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
           >
             {role}
             {role === 'Pet Owner' && (
-              <span className="ml-1.5 px-1.5 py-0.2 rounded-full bg-teal-100 text-teal-800 text-[10px]">
+              <span className="ml-1.5 px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-800 text-[10px]">
                 {(owners || []).length}
               </span>
             )}
@@ -369,7 +369,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                 const online = isUserOnline(owner.email, owner.lastLogin);
 
                 return (
-                  <tr key={owner.id} className="hover:bg-teal-50/30 transition-colors bg-teal-50/10">
+                  <tr key={owner.id} className="hover:bg-rose-50/30 transition-colors bg-rose-50/10">
                     {/* USER ACCOUNT */}
                     <td className="px-4 sm:px-5 py-3.5 font-medium">
                       <div className="flex items-center gap-3">
@@ -398,7 +398,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                     {/* CATEGORY / ROLE */}
                     <td className="px-4 py-3.5">
                       <span className={getRoleBadgeStyle('Pet Owner')}>
-                        <Heart className="w-3 h-3 text-teal-600" />
+                        <Heart className="w-3 h-3 text-rose-600" />
                         Pet Owner
                       </span>
                     </td>
@@ -407,9 +407,9 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                     <td className="px-4 py-3.5 font-medium">
                       <button
                         onClick={() => setMonitoringOwner(owner)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs border border-teal-200 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs border border-rose-200 transition-colors"
                       >
-                        <Dog className="w-3.5 h-3.5 text-teal-600" />
+                        <Dog className="w-3.5 h-3.5 text-rose-600" />
                         {ownerPets.length} {ownerPets.length === 1 ? 'Patient' : 'Patients'} Linked
                       </button>
                     </td>
@@ -438,7 +438,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                     <td className="px-4 sm:px-5 py-3.5 text-right">
                       <button
                         onClick={() => setMonitoringOwner(owner)}
-                        className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         Monitor Pet Details
@@ -496,7 +496,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                 <StatusBadge status={monitoringOwner.accessStatus.charAt(0).toUpperCase() + monitoringOwner.accessStatus.slice(1)} size="sm" />
               </div>
               <div className="flex items-center gap-4 text-slate-600 text-[11px] pt-1">
-                <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-teal-600" />{monitoringOwner.phone}</span>
+                <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-rose-600" />{monitoringOwner.phone}</span>
                 {monitoringOwner.address && (
                   <span className="text-slate-500">• {monitoringOwner.address}</span>
                 )}
@@ -506,7 +506,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
             {/* Linked Pets Monitoring Cards */}
             <div className="space-y-3">
               <h4 className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
-                <Dog className="w-4 h-4 text-teal-600" />
+                <Dog className="w-4 h-4 text-rose-600" />
                 Registered Patients ({getPetsForOwner(monitoringOwner).length})
               </h4>
 
@@ -514,7 +514,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                 {getPetsForOwner(monitoringOwner).map((pet) => (
                   <div
                     key={pet.id}
-                    className="p-4 rounded-xl border border-slate-200 bg-white hover:border-teal-300 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs"
+                    className="p-4 rounded-xl border border-slate-200 bg-white hover:border-rose-300 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs"
                   >
                     <div className="flex items-center gap-3">
                       <img src={pet.avatarUrl} alt={pet.name} className="w-12 h-12 rounded-xl object-cover ring-1 ring-slate-200" />
@@ -547,7 +547,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                           notes: pet.notes || '',
                         });
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs flex items-center gap-1 border border-teal-200 shrink-0"
+                      className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs flex items-center gap-1 border border-rose-200 shrink-0"
                     >
                       <Edit3 className="w-3.5 h-3.5" /> Edit Pet Details
                     </button>
@@ -581,7 +581,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                 required
                 value={petForm.name}
                 onChange={(e) => setPetForm({ ...petForm, name: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
             <div>
@@ -589,7 +589,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
               <select
                 value={petForm.species}
                 onChange={(e) => setPetForm({ ...petForm, species: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               >
                 <option value="Dog">Dog</option>
                 <option value="Cat">Cat</option>
@@ -605,7 +605,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                 type="text"
                 value={petForm.breed}
                 onChange={(e) => setPetForm({ ...petForm, breed: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
             <div>
@@ -617,7 +617,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                 step="0.5"
                 value={petForm.age}
                 onChange={(e) => setPetForm({ ...petForm, age: Number(e.target.value) })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
             <div>
@@ -629,7 +629,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
                 step="0.1"
                 value={petForm.weight}
                 onChange={(e) => setPetForm({ ...petForm, weight: Number(e.target.value) })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
           </div>
@@ -640,7 +640,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
               rows={3}
               value={petForm.notes}
               onChange={(e) => setPetForm({ ...petForm, notes: e.target.value })}
-              className="w-full p-2.5 rounded-xl border border-slate-300 font-medium focus:border-teal-500 focus:outline-none"
+              className="w-full p-2.5 rounded-xl border border-slate-300 font-medium focus:border-rose-500 focus:outline-none"
             />
           </div>
 
@@ -654,7 +654,7 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-teal-600 text-white font-bold hover:bg-teal-700 shadow-md"
+              className="px-5 py-2 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 shadow-md"
             >
               Save Changes
             </button>

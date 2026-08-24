@@ -13,14 +13,14 @@ export const Footer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 pb-12 border-b border-slate-800">
           {/* Col 1: Logo & Info */}
           <div className="space-y-4 md:col-span-1">
-            <div className="bg-white p-2 rounded-xl inline-block">
+            <div className="bg-white/95 p-2 rounded-2xl inline-block shadow-xs">
               <Logo size="md" />
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
               Automated pet feeding, smart hydration tracking, and AI-assisted consumption telemetry tailored for Heritage Animal Clinic.
             </p>
-            <div className="flex items-center gap-2 text-xs text-teal-400 font-semibold pt-1">
-              <Heart className="w-4 h-4 fill-teal-400" />
+            <div className="flex items-center gap-2 text-xs text-rose-400 font-semibold pt-1">
+              <Heart className="w-4 h-4 fill-rose-400" />
               Capstone Project Presentation Ready
             </div>
           </div>
@@ -29,11 +29,11 @@ export const Footer: React.FC = () => {
           <div className="space-y-3">
             <h4 className="text-sm font-bold text-white uppercase tracking-wider">Navigation</h4>
             <ul className="space-y-2 text-xs text-slate-400">
-              <li><a href="#home" className="hover:text-teal-400 transition-colors">Home</a></li>
-              <li><a href="#features" className="hover:text-teal-400 transition-colors">System Features</a></li>
-              <li><a href="#how-it-works" className="hover:text-teal-400 transition-colors">How It Works</a></li>
-              <li><a href="#about" className="hover:text-teal-400 transition-colors">About Project</a></li>
-              <li><a href="#contact" className="hover:text-teal-400 transition-colors">Contact Clinic</a></li>
+              <li><a href="#home" className="hover:text-rose-400 transition-colors">Home</a></li>
+              <li><a href="#features" className="hover:text-rose-400 transition-colors">System Features</a></li>
+              <li><a href="#how-it-works" className="hover:text-rose-400 transition-colors">How It Works</a></li>
+              <li><a href="#about" className="hover:text-rose-400 transition-colors">About Project</a></li>
+              <li><a href="#contact" className="hover:text-rose-400 transition-colors">Contact Clinic</a></li>
             </ul>
           </div>
 
@@ -42,15 +42,15 @@ export const Footer: React.FC = () => {
             <h4 className="text-sm font-bold text-white uppercase tracking-wider">Heritage Animal Clinic</h4>
             <div className="space-y-2.5 text-xs text-slate-400">
               <p className="flex items-start gap-2">
-                <MapPin className="w-4 h-4 text-teal-400 shrink-0 mt-0.5" />
+                <MapPin className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                 <span>742 Evergreen Terrace, Medical District, Sector 4</span>
               </p>
               <p className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-teal-400 shrink-0" />
+                <Phone className="w-4 h-4 text-rose-400 shrink-0" />
                 <span>(555) 890-1234</span>
               </p>
               <p className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-teal-400 shrink-0" />
+                <Mail className="w-4 h-4 text-rose-400 shrink-0" />
                 <span>contact@heritageanimalclinic.com</span>
               </p>
             </div>

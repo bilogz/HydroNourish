@@ -9,7 +9,7 @@
   body {
     font-family: var(--font-sans);
     color: #1e293b;
-    background-color: #f8fafc;
+    background-color: #fdfbfb;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -24,38 +24,39 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #fdf2f4;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #fca5b8;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #f47293;
 }
 
 /* Soft Clinic Card Shadows & Transitions */
 .clinic-card {
   background-color: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #fce7eb;
   border-radius: 0.75rem;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px 0 rgba(136, 19, 55, 0.04), 0 1px 2px -1px rgba(136, 19, 55, 0.03);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .clinic-card:hover {
-  box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.06), 0 3px 6px -3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 6px 14px -2px rgba(136, 19, 55, 0.08), 0 3px 6px -3px rgba(136, 19, 55, 0.04);
   transform: translateY(-1px);
+  border-color: #fbcfe8;
 }
 
 .clinic-gradient-bg {
-  background: linear-gradient(135deg, #0284c7 0%, #0d9488 50%, #10b981 100%);
+  background: linear-gradient(135deg, #881337 0%, #be123c 45%, #fb7185 100%);
 }
 
 .clinic-gradient-text {
-  background: linear-gradient(135deg, #0284c7 0%, #0d9488 50%, #10b981 100%);
+  background: linear-gradient(135deg, #881337 0%, #be123c 50%, #e11d48 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

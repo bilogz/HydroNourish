@@ -12,7 +12,7 @@ export const NotFoundPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950 flex items-center justify-center p-6">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="p-6 bg-slate-50 border-b border-slate-100 text-center space-y-2">
@@ -23,8 +23,8 @@ export const NotFoundPage: React.FC = () => {
 
         {/* Body */}
         <div className="p-8 text-center space-y-5">
-          <div className="p-4 rounded-2xl bg-teal-50 w-fit mx-auto">
-            <SearchX className="w-10 h-10 text-teal-500" />
+          <div className="p-4 rounded-2xl bg-rose-50 w-fit mx-auto">
+            <SearchX className="w-10 h-10 text-rose-500" />
           </div>
 
           <div className="space-y-2">
@@ -47,7 +47,7 @@ export const NotFoundPage: React.FC = () => {
             </button>
             <button
               onClick={() => navigate('/')}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm transition-all cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm transition-all cursor-pointer"
             >
               <Home className="w-4 h-4" />
               Back to Home

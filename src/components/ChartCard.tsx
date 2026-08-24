@@ -25,7 +25,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
           {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
         </div>
         {badge && (
-          <span className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-teal-50 text-teal-700 border border-teal-100">
+          <span className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-rose-50 text-rose-700 border border-rose-100">
             {badge}
           </span>
         )}

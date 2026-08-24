@@ -338,9 +338,9 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
               <button
                 onClick={() => runAction(() => usbSerialService.toggleAutoRefill())}
                 disabled={!isConnected || isActing}
-                className="p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-teal-500/50 flex flex-col items-center text-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group active:scale-95"
+                className="p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-rose-500/50 flex flex-col items-center text-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group active:scale-95"
               >
-                <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center group-hover:scale-110 transition-transform">
                   <RefreshCw className="w-5 h-5" />
                 </div>
                 <div>
@@ -392,7 +392,7 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
                   className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
                   title="Reverse Motor Direction"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 text-teal-400" />
+                  <RefreshCw className="w-3.5 h-3.5 text-rose-400" />
                   Invert Direction
                 </button>
                 <button
@@ -426,7 +426,7 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
             <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center">
                     <Wifi className="w-5 h-5" />
                   </div>
                   <div>
@@ -445,7 +445,7 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
                     }
                   }}
                   disabled={!isConnected || isScanningWifi}
-                  className="px-3 py-1.5 rounded-xl bg-teal-600/30 hover:bg-teal-600/50 border border-teal-500/40 text-teal-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
+                  className="px-3 py-1.5 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/40 text-rose-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isScanningWifi ? 'animate-spin' : ''}`} />
                   {isScanningWifi ? 'Scanning Networks...' : 'Scan Nearby Wi-Fi'}
@@ -466,7 +466,7 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
                         }}
                         className={`px-2.5 py-1 rounded-lg text-xs font-mono flex items-center gap-1.5 border transition-all cursor-pointer ${
                           wifiSsidInput === n.ssid
-                            ? 'bg-teal-500/20 border-teal-400 text-teal-200 font-bold'
+                            ? 'bg-rose-500/20 border-rose-400 text-rose-200 font-bold'
                             : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300'
                         }`}
                       >
@@ -487,7 +487,7 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
                     value={wifiSsidInput}
                     onChange={(e) => setWifiSsidInput(e.target.value)}
                     placeholder="SSID Name (e.g. MyWiFi)"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 font-mono"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 font-mono"
                   />
                 </div>
                 <div className="sm:col-span-5">
@@ -496,14 +496,14 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
                     value={wifiPassInput}
                     onChange={(e) => setWifiPassInput(e.target.value)}
                     placeholder="Password (blank if open)"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 font-mono"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 font-mono"
                   />
                 </div>
                 <div className="sm:col-span-2">
                   <button
                     onClick={() => runAction(() => usbSerialService.pairWifi(wifiSsidInput, wifiPassInput))}
                     disabled={!isConnected || isActing || !wifiSsidInput.trim()}
-                    className="w-full py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40 active:scale-95 transition-all shadow-sm"
+                    className="w-full py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40 active:scale-95 transition-all shadow-sm"
                   >
                     <Send className="w-3 h-3" />
                     Flash Wi-Fi
@@ -628,12 +628,12 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
             <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800">
               <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
                 <span className="font-semibold">TDS Purity</span>
-                <Activity className="w-4 h-4 text-teal-400" />
+                <Activity className="w-4 h-4 text-rose-400" />
               </div>
               <div className="text-2xl font-black text-white">
                 {telemetry ? `${telemetry.tds} PPM` : '--'}
               </div>
-              <p className="text-[10px] text-teal-400 mt-1 font-semibold">
+              <p className="text-[10px] text-rose-400 mt-1 font-semibold">
                 {telemetry?.waterQuality || 'Pending Sync'}
               </p>
             </div>

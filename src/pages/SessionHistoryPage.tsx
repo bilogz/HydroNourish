@@ -190,7 +190,7 @@ export const SessionHistoryPage: React.FC = () => {
                       <span className="font-bold text-slate-800 block">{session.ownerName}</span>
                       <span className="text-[10px] text-slate-400 font-mono">{session.ownerEmail}</span>
                     </td>
-                    <td className="px-4 py-3.5 font-mono font-bold text-teal-600">{session.deviceId}</td>
+                    <td className="px-4 py-3.5 font-mono font-bold text-rose-600">{session.deviceId}</td>
                     <td className="px-4 py-3.5 font-medium text-slate-600">
                       <div>{new Date(session.admissionDate).toLocaleDateString()}</div>
                       <div className="text-[10px] text-slate-400">{new Date(session.admissionDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
@@ -317,7 +317,7 @@ export const SessionHistoryPage: React.FC = () => {
             {/* Timeline */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
               <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Session ID</span><span className="font-mono font-bold text-violet-800">{viewSession.id}</span></div>
-              <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Assigned Device</span><span className="font-bold text-teal-700">{viewSession.deviceId}</span></div>
+              <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Assigned Device</span><span className="font-bold text-rose-700">{viewSession.deviceId}</span></div>
               <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Admission Date</span><span className="font-bold text-slate-800">{new Date(viewSession.admissionDate).toLocaleDateString()}</span></div>
               <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Duration</span><span className="font-black text-slate-900">{formatDuration(viewSession.startTime, viewSession.releaseTime)}</span></div>
             </div>

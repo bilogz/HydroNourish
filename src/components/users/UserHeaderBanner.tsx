@@ -42,7 +42,7 @@ export const UserHeaderBanner: React.FC<UserHeaderBannerProps> = ({
   } else if (rawRole === 'clinic staff' || rawRole === 'staff' || currentUserObj?.role === 'Clinic Staff') {
     roleLabel = 'Clinic Staff';
     RoleIcon = UserCheck;
-    roleBadgeClass = 'bg-teal-400/20 text-teal-300 border-teal-400/30';
+    roleBadgeClass = 'bg-rose-400/20 text-rose-300 border-rose-400/30';
   } else {
     roleLabel = 'Administrator';
     RoleIcon = Shield;
@@ -71,7 +71,7 @@ export const UserHeaderBanner: React.FC<UserHeaderBannerProps> = ({
   return (
     <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-5 shadow-xl border border-indigo-900/50 relative overflow-hidden">
       {/* Ambient Glow */}
-      <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-72 h-72 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-72 h-72 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute left-1/3 bottom-0 translate-y-12 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Logged in User Profile Info */}
@@ -115,7 +115,7 @@ export const UserHeaderBanner: React.FC<UserHeaderBannerProps> = ({
 
           <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-indigo-200/90">
             <span className="flex items-center gap-1.5 font-medium">
-              <Mail className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+              <Mail className="w-3.5 h-3.5 text-rose-400 shrink-0" />
               <span className="font-mono font-bold text-slate-200">{email}</span>
             </span>
             <span className="hidden sm:inline text-slate-600">•</span>

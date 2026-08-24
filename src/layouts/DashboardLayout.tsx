@@ -136,7 +136,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const adminGroup: NavItem[] = isAdmin
     ? [
         { label: 'Dashboard', path: '/app', icon: Home, color: 'text-blue-600' },
-        { label: 'Inquiries', path: '/app/inquiries', icon: Inbox, color: 'text-teal-600', badge: unreadInquiriesCount },
+        { label: 'Inquiries', path: '/app/inquiries', icon: Inbox, color: 'text-rose-600', badge: unreadInquiriesCount },
         { label: 'Session History', path: '/app/sessions', icon: ClipboardList, color: 'text-violet-600' },
         { label: 'Users', path: '/app/users', icon: Users, color: 'text-emerald-600' },
         { label: 'Reports', path: '/app/reports', icon: FileText, color: 'text-purple-600' },
@@ -144,20 +144,20 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       ]
     : [
         { label: 'Dashboard', path: '/app', icon: Home, color: 'text-blue-600' },
-        { label: 'Inquiries', path: '/app/inquiries', icon: Inbox, color: 'text-teal-600', badge: unreadInquiriesCount },
+        { label: 'Inquiries', path: '/app/inquiries', icon: Inbox, color: 'text-rose-600', badge: unreadInquiriesCount },
         { label: 'Session History', path: '/app/sessions', icon: ClipboardList, color: 'text-violet-600' },
         { label: 'Reports', path: '/app/reports', icon: FileText, color: 'text-purple-600' },
       ];
 
   const healthGroup: NavItem[] = [
     { label: 'Pets', path: '/app/pets', icon: Dog, color: 'text-amber-600' },
-    { label: 'Pet Owners', path: '/app/pet-owners', icon: HeartHandshake, color: 'text-teal-600' },
+    { label: 'Pet Owners', path: '/app/pet-owners', icon: HeartHandshake, color: 'text-rose-600' },
     { label: 'Feeding', path: '/app/feeding', icon: Utensils, color: 'text-orange-600' },
     { label: 'Hydration', path: '/app/hydration', icon: Droplets, color: 'text-sky-600' },
   ];
 
   const automatedSubItems: NavItem[] = [
-    { label: 'Smart Devices', path: '/app/devices', icon: Cpu, color: 'text-teal-600' },
+    { label: 'Smart Devices', path: '/app/devices', icon: Cpu, color: 'text-rose-600' },
   ];
 
   const renderNavLink = (
@@ -178,7 +178,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         className={() => {
           return `flex items-center gap-3 ${isSubItem ? 'px-3.5 py-2 text-xs' : 'px-3 py-2.5 text-xs'} font-semibold rounded-xl transition-all group relative ${
             active
-              ? 'bg-teal-50/90 text-teal-900 border border-teal-200/80 shadow-xs font-bold'
+              ? 'bg-rose-50/90 text-rose-900 border border-rose-200/80 shadow-xs font-bold'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
           }`;
         }}
@@ -263,7 +263,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   automatedOpen ? 'bg-slate-100/70 border border-slate-200/60' : ''
                 }`}
               >
-                <Zap className="w-4 h-4 text-teal-600 shrink-0" />
+                <Zap className="w-4 h-4 text-rose-600 shrink-0" />
                 {!sidebarCollapsed && (
                   <span className="flex-1 text-left">Automated Warnings</span>
                 )}
@@ -286,9 +286,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* Clinic Footer + Logout */}
         <div className="border-t border-slate-100 p-3 space-y-2">
           {!sidebarCollapsed && (
-            <div className="p-3 bg-slate-50 rounded-xl">
-              <div className="flex items-center gap-2 text-xs font-bold text-teal-700">
-                <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
+            <div className="p-3 bg-rose-50/60 rounded-xl border border-rose-100/60">
+              <div className="flex items-center gap-2 text-xs font-bold text-rose-800">
+                <ShieldCheck className="w-4 h-4 text-rose-600 shrink-0" />
                 <span>Heritage Animal Clinic</span>
               </div>
               <p className="text-[10px] text-slate-500 mt-0.5">
@@ -343,7 +343,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold ${
                           isActive
-                            ? 'bg-teal-50 text-teal-900 border border-teal-200 font-bold'
+                            ? 'bg-rose-50 text-rose-900 border border-rose-200 font-bold'
                             : 'text-slate-600'
                         }`
                       }
@@ -374,7 +374,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold ${
                           isActive
-                            ? 'bg-teal-50 text-teal-900 border border-teal-200 font-bold'
+                            ? 'bg-rose-50 text-rose-900 border border-rose-200 font-bold'
                             : 'text-slate-600'
                         }`
                       }
@@ -400,7 +400,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold ${
                           isActive
-                            ? 'bg-teal-50 text-teal-900 border border-teal-200 font-bold'
+                            ? 'bg-rose-50 text-rose-900 border border-rose-200 font-bold'
                             : 'text-slate-600'
                         }`
                       }
@@ -429,13 +429,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     className="w-8 h-8 rounded-lg object-cover ring-1 ring-slate-200"
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-800 font-extrabold text-xs flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-800 font-extrabold text-xs flex items-center justify-center">
                     {initials}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-slate-900 truncate">{adminName}</p>
-                  <p className="text-[10px] text-teal-700 font-extrabold">{adminRole}</p>
+                  <p className="text-[10px] text-rose-700 font-extrabold">{adminRole}</p>
                 </div>
               </div>
 
@@ -472,14 +472,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
             <div>
               <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                <Link to="/app" className="hover:text-teal-600">
+                <Link to="/app" className="hover:text-rose-600">
                   Dashboard
                 </Link>
                 {breadcrumbs.map((b, idx) => (
                   <React.Fragment key={idx}>
                     <span>/</span>
                     {b.href ? (
-                      <Link to={b.href} className="hover:text-teal-600">
+                      <Link to={b.href} className="hover:text-rose-600">
                         {b.label}
                       </Link>
                     ) : (
@@ -503,17 +503,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 placeholder="Search pets, devices…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-xs font-medium bg-slate-100 border border-transparent rounded-xl focus:bg-white focus:border-teal-500 focus:outline-none transition-all"
+                className="w-full pl-9 pr-4 py-2 text-xs font-medium bg-slate-100 border border-transparent rounded-xl focus:bg-white focus:border-rose-500 focus:outline-none transition-all"
               />
             </div>
 
             {/* AI Assistant */}
             <button
               onClick={() => setAiModalOpen(true)}
-              className="px-3 py-2 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs"
+              className="px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs"
               title="Launch AI Clinical Assistant"
             >
-              <Sparkles className="w-4 h-4 text-teal-600" />
+              <Sparkles className="w-4 h-4 text-rose-600" />
               <span className="hidden sm:inline">AI Pet Summary</span>
             </button>
 
@@ -544,15 +544,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     {/* 1. CONTACT INQUIRIES NOTIFICATIONS */}
                     {unreadInquiries.length > 0 && (
                       <div className="space-y-2">
-                        <div className="flex items-center justify-between text-[11px] font-extrabold text-teal-800 uppercase tracking-wider">
+                        <div className="flex items-center justify-between text-[11px] font-extrabold text-rose-800 uppercase tracking-wider">
                           <span className="flex items-center gap-1.5">
-                            <Inbox className="w-3.5 h-3.5 text-teal-600" />
+                            <Inbox className="w-3.5 h-3.5 text-rose-600" />
                             Client Inquiries ({unreadInquiries.length})
                           </span>
                           <Link
                             to="/app/inquiries"
                             onClick={() => setNotificationsOpen(false)}
-                            className="text-teal-600 hover:underline capitalize font-bold"
+                            className="text-rose-600 hover:underline capitalize font-bold"
                           >
                             View All
                           </Link>
@@ -562,18 +562,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                             key={inquiry.id}
                             to="/app/inquiries"
                             onClick={() => setNotificationsOpen(false)}
-                            className="block p-3 rounded-xl bg-teal-50/70 hover:bg-teal-100/70 border border-teal-200/80 transition-colors"
+                            className="block p-3 rounded-xl bg-rose-50/70 hover:bg-rose-100/70 border border-rose-200/80 transition-colors"
                           >
                             <div className="flex items-center justify-between">
-                              <span className="font-bold text-xs text-teal-950 flex items-center gap-1">
+                              <span className="font-bold text-xs text-rose-950 flex items-center gap-1">
                                 <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
                                 {inquiry.name}
                               </span>
-                              <span className="text-[10px] text-teal-700 font-mono">
+                              <span className="text-[10px] text-rose-700 font-mono">
                                 {inquiry.createdAt ? new Date(inquiry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'New'}
                               </span>
                             </div>
-                            <p className="text-[11px] font-semibold text-teal-900 mt-0.5 truncate">
+                            <p className="text-[11px] font-semibold text-rose-900 mt-0.5 truncate">
                               {inquiry.subject}
                             </p>
                             <p className="text-xs text-slate-600 mt-1 line-clamp-2">
@@ -595,7 +595,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                           <Link
                             to="/app/alerts"
                             onClick={() => setNotificationsOpen(false)}
-                            className="text-teal-600 hover:underline capitalize font-bold"
+                            className="text-rose-600 hover:underline capitalize font-bold"
                           >
                             View All
                           </Link>
@@ -635,7 +635,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     <Link
                       to="/app/inquiries"
                       onClick={() => setNotificationsOpen(false)}
-                      className="text-teal-600 hover:underline flex items-center gap-1"
+                      className="text-rose-600 hover:underline flex items-center gap-1"
                     >
                       <Inbox className="w-3.5 h-3.5" />
                       Inquiries Hub
@@ -643,7 +643,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     <Link
                       to="/app/alerts"
                       onClick={() => setNotificationsOpen(false)}
-                      className="text-slate-600 hover:text-teal-600 hover:underline flex items-center gap-1"
+                      className="text-slate-600 hover:text-rose-600 hover:underline flex items-center gap-1"
                     >
                       <Bot className="w-3.5 h-3.5" />
                       AI Observations
@@ -666,13 +666,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     className="w-8 h-8 rounded-lg object-cover ring-1 ring-slate-200"
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-800 font-extrabold text-xs flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-800 font-extrabold text-xs flex items-center justify-center">
                     {initials}
                   </div>
                 )}
                 <div className="text-left hidden sm:block">
                   <p className="text-xs font-bold text-slate-900 leading-tight">{adminName}</p>
-                  <p className="text-[10px] text-teal-700 font-extrabold">{adminRole}</p>
+                  <p className="text-[10px] text-rose-700 font-extrabold">{adminRole}</p>
                 </div>
               </button>
 
@@ -681,7 +681,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   <div className="p-2 border-b border-slate-100">
                     <p className="font-bold text-xs text-slate-900">{adminName}</p>
                     <p className="text-[11px] text-slate-500 truncate">{adminEmail}</p>
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-extrabold">
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-extrabold">
                       {adminRole}
                     </span>
                   </div>

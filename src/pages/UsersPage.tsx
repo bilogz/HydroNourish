@@ -76,7 +76,7 @@ export const UsersPage: React.FC = () => {
               onClick={() => setActiveTab('staff')}
               className={`pb-3 px-1 flex items-center gap-2 transition-all border-b-2 ${
                 activeTab === 'staff'
-                  ? 'border-teal-600 text-teal-700'
+                  ? 'border-rose-600 text-rose-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >
@@ -87,7 +87,7 @@ export const UsersPage: React.FC = () => {
               onClick={() => setActiveTab('owners')}
               className={`pb-3 px-1 flex items-center gap-2 transition-all border-b-2 ${
                 activeTab === 'owners'
-                  ? 'border-teal-600 text-teal-700'
+                  ? 'border-rose-600 text-rose-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >

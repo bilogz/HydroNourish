@@ -140,7 +140,7 @@ export const OwnerLoginForm: React.FC<OwnerLoginFormProps> = ({
             className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5"
           >
             <span className="flex items-center gap-1.5">
-              <Mail className="w-3.5 h-3.5 text-teal-600" />
+              <Mail className="w-3.5 h-3.5 text-rose-600" />
               Email Address *
             </span>
           </label>
@@ -156,7 +156,7 @@ export const OwnerLoginForm: React.FC<OwnerLoginFormProps> = ({
               setError(null);
             }}
             disabled={isLoading}
-            className="w-full px-4 py-3 text-sm font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 transition-all"
+            className="w-full px-4 py-3 text-sm font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 disabled:opacity-60 transition-all"
             placeholder="owner@example.com"
           />
         </div>
@@ -168,7 +168,7 @@ export const OwnerLoginForm: React.FC<OwnerLoginFormProps> = ({
             className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5"
           >
             <span className="flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-teal-600" />
+              <Lock className="w-3.5 h-3.5 text-rose-600" />
               Password *
             </span>
           </label>
@@ -184,7 +184,7 @@ export const OwnerLoginForm: React.FC<OwnerLoginFormProps> = ({
                 setError(null);
               }}
               disabled={isLoading}
-              className="w-full px-4 py-3 pr-10 text-sm font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 transition-all"
+              className="w-full px-4 py-3 pr-10 text-sm font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 disabled:opacity-60 transition-all"
               placeholder="Enter password"
             />
             <button
@@ -201,7 +201,7 @@ export const OwnerLoginForm: React.FC<OwnerLoginFormProps> = ({
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
+          className="w-full py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
         >
           <LogIn className="w-4 h-4" />
           {isLoading ? 'Signing In…' : 'Access Owner Dashboard'}
@@ -214,7 +214,7 @@ export const OwnerLoginForm: React.FC<OwnerLoginFormProps> = ({
         <button
           type="button"
           onClick={onSwitchToRegister}
-          className="inline-flex items-center gap-1.5 text-xs font-extrabold text-teal-700 hover:text-teal-900 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-xs font-extrabold text-rose-700 hover:text-rose-900 transition-colors cursor-pointer"
         >
           <UserPlus className="w-4 h-4" />
           Register New Pet Owner Account

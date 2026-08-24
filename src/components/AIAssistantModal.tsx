@@ -99,7 +99,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
             </div>
             <div>
               <span className="text-[10px] text-slate-400 font-bold uppercase">Assigned Node</span>
-              <p className="font-mono font-bold text-teal-600 mt-0.5">{assignedDevice?.id || 'HN-NODE-F778'}</p>
+              <p className="font-mono font-bold text-rose-600 mt-0.5">{assignedDevice?.id || 'HN-NODE-F778'}</p>
             </div>
           </div>
         )}
@@ -108,7 +108,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
         <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <h4 className="font-bold text-slate-900 flex items-center gap-2 text-sm">
-              <FileText className="w-4 h-4 text-teal-600" />
+              <FileText className="w-4 h-4 text-rose-600" />
               Comprehensive Patient Summary: {selectedPet?.name}
             </h4>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
@@ -117,13 +117,13 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-            <div className="p-3 bg-teal-50/60 rounded-xl border border-teal-100 flex flex-col justify-between">
-              <span className="text-[10px] font-bold text-teal-800 uppercase flex items-center gap-1">
-                <Utensils className="w-3.5 h-3.5 text-teal-600" />
+            <div className="p-3 bg-rose-50/60 rounded-xl border border-rose-100 flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-rose-800 uppercase flex items-center gap-1">
+                <Utensils className="w-3.5 h-3.5 text-rose-600" />
                 Feeding Activity
               </span>
-              <p className="font-extrabold text-sm text-teal-950 mt-1">{totalMealsToday} Meals Served</p>
-              <span className="text-[10px] text-teal-700 mt-0.5">Automated schedules active</span>
+              <p className="font-extrabold text-sm text-rose-950 mt-1">{totalMealsToday} Meals Served</p>
+              <span className="text-[10px] text-rose-700 mt-0.5">Automated schedules active</span>
             </div>
 
             <div className="p-3 bg-sky-50/60 rounded-xl border border-sky-100 flex flex-col justify-between">

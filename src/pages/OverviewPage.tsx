@@ -138,8 +138,8 @@ export const OverviewPage: React.FC = () => {
             value={completedSessionCount}
             subtitle="Total discharged patients"
             icon={CheckCircle}
-            iconBgColor="bg-teal-50"
-            iconTextColor="text-teal-600"
+            iconBgColor="bg-rose-50"
+            iconTextColor="text-rose-600"
             badgeText="Archived"
             badgeType="info"
           />
@@ -212,7 +212,7 @@ export const OverviewPage: React.FC = () => {
         {hasDeviceConnected && (
           <div className="clinic-card p-4 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex flex-wrap items-center justify-between gap-4 border border-slate-700/60 shadow-lg">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-teal-500/20 text-teal-400 border border-teal-500/30">
+              <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30">
                 <Cpu className="w-5 h-5" />
               </div>
               <div>
@@ -346,17 +346,17 @@ export const OverviewPage: React.FC = () => {
           <div className="lg:col-span-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Cpu className="w-5 h-5 text-teal-600" />
+                <Cpu className="w-5 h-5 text-rose-600" />
                 HydroNourish Hardware Node
               </h3>
-              <Link to="/app/devices" className="text-xs font-semibold text-teal-600 hover:underline flex items-center gap-1">
+              <Link to="/app/devices" className="text-xs font-semibold text-rose-600 hover:underline flex items-center gap-1">
                 Manage Device <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
             <div className="clinic-card overflow-hidden bg-white border border-slate-200/80">
               <div className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-teal-50 text-teal-700 font-mono text-xs font-bold border border-teal-200">
+                  <div className="p-2.5 rounded-xl bg-rose-50 text-rose-700 font-mono text-xs font-bold border border-rose-200">
                     {hardware.id}
                   </div>
                   <div>
@@ -379,7 +379,7 @@ export const OverviewPage: React.FC = () => {
               <div className="p-4 bg-slate-50 border-t border-slate-100 grid grid-cols-3 gap-2 text-xs text-center">
                 <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Food Level</span><span className="font-bold text-slate-800">{hardware.foodLevelPct}%</span></div>
                 <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Water Level</span><span className="font-bold text-slate-800">{hardware.waterLevelPct}%</span></div>
-                <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Assignment</span><span className="font-bold text-teal-700">{hardware.assignedPetName || 'Vacant'}</span></div>
+                <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Assignment</span><span className="font-bold text-rose-700">{hardware.assignedPetName || 'Vacant'}</span></div>
               </div>
             </div>
           </div>
@@ -390,7 +390,7 @@ export const OverviewPage: React.FC = () => {
                 <Calendar className="w-5 h-5 text-indigo-600" />
                 Recent Dispense & Intake Records
               </h3>
-              <Link to="/app/feeding" className="text-xs font-semibold text-teal-600 hover:underline flex items-center gap-1">
+              <Link to="/app/feeding" className="text-xs font-semibold text-rose-600 hover:underline flex items-center gap-1">
                 View Logs <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>

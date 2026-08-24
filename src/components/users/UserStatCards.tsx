@@ -32,8 +32,8 @@ export const UserStatCards: React.FC<UserStatCardsProps> = ({ users }) => {
         value={petOwnersCount}
         subtitle="Community Client Profiles"
         icon={Heart}
-        iconBgColor="bg-teal-50"
-        iconTextColor="text-teal-600"
+        iconBgColor="bg-rose-50"
+        iconTextColor="text-rose-600"
         badgeText="Clients"
         badgeType="success"
       />

@@ -193,10 +193,10 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
         {stepIndicators.map((s, i) => (
           <React.Fragment key={s.key}>
             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-              i <= currentStepIndex ? 'bg-teal-100 text-teal-800 border border-teal-200' : 'bg-slate-100 text-slate-400 border border-slate-200'
+              i <= currentStepIndex ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-slate-100 text-slate-400 border border-slate-200'
             }`}>
               <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
-                i < currentStepIndex ? 'bg-teal-600 text-white' : i === currentStepIndex ? 'bg-teal-600 text-white' : 'bg-slate-300 text-white'
+                i < currentStepIndex ? 'bg-rose-600 text-white' : i === currentStepIndex ? 'bg-rose-600 text-white' : 'bg-slate-300 text-white'
               }`}>{i < currentStepIndex ? '✓' : s.num}</span>
               <span className="hidden sm:inline">{s.label}</span>
             </div>
@@ -210,15 +210,15 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
         <div className="space-y-4 text-xs">
           <div className="flex items-center justify-between">
             <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-              <User className="w-4 h-4 text-teal-600" /> Select Pet Owner
+              <User className="w-4 h-4 text-rose-600" /> Select Pet Owner
             </h4>
-            <button onClick={() => setShowNewOwnerForm(!showNewOwnerForm)} className="text-teal-600 hover:text-teal-700 font-bold flex items-center gap-1">
+            <button onClick={() => setShowNewOwnerForm(!showNewOwnerForm)} className="text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1">
               <Plus className="w-3.5 h-3.5" /> Add New Owner
             </button>
           </div>
 
           {showNewOwnerForm && (
-            <div className="p-4 rounded-xl border border-teal-200 bg-teal-50/50 space-y-3">
+            <div className="p-4 rounded-xl border border-rose-200 bg-rose-50/50 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 uppercase mb-1">Full Name *</label>
@@ -237,7 +237,7 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
                   <input type="text" value={newOwner.notes} onChange={e => setNewOwner({ ...newOwner, notes: e.target.value })} className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold" placeholder="Optional" />
                 </div>
               </div>
-              <button onClick={handleCreateOwner} className="px-4 py-2 rounded-xl bg-teal-600 text-white font-bold text-xs">Create Owner</button>
+              <button onClick={handleCreateOwner} className="px-4 py-2 rounded-xl bg-rose-600 text-white font-bold text-xs">Create Owner</button>
             </div>
           )}
 
@@ -247,23 +247,23 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
                 key={owner.id}
                 onClick={() => setSelectedOwnerId(owner.id)}
                 className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
-                  selectedOwnerId === owner.id ? 'border-teal-400 bg-teal-50 ring-1 ring-teal-300' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  selectedOwnerId === owner.id ? 'border-rose-400 bg-rose-50 ring-1 ring-teal-300' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
-                <div className="w-9 h-9 rounded-lg bg-teal-100 text-teal-800 font-bold flex items-center justify-center text-sm">
+                <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-800 font-bold flex items-center justify-center text-sm">
                   {owner.name.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-slate-900 truncate">{owner.name}</p>
                   <p className="text-slate-500 truncate">{owner.email} • {owner.phone}</p>
                 </div>
-                {selectedOwnerId === owner.id && <Check className="w-5 h-5 text-teal-600 shrink-0" />}
+                {selectedOwnerId === owner.id && <Check className="w-5 h-5 text-rose-600 shrink-0" />}
               </button>
             ))}
           </div>
 
           <div className="flex justify-end pt-3 border-t border-slate-100">
-            <button onClick={() => setStep('pet')} disabled={!canProceedFromOwner} className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${canProceedFromOwner ? 'bg-teal-600 text-white hover:bg-teal-500' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
+            <button onClick={() => setStep('pet')} disabled={!canProceedFromOwner} className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${canProceedFromOwner ? 'bg-rose-600 text-white hover:bg-rose-500' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
               Next <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -277,7 +277,7 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
             <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
               <Dog className="w-4 h-4 text-amber-600" /> Select Pet for {selectedOwner?.name}
             </h4>
-            <button onClick={() => setShowNewPetForm(!showNewPetForm)} className="text-teal-600 hover:text-teal-700 font-bold flex items-center gap-1">
+            <button onClick={() => setShowNewPetForm(!showNewPetForm)} className="text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1">
               <Plus className="w-3.5 h-3.5" /> Add New Pet
             </button>
           </div>
@@ -386,7 +386,7 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
             <button onClick={() => setStep('owner')} className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700 text-xs flex items-center gap-1">
               <ChevronLeft className="w-3.5 h-3.5" /> Back
             </button>
-            <button onClick={() => setStep('details')} disabled={!canProceedFromPet} className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${canProceedFromPet ? 'bg-teal-600 text-white hover:bg-teal-500' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
+            <button onClick={() => setStep('details')} disabled={!canProceedFromPet} className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${canProceedFromPet ? 'bg-rose-600 text-white hover:bg-rose-500' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
               Next <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -424,7 +424,7 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
             <button onClick={() => setStep('pet')} className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700 text-xs flex items-center gap-1">
               <ChevronLeft className="w-3.5 h-3.5" /> Back
             </button>
-            <button onClick={() => setStep('confirm')} disabled={!canProceedFromDetails} className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${canProceedFromDetails ? 'bg-teal-600 text-white hover:bg-teal-500' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
+            <button onClick={() => setStep('confirm')} disabled={!canProceedFromDetails} className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${canProceedFromDetails ? 'bg-rose-600 text-white hover:bg-rose-500' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
               Review & Confirm <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -450,7 +450,7 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
               <div><span className="text-slate-500">Owner:</span> <span className="font-bold text-slate-800">{selectedOwner.name}</span></div>
               <div><span className="text-slate-500">Email:</span> <span className="font-bold text-slate-800">{selectedOwner.email}</span></div>
               <div><span className="text-slate-500">Phone:</span> <span className="font-bold text-slate-800">{selectedOwner.phone}</span></div>
-              <div><span className="text-slate-500">Device:</span> <span className="font-bold text-teal-600">{selectedPet.assignedDeviceId || 'Cage 1'}</span></div>
+              <div><span className="text-slate-500">Device:</span> <span className="font-bold text-rose-600">{selectedPet.assignedDeviceId || 'Cage 1'}</span></div>
               <div><span className="text-slate-500">Admission:</span> <span className="font-bold text-slate-800">{new Date(admissionDate).toLocaleString()}</span></div>
               <div><span className="text-slate-500">Expected Release:</span> <span className="font-bold text-slate-800">{expectedRelease ? new Date(expectedRelease).toLocaleString() : 'Not set'}</span></div>
               <div><span className="text-slate-500">Feeding:</span> <span className="font-bold text-slate-800">{selectedPet.feedingPlan.portionGrams}g × {selectedPet.feedingPlan.timesPerDay}/day</span></div>

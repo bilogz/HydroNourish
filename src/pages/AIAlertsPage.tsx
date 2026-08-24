@@ -30,9 +30,9 @@ export const AIAlertsPage: React.FC = () => {
   return (
     <DashboardLayout pageTitle="AI-Assisted Health Observations" breadcrumbs={[{ label: 'AI Health Alerts' }]}>
       {/* ================= MANDATORY MEDICAL SAFETY NOTICE ================= */}
-      <div className="clinic-card p-4 bg-teal-500/10 border-teal-200 text-xs text-teal-950 flex items-center justify-between">
+      <div className="clinic-card p-4 bg-rose-500/10 border-rose-200 text-xs text-rose-950 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Bot className="w-5 h-5 text-teal-600 shrink-0" />
+          <Bot className="w-5 h-5 text-rose-600 shrink-0" />
           <span>
             <strong>Clinical Safety Protocol:</strong> AI observations indicate possible abnormal readings or telemetry deviations. They serve as supportive observations for Heritage Animal Clinic staff and are not confirmed medical diagnoses.
           </span>
@@ -142,7 +142,7 @@ export const AIAlertsPage: React.FC = () => {
                       {alert.reviewStatus !== 'Resolved' && (
                         <button
                           onClick={() => resolveAlert(alert.id)}
-                          className="px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px]"
+                          className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px]"
                         >
                           Resolve
                         </button>

@@ -59,7 +59,7 @@ export const LandingPage: React.FC = () => {
   return (
     <PublicLayout>
       {/* ================= 1. HERO SECTION ================= */}
-      <section id="home" className="relative pt-16 pb-20 md:pt-24 md:pb-28 overflow-hidden bg-gradient-to-b from-slate-50 via-teal-50/40 to-slate-50">
+      <section id="home" className="relative pt-16 pb-20 md:pt-24 md:pb-28 overflow-hidden bg-gradient-to-b from-slate-50 via-rose-50/40 to-slate-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-[1.15]">
             Smarter Feeding, Hydration, and Health Monitoring for <span className="clinic-gradient-text">Pets</span>
@@ -72,7 +72,7 @@ export const LandingPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
             <Link
               to="/owner/login"
-              className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 via-teal-600 to-emerald-600 text-white font-bold text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2.5 text-center"
+              className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-rose-700 via-rose-600 to-pink-600 text-white font-bold text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2.5 text-center"
             >
               Pet Owner Portal
               <ArrowRight className="w-5 h-5" />
@@ -86,9 +86,9 @@ export const LandingPage: React.FC = () => {
           </div>
 
           <div className="pt-4 flex flex-wrap items-center justify-center gap-6 text-xs font-medium text-slate-500">
-            <span className="flex items-center gap-1.5"><Check className="w-4 h-4 text-emerald-600" /> Real-time telemetry</span>
-            <span className="flex items-center gap-1.5"><Check className="w-4 h-4 text-emerald-600" /> ESP32 hardware support</span>
-            <span className="flex items-center gap-1.5"><Check className="w-4 h-4 text-emerald-600" /> AI observations</span>
+            <span className="flex items-center gap-1.5"><Check className="w-4 h-4 text-rose-600" /> Real-time telemetry</span>
+            <span className="flex items-center gap-1.5"><Check className="w-4 h-4 text-rose-600" /> ESP32 hardware support</span>
+            <span className="flex items-center gap-1.5"><Check className="w-4 h-4 text-rose-600" /> AI observations</span>
           </div>
         </div>
       </section>
@@ -97,7 +97,7 @@ export const LandingPage: React.FC = () => {
       <section id="features" className="py-20 bg-slate-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16 space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-teal-600">Core Capabilities</h2>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-rose-600">Core Capabilities</h2>
             <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
               Integrated Technology for Heritage Animal Clinic
             </p>
@@ -164,7 +164,7 @@ export const LandingPage: React.FC = () => {
 
             {/* Feature 6 */}
             <div className="clinic-card p-6 space-y-4">
-              <div className="p-3.5 rounded-2xl bg-teal-50 text-teal-600 w-fit">
+              <div className="p-3.5 rounded-2xl bg-rose-50 text-rose-600 w-fit">
                 <Smartphone className="w-6 h-6" />
               </div>
               <h3 className="text-lg font-bold text-slate-900 tracking-tight">Owner Portal & Direct Inquiries</h3>
@@ -180,7 +180,7 @@ export const LandingPage: React.FC = () => {
       <section id="how-it-works" className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16 space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-teal-600">Workflow</h2>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-rose-600">Workflow</h2>
             <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
               Four Steps to Complete Care Tracking
             </p>
@@ -188,7 +188,7 @@ export const LandingPage: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             <div className="relative p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-teal-600 text-white font-extrabold flex items-center justify-center mx-auto text-lg">
+              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white font-extrabold flex items-center justify-center mx-auto text-lg">
                 1
               </div>
               <h4 className="text-base font-bold text-slate-900">Register the Pet</h4>
@@ -198,7 +198,7 @@ export const LandingPage: React.FC = () => {
             </div>
 
             <div className="relative p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-teal-600 text-white font-extrabold flex items-center justify-center mx-auto text-lg">
+              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white font-extrabold flex items-center justify-center mx-auto text-lg">
                 2
               </div>
               <h4 className="text-base font-bold text-slate-900">Connect Device</h4>
@@ -208,7 +208,7 @@ export const LandingPage: React.FC = () => {
             </div>
 
             <div className="relative p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-teal-600 text-white font-extrabold flex items-center justify-center mx-auto text-lg">
+              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white font-extrabold flex items-center justify-center mx-auto text-lg">
                 3
               </div>
               <h4 className="text-base font-bold text-slate-900">Collect Readings</h4>
@@ -218,7 +218,7 @@ export const LandingPage: React.FC = () => {
             </div>
 
             <div className="relative p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-teal-600 text-white font-extrabold flex items-center justify-center mx-auto text-lg">
+              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white font-extrabold flex items-center justify-center mx-auto text-lg">
                 4
               </div>
               <h4 className="text-base font-bold text-slate-900">Review Results & Alerts</h4>
@@ -248,7 +248,7 @@ export const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-4">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-teal-600">About HydroNourish</h2>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-rose-600">About HydroNourish</h2>
               <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight">
                 Designed specifically for Heritage Animal Clinic
               </h3>
@@ -264,15 +264,15 @@ export const LandingPage: React.FC = () => {
               <h4 className="text-base font-bold text-slate-900">System Architecture Highlights</h4>
               <ul className="space-y-3 text-xs text-slate-600">
                 <li className="flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <span><strong>Microcontroller Telemetry:</strong> Micro-dispensing servos and load cells transmit load weight changes to the server.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <span><strong>AI Anomaly Flagging:</strong> Machine-learning algorithms flag deviations from historical baseline water/food consumption.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <span><strong>Supabase-Ready Database Schema:</strong> Ready for real-time Postgres DB synchronization.</span>
                 </li>
               </ul>
@@ -285,7 +285,7 @@ export const LandingPage: React.FC = () => {
       <section id="contact" className="py-20 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10 space-y-2">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-teal-600">Contact Us</h2>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-rose-600">Contact Us</h2>
             <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight">
               Get in Touch with Heritage Animal Clinic
             </h3>
@@ -328,7 +328,7 @@ export const LandingPage: React.FC = () => {
                       placeholder="e.g. Dr. Jane Doe"
                       value={contactName}
                       onChange={e => setContactName(e.target.value)}
-                      className="w-full px-4 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:bg-white focus:outline-none"
+                      className="w-full px-4 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:bg-white focus:outline-none"
                     />
                   </div>
                   <div>
@@ -341,7 +341,7 @@ export const LandingPage: React.FC = () => {
                       placeholder="e.g. jane@example.com"
                       value={contactEmail}
                       onChange={e => setContactEmail(e.target.value)}
-                      className="w-full px-4 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:bg-white focus:outline-none"
+                      className="w-full px-4 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:bg-white focus:outline-none"
                     />
                   </div>
                 </div>
@@ -355,7 +355,7 @@ export const LandingPage: React.FC = () => {
                     placeholder="e.g. Inquiry regarding HydroNourish setup"
                     value={contactSubject}
                     onChange={e => setContactSubject(e.target.value)}
-                    className="w-full px-4 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:bg-white focus:outline-none"
+                    className="w-full px-4 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:bg-white focus:outline-none"
                   />
                 </div>
 
@@ -369,14 +369,14 @@ export const LandingPage: React.FC = () => {
                     placeholder="Write your message here..."
                     value={contactMessage}
                     onChange={e => setContactMessage(e.target.value)}
-                    className="w-full px-4 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:bg-white focus:outline-none resize-none"
+                    className="w-full px-4 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:bg-white focus:outline-none resize-none"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Send className={`w-4 h-4 ${isSubmitting ? 'animate-spin' : ''}`} />
                   {isSubmitting ? 'Sending Inquiry...' : 'Submit Contact Form'}

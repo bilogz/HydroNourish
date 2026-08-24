@@ -82,7 +82,7 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-white/10 backdrop-blur-sm">
-                <Cpu className="w-5 h-5 text-teal-300" />
+                <Cpu className="w-5 h-5 text-rose-300" />
               </div>
               <div>
                 <h3 className="text-sm font-extrabold text-white tracking-tight">Current Hardware Assignment</h3>
@@ -97,7 +97,7 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
 
         {/* Empty State Body */}
         <div className="p-8 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-teal-50 text-teal-500 flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-4">
             <Cpu className="w-8 h-8" />
           </div>
           <h4 className="text-base font-bold text-slate-900 mb-1">
@@ -112,7 +112,7 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
           {canAssignPet() && isConnected ? (
             <button
               onClick={onAssignClick}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all"
             >
               <Plus className="w-4 h-4" />
               Assign Pet and Owner
@@ -159,7 +159,7 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-white/10 backdrop-blur-sm">
-              <Cpu className="w-5 h-5 text-teal-300" />
+              <Cpu className="w-5 h-5 text-rose-300" />
             </div>
             <div>
               <h3 className="text-sm font-extrabold text-white tracking-tight">Current Hardware Assignment</h3>
@@ -216,7 +216,7 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
                 <span className="font-extrabold text-indigo-700">{elapsed || 'Just started'}</span>
               </div>
               <div className="flex items-center gap-2 text-xs">
-                <Calendar className="w-3.5 h-3.5 text-teal-500" />
+                <Calendar className="w-3.5 h-3.5 text-rose-500" />
                 <span className="text-slate-500">Expected Release:</span>
                 <span className="font-bold text-slate-800">{new Date(activeSession.expectedReleaseDate).toLocaleDateString()}</span>
               </div>
@@ -275,7 +275,7 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
                   <span className="text-xs font-bold text-slate-800">{activeSession.petSnapshot?.hydrationTarget || 500}ml</span>
                 </div>
                 <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-                  <Activity className="w-3.5 h-3.5 text-teal-500 mx-auto mb-0.5" />
+                  <Activity className="w-3.5 h-3.5 text-rose-500 mx-auto mb-0.5" />
                   <span className="text-[11px] text-slate-500 block">Telemetry</span>
                   <span className="text-xs font-bold text-slate-800">Active</span>
                 </div>
@@ -300,7 +300,7 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
           </button>
           <button
             onClick={() => onViewPet(activeSession.petId)}
-            className="px-4 py-2.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-700 font-bold text-xs flex items-center gap-1.5 transition-all border border-teal-200"
+            className="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center gap-1.5 transition-all border border-rose-200"
           >
             <Dog className="w-3.5 h-3.5" /> View Pet Details
           </button>

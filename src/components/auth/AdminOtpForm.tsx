@@ -224,7 +224,7 @@ export const AdminOtpForm: React.FC<AdminOtpFormProps> = ({
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="text-center space-y-2">
-        <div className="p-3 rounded-2xl bg-teal-50 text-teal-600 w-fit mx-auto">
+        <div className="p-3 rounded-2xl bg-rose-50 text-rose-600 w-fit mx-auto">
           <ShieldCheck className="w-6 h-6" />
         </div>
         <h2 className="text-xl font-extrabold text-slate-900">Enter Verification Code</h2>
@@ -232,7 +232,7 @@ export const AdminOtpForm: React.FC<AdminOtpFormProps> = ({
           We sent a 6-digit verification code to:
         </p>
         <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200">
-          <Mail className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+          <Mail className="w-3.5 h-3.5 text-rose-600 shrink-0" />
           <span className="text-xs font-bold text-slate-800 font-mono">{email}</span>
         </div>
       </div>
@@ -240,7 +240,7 @@ export const AdminOtpForm: React.FC<AdminOtpFormProps> = ({
       {/* Cooldown Timer */}
       <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
         <span className="font-semibold text-slate-600 flex items-center gap-1.5">
-          <Clock className="w-3.5 h-3.5 text-teal-500" />
+          <Clock className="w-3.5 h-3.5 text-rose-500" />
           Code expires in:
         </span>
         <span
@@ -289,8 +289,8 @@ export const AdminOtpForm: React.FC<AdminOtpFormProps> = ({
                 disabled={isVerifying}
                 className={`w-11 h-14 text-center font-extrabold text-lg rounded-xl border-2 transition-all focus:outline-none disabled:opacity-60 ${
                   digit
-                    ? 'bg-teal-50 border-teal-500 text-teal-900'
-                    : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white focus:border-teal-500'
+                    ? 'bg-rose-50 border-rose-500 text-rose-900'
+                    : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white focus:border-rose-500'
                 }`}
               />
             ))}
@@ -302,7 +302,7 @@ export const AdminOtpForm: React.FC<AdminOtpFormProps> = ({
           id="verify-otp-btn"
           type="submit"
           disabled={isVerifying || getOtpValue().length < OTP_LENGTH}
-          className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+          className="w-full py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
         >
           {isVerifying ? (
             <>
@@ -335,7 +335,7 @@ export const AdminOtpForm: React.FC<AdminOtpFormProps> = ({
           type="button"
           onClick={handleResend}
           disabled={isCooldownActive || isResending || isVerifying}
-          className="inline-flex items-center gap-1 text-xs font-bold text-teal-600 hover:text-teal-800 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-1 text-xs font-bold text-rose-600 hover:text-rose-800 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
         >
           {isResending ? (
             <>

@@ -456,7 +456,7 @@ export const OwnerDashboardPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Logo size="md" />
-            <span className="px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-extrabold uppercase tracking-wider hidden sm:inline-block">
+            <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-extrabold uppercase tracking-wider hidden sm:inline-block">
               Pet Owner Portal
             </span>
           </div>
@@ -466,7 +466,7 @@ export const OwnerDashboardPage: React.FC = () => {
               <p className="text-xs font-bold text-slate-900 leading-tight">{currentOwner?.name || 'Pet Owner'}</p>
               <p className="text-[10px] text-slate-400 font-mono">{ownerEmail}</p>
             </div>
-            <span className="px-2.5 py-1 rounded-xl bg-teal-50 border border-teal-200 text-teal-700 text-[10px] font-extrabold uppercase">
+            <span className="px-2.5 py-1 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-extrabold uppercase">
               Registered Owner
             </span>
             <button
@@ -497,7 +497,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                   active
-                    ? 'bg-teal-600 text-white shadow-xs'
+                    ? 'bg-rose-600 text-white shadow-xs'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
@@ -512,22 +512,22 @@ export const OwnerDashboardPage: React.FC = () => {
       {/* Main Content Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
         {/* Welcome Banner */}
-        <div className="p-6 rounded-2xl bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl relative overflow-hidden">
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-rose-950 via-rose-900 to-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl relative overflow-hidden">
           <div className="space-y-1 relative z-10">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-teal-300" />
+              <Sparkles className="w-5 h-5 text-rose-300" />
               <h2 className="text-lg sm:text-xl font-black">Welcome, {currentOwner?.name}!</h2>
             </div>
-            <p className="text-xs text-teal-100/80">
+            <p className="text-xs text-rose-100/80">
               Heritage Animal Clinic Pet Owner Dashboard. Real-time telemetry monitoring, dietary logs, and health updates strictly for your pets.
             </p>
           </div>
           <div className="flex items-center gap-2 relative z-10 shrink-0">
             <button
               onClick={() => setActiveTab('messages')}
-              className="px-4 py-2.5 rounded-xl bg-teal-500/30 hover:bg-teal-500/40 text-teal-200 border border-teal-400/40 font-extrabold text-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2.5 rounded-xl bg-rose-500/30 hover:bg-rose-500/40 text-rose-200 border border-rose-400/40 font-extrabold text-xs transition-all flex items-center gap-1.5 cursor-pointer"
             >
-              <MessageSquare className="w-4 h-4 text-teal-300" />
+              <MessageSquare className="w-4 h-4 text-rose-300" />
               Message Clinic Staff
             </button>
             <button
@@ -548,7 +548,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 });
                 setAddPetModalOpen(true);
               }}
-              className="px-4 py-2.5 rounded-xl bg-teal-400 hover:bg-teal-300 text-slate-950 font-black text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2.5 rounded-xl bg-rose-400 hover:bg-rose-300 text-slate-950 font-black text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               + Add My Pet
@@ -582,7 +582,7 @@ export const OwnerDashboardPage: React.FC = () => {
                   });
                   setAddPetModalOpen(true);
                 }}
-                className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
               >
                 <Plus className="w-4 h-4" /> + Register Pet
               </button>
@@ -591,13 +591,13 @@ export const OwnerDashboardPage: React.FC = () => {
             {myPets.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {myPets.map((pet) => (
-                  <div key={pet.id} className="clinic-card overflow-hidden bg-white hover:border-teal-300 transition-all border border-slate-200/90 shadow-sm flex flex-col justify-between">
+                  <div key={pet.id} className="clinic-card overflow-hidden bg-white hover:border-rose-300 transition-all border border-slate-200/90 shadow-sm flex flex-col justify-between">
                     <div>
                       <div className="p-5 flex items-start gap-4">
                         <img
                           src={pet.avatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'}
                           alt={pet.name}
-                          className="w-18 h-18 rounded-2xl object-cover ring-2 ring-teal-500/30 shadow-xs shrink-0 border border-slate-200"
+                          className="w-18 h-18 rounded-2xl object-cover ring-2 ring-rose-500/30 shadow-xs shrink-0 border border-slate-200"
                         />
                         <div className="flex-1 space-y-1 min-w-0">
                           <div className="flex items-center justify-between gap-2">
@@ -632,7 +632,7 @@ export const OwnerDashboardPage: React.FC = () => {
                     <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between bg-white gap-2">
                       <button
                         onClick={() => handleOpenEdit(pet)}
-                        className="flex-1 py-2 px-3 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all border border-teal-200 cursor-pointer"
+                        className="flex-1 py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all border border-rose-200 cursor-pointer"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                         Edit Pet Details & Photo
@@ -650,8 +650,8 @@ export const OwnerDashboardPage: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <div className="clinic-card p-12 text-center space-y-4 bg-white border-2 border-dashed border-teal-200 rounded-3xl shadow-sm">
-                <div className="w-16 h-16 rounded-3xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto shadow-xs">
+              <div className="clinic-card p-12 text-center space-y-4 bg-white border-2 border-dashed border-rose-200 rounded-3xl shadow-sm">
+                <div className="w-16 h-16 rounded-3xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
                   <Dog className="w-8 h-8" />
                 </div>
                 <div className="space-y-1.5">
@@ -679,7 +679,7 @@ export const OwnerDashboardPage: React.FC = () => {
                       });
                       setAddPetModalOpen(true);
                     }}
-                    className="px-6 py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-extrabold text-xs shadow-lg shadow-teal-600/20 inline-flex items-center gap-2 cursor-pointer transition-all"
+                    className="px-6 py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-extrabold text-xs shadow-lg shadow-rose-600/20 inline-flex items-center gap-2 cursor-pointer transition-all"
                   >
                     <Plus className="w-4 h-4" />
                     + Add / Register My Pet Now
@@ -719,12 +719,12 @@ export const OwnerDashboardPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="p-3 bg-teal-50 rounded-xl border border-teal-200 text-xs text-teal-800 flex items-center justify-between gap-2">
+                <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-800 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Wifi className="w-4 h-4 text-teal-600 shrink-0" />
+                    <Wifi className="w-4 h-4 text-rose-600 shrink-0" />
                     <span>Connected Wi-Fi: <strong className="text-indigo-700">{hardware.wifiSsid || 'brrt rrt'}</strong></span>
                   </div>
-                  <span className="text-[11px] font-bold text-teal-700 bg-white/80 px-2 py-0.5 rounded-lg border border-teal-300/60">
+                  <span className="text-[11px] font-bold text-rose-700 bg-white/80 px-2 py-0.5 rounded-lg border border-rose-300/60">
                     {hardware.wifiSignalDbm} dBm
                   </span>
                 </div>
@@ -785,12 +785,12 @@ export const OwnerDashboardPage: React.FC = () => {
           <div className="space-y-6">
             {activeInquiry && !isStartingNewTopic ? (
               /* Unified Chatbox Window */
-              <div className="clinic-card border border-teal-200/90 bg-white shadow-md overflow-hidden rounded-3xl flex flex-col">
+              <div className="clinic-card border border-rose-200/90 bg-white shadow-md overflow-hidden rounded-3xl flex flex-col">
                 {/* 1. Chat Header */}
                 <div className="p-4 sm:p-5 bg-gradient-to-r from-teal-900 via-slate-900 to-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3.5 min-w-0">
                     <div className="relative shrink-0">
-                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-sky-600 via-teal-600 to-emerald-500 text-white flex items-center justify-center shadow-md">
+                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-800 via-rose-600 to-pink-500 text-white flex items-center justify-center shadow-md">
                         <svg viewBox="0 0 100 100" fill="none" className="w-7 h-7 text-white">
                           <path
                             d="M50 8 C50 8, 18 50, 18 66 A32 32 0 0 0 82 66 C82 50, 50 8, 50 8 Z"
@@ -849,7 +849,7 @@ export const OwnerDashboardPage: React.FC = () => {
 
                     <button
                       onClick={() => setIsStartingNewTopic(true)}
-                      className="px-3.5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap"
+                      className="px-3.5 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-slate-950 font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap"
                     >
                       <Plus className="w-4 h-4" />
                       New Topic
@@ -861,7 +861,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 <div className="bg-slate-100 border-b border-slate-200/80 px-5 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-extrabold text-slate-500 uppercase text-[10px]">Active Topic:</span>
-                    <span className="font-extrabold text-teal-900 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200/80">
+                    <span className="font-extrabold text-rose-900 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200/80">
                       {activeInquiry.subject}
                     </span>
                     <span
@@ -950,7 +950,7 @@ export const OwnerDashboardPage: React.FC = () => {
                             <div
                               className={`p-4 rounded-2xl text-xs leading-relaxed max-w-[85%] sm:max-w-lg whitespace-pre-wrap ${
                                 isOwner
-                                  ? 'bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-sm rounded-tr-xs font-medium'
+                                  ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white shadow-sm rounded-tr-xs font-medium'
                                   : 'bg-white text-slate-800 border border-emerald-200/90 shadow-2xs rounded-tl-xs ring-1 ring-emerald-500/10'
                               }`}
                             >
@@ -964,7 +964,7 @@ export const OwnerDashboardPage: React.FC = () => {
                             </div>
 
                             {isOwner && (
-                              <div className="text-[10px] text-teal-600 font-bold px-1 flex items-center gap-1">
+                              <div className="text-[10px] text-rose-600 font-bold px-1 flex items-center gap-1">
                                 <span>✓ Sent to Clinic Desk</span>
                               </div>
                             )}
@@ -983,13 +983,13 @@ export const OwnerDashboardPage: React.FC = () => {
                       placeholder={`Type a message or follow-up question for clinic staff... (Press Enter to send)`}
                       value={chatInputText}
                       onChange={(e) => setChatInputText(e.target.value)}
-                      className="flex-1 p-3.5 rounded-2xl border border-slate-300 focus:border-teal-500 focus:outline-none text-xs leading-relaxed bg-slate-50/60"
+                      className="flex-1 p-3.5 rounded-2xl border border-slate-300 focus:border-rose-500 focus:outline-none text-xs leading-relaxed bg-slate-50/60"
                     />
 
                     <button
                       type="submit"
                       disabled={isSendingChat || !chatInputText.trim()}
-                      className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 disabled:opacity-40 cursor-pointer shrink-0"
+                      className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-teal-700 hover:to-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 disabled:opacity-40 cursor-pointer shrink-0"
                     >
                       <Send className={`w-4 h-4 ${isSendingChat ? 'animate-spin' : ''}`} />
                       <span>{isSendingChat ? 'Sending...' : 'Send'}</span>
@@ -1002,11 +1002,11 @@ export const OwnerDashboardPage: React.FC = () => {
               </div>
             ) : (
               /* New Consultation Topic Form */
-              <div className="clinic-card p-6 border border-teal-200 bg-white shadow-sm space-y-4 rounded-3xl">
+              <div className="clinic-card p-6 border border-rose-200 bg-white shadow-sm space-y-4 rounded-3xl">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                   <div>
                     <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5 text-teal-600" />
+                      <MessageSquare className="w-5 h-5 text-rose-600" />
                       Start Consultation Topic with Heritage Animal Clinic
                     </h3>
                     <p className="text-xs text-slate-500">
@@ -1030,7 +1030,7 @@ export const OwnerDashboardPage: React.FC = () => {
                       <select
                         value={messagePetId}
                         onChange={(e) => setMessagePetId(e.target.value)}
-                        className="w-full p-2.5 rounded-xl border border-slate-300 font-bold focus:border-teal-500 focus:outline-none"
+                        className="w-full p-2.5 rounded-xl border border-slate-300 font-bold focus:border-rose-500 focus:outline-none"
                       >
                         <option value="">General Inquiry (All / Any Pet)</option>
                         {myPets.map((p) => (
@@ -1046,7 +1046,7 @@ export const OwnerDashboardPage: React.FC = () => {
                       <select
                         value={messageSubject}
                         onChange={(e) => setMessageSubject(e.target.value)}
-                        className="w-full p-2.5 rounded-xl border border-slate-300 font-bold focus:border-teal-500 focus:outline-none"
+                        className="w-full p-2.5 rounded-xl border border-slate-300 font-bold focus:border-rose-500 focus:outline-none"
                       >
                         <option value="General Veterinary Consultation">General Veterinary Consultation</option>
                         <option value="Feeding & Dietary Concern">Feeding & Dietary Concern</option>
@@ -1067,7 +1067,7 @@ export const OwnerDashboardPage: React.FC = () => {
                       required
                       value={messageText}
                       onChange={(e) => setMessageText(e.target.value)}
-                      className="w-full p-3.5 rounded-xl border border-slate-300 font-medium focus:border-teal-500 focus:outline-none leading-relaxed"
+                      className="w-full p-3.5 rounded-xl border border-slate-300 font-medium focus:border-rose-500 focus:outline-none leading-relaxed"
                       placeholder="Describe any symptoms, dietary changes, questions about telemetry data, or instructions for the clinic staff..."
                     />
                   </div>
@@ -1081,7 +1081,7 @@ export const OwnerDashboardPage: React.FC = () => {
                     <button
                       type="submit"
                       disabled={isSendingMessage}
-                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-teal-700 hover:to-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                     >
                       <Send className="w-4 h-4" />
                       {isSendingMessage ? 'Transmitting...' : 'Start Chat Thread'}
@@ -1114,7 +1114,7 @@ export const OwnerDashboardPage: React.FC = () => {
                     : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=300')
                 }
                 alt="Pet Preview"
-                className="w-20 h-20 rounded-2xl object-cover ring-2 ring-teal-500/30 border border-slate-200 shadow-sm"
+                className="w-20 h-20 rounded-2xl object-cover ring-2 ring-rose-500/30 border border-slate-200 shadow-sm"
               />
               <button
                 type="button"
@@ -1128,7 +1128,7 @@ export const OwnerDashboardPage: React.FC = () => {
 
             <div className="flex-1 space-y-1.5 text-center sm:text-left">
               <div className="font-bold text-slate-800 text-xs flex items-center justify-center sm:justify-start gap-1.5">
-                <ImageIcon className="w-4 h-4 text-teal-600" />
+                <ImageIcon className="w-4 h-4 text-rose-600" />
                 <span>Pet Picture / Photo</span>
               </div>
               <p className="text-[11px] text-slate-500">
@@ -1144,9 +1144,9 @@ export const OwnerDashboardPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => addFileInputRef.current?.click()}
-                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-teal-800 font-extrabold text-xs border border-slate-200 inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-rose-800 font-extrabold text-xs border border-slate-200 inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
               >
-                <Upload className="w-3.5 h-3.5 text-teal-600" />
+                <Upload className="w-3.5 h-3.5 text-rose-600" />
                 {petForm.avatarUrl ? 'Change Picture' : 'Upload Pet Photo'}
               </button>
             </div>
@@ -1160,7 +1160,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 required
                 value={petForm.name}
                 onChange={(e) => setPetForm({ ...petForm, name: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
                 placeholder="e.g. Max, Bella, Milo"
               />
             </div>
@@ -1169,7 +1169,7 @@ export const OwnerDashboardPage: React.FC = () => {
               <select
                 value={petForm.species}
                 onChange={(e) => setPetForm({ ...petForm, species: e.target.value as any })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               >
                 <option value="Dog">Dog</option>
                 <option value="Cat">Cat</option>
@@ -1186,7 +1186,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 required
                 value={petForm.breed}
                 onChange={(e) => setPetForm({ ...petForm, breed: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
                 placeholder="e.g. Golden Retriever"
               />
             </div>
@@ -1200,7 +1200,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 required
                 value={petForm.age}
                 onChange={(e) => setPetForm({ ...petForm, age: Number(e.target.value) })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
             <div>
@@ -1213,7 +1213,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 required
                 value={petForm.weight}
                 onChange={(e) => setPetForm({ ...petForm, weight: Number(e.target.value) })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
           </div>
@@ -1224,7 +1224,7 @@ export const OwnerDashboardPage: React.FC = () => {
               <select
                 value={petForm.sex}
                 onChange={(e) => setPetForm({ ...petForm, sex: e.target.value as any })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               >
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
@@ -1238,7 +1238,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 max="500"
                 value={petForm.portionGrams}
                 onChange={(e) => setPetForm({ ...petForm, portionGrams: Number(e.target.value) })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
           </div>
@@ -1249,7 +1249,7 @@ export const OwnerDashboardPage: React.FC = () => {
               rows={2}
               value={petForm.notes}
               onChange={(e) => setPetForm({ ...petForm, notes: e.target.value })}
-              className="w-full p-2.5 rounded-xl border border-slate-300 font-medium focus:border-teal-500 focus:outline-none"
+              className="w-full p-2.5 rounded-xl border border-slate-300 font-medium focus:border-rose-500 focus:outline-none"
               placeholder="Allergies, favorite food, behavioral notes..."
             />
           </div>
@@ -1264,7 +1264,7 @@ export const OwnerDashboardPage: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-teal-600 text-white font-bold hover:bg-teal-700 shadow-md cursor-pointer"
+              className="px-5 py-2 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 shadow-md cursor-pointer"
             >
               + Add Pet
             </button>
@@ -1287,7 +1287,7 @@ export const OwnerDashboardPage: React.FC = () => {
               <img
                 src={petForm.avatarUrl || editingPet?.avatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=300'}
                 alt="Pet Preview"
-                className="w-20 h-20 rounded-2xl object-cover ring-2 ring-teal-500/30 border border-slate-200 shadow-sm"
+                className="w-20 h-20 rounded-2xl object-cover ring-2 ring-rose-500/30 border border-slate-200 shadow-sm"
               />
               <button
                 type="button"
@@ -1301,7 +1301,7 @@ export const OwnerDashboardPage: React.FC = () => {
 
             <div className="flex-1 space-y-1.5 text-center sm:text-left">
               <div className="font-bold text-slate-800 text-xs flex items-center justify-center sm:justify-start gap-1.5">
-                <ImageIcon className="w-4 h-4 text-teal-600" />
+                <ImageIcon className="w-4 h-4 text-rose-600" />
                 <span>Update Pet Picture</span>
               </div>
               <p className="text-[11px] text-slate-500">
@@ -1317,9 +1317,9 @@ export const OwnerDashboardPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => editFileInputRef.current?.click()}
-                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-teal-800 font-extrabold text-xs border border-slate-200 inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-rose-800 font-extrabold text-xs border border-slate-200 inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
               >
-                <Upload className="w-3.5 h-3.5 text-teal-600" />
+                <Upload className="w-3.5 h-3.5 text-rose-600" />
                 Select New Photo
               </button>
             </div>
@@ -1333,7 +1333,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 required
                 value={petForm.name}
                 onChange={(e) => setPetForm({ ...petForm, name: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
             <div>
@@ -1341,7 +1341,7 @@ export const OwnerDashboardPage: React.FC = () => {
               <select
                 value={petForm.species}
                 onChange={(e) => setPetForm({ ...petForm, species: e.target.value as any })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               >
                 <option value="Dog">Dog</option>
                 <option value="Cat">Cat</option>
@@ -1358,7 +1358,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 required
                 value={petForm.breed}
                 onChange={(e) => setPetForm({ ...petForm, breed: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
             <div>
@@ -1371,7 +1371,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 required
                 value={petForm.age}
                 onChange={(e) => setPetForm({ ...petForm, age: Number(e.target.value) })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
             <div>
@@ -1384,7 +1384,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 required
                 value={petForm.weight}
                 onChange={(e) => setPetForm({ ...petForm, weight: Number(e.target.value) })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
           </div>
@@ -1395,7 +1395,7 @@ export const OwnerDashboardPage: React.FC = () => {
               <select
                 value={petForm.sex}
                 onChange={(e) => setPetForm({ ...petForm, sex: e.target.value as any })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               >
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
@@ -1409,7 +1409,7 @@ export const OwnerDashboardPage: React.FC = () => {
                 max="500"
                 value={petForm.portionGrams}
                 onChange={(e) => setPetForm({ ...petForm, portionGrams: Number(e.target.value) })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
           </div>
@@ -1420,7 +1420,7 @@ export const OwnerDashboardPage: React.FC = () => {
               rows={3}
               value={petForm.notes}
               onChange={(e) => setPetForm({ ...petForm, notes: e.target.value })}
-              className="w-full p-2.5 rounded-xl border border-slate-300 font-medium focus:border-teal-500 focus:outline-none"
+              className="w-full p-2.5 rounded-xl border border-slate-300 font-medium focus:border-rose-500 focus:outline-none"
             />
           </div>
 
@@ -1434,7 +1434,7 @@ export const OwnerDashboardPage: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-teal-600 text-white font-bold hover:bg-teal-700 shadow-md cursor-pointer"
+              className="px-5 py-2 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 shadow-md cursor-pointer"
             >
               Save Changes & Photo
             </button>

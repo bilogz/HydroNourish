@@ -180,8 +180,8 @@ export const InquiriesPage: React.FC = () => {
         {/* ================= HEADER BANNER ================= */}
         <div className="clinic-card p-6 bg-gradient-to-r from-teal-900 via-slate-900 to-slate-900 text-white flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-teal-300 text-xs font-bold uppercase tracking-wider">
-              <Inbox className="w-3.5 h-3.5 text-teal-400" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-400/30 text-rose-300 text-xs font-bold uppercase tracking-wider">
+              <Inbox className="w-3.5 h-3.5 text-rose-400" />
               Public Contact Inquiries Ingestion Hub
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
@@ -200,7 +200,7 @@ export const InquiriesPage: React.FC = () => {
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllRead}
-                className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
               >
                 <CheckCheck className="w-4 h-4" />
                 Mark All as Read ({unreadCount})
@@ -323,7 +323,7 @@ export const InquiriesPage: React.FC = () => {
                 placeholder="Search by name, email, subject, or message text..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-teal-500 focus:outline-none transition-all"
+                className="w-full pl-10 pr-4 py-2 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-rose-500 focus:outline-none transition-all"
               />
               {searchTerm && (
                 <button
@@ -373,7 +373,7 @@ export const InquiriesPage: React.FC = () => {
                   key={inquiry.id}
                   className={`clinic-card p-4 sm:p-5 transition-all hover:shadow-md cursor-pointer border ${
                     isUnread
-                      ? 'bg-teal-50/40 border-teal-200 ring-1 ring-teal-200/50'
+                      ? 'bg-rose-50/40 border-rose-200 ring-1 ring-teal-200/50'
                       : 'bg-white border-slate-200/80 hover:border-slate-300'
                   }`}
                   onClick={() => handleOpenDetail(inquiry)}
@@ -384,7 +384,7 @@ export const InquiriesPage: React.FC = () => {
                       <div
                         className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
                           isUnread
-                            ? 'bg-teal-600 text-white'
+                            ? 'bg-rose-600 text-white'
                             : 'bg-slate-100 text-slate-700'
                         }`}
                       >
@@ -421,7 +421,7 @@ export const InquiriesPage: React.FC = () => {
                   {/* Subject & Snippet */}
                   <div className="pt-3 space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-md border border-teal-100">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-md border border-rose-100">
                         {inquiry.subject || 'General Inquiry'}
                       </span>
                       {inquiry.subject?.includes('[') && inquiry.subject?.includes(']') && (
@@ -483,10 +483,10 @@ export const InquiriesPage: React.FC = () => {
 
                       <button
                         onClick={() => handleLaunchEmailClient(inquiry)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-teal-700 hover:bg-teal-50 flex items-center gap-1.5 transition-colors"
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-700 hover:bg-rose-50 flex items-center gap-1.5 transition-colors"
                         title="Send Email via Mail App"
                       >
-                        <ExternalLink className="w-3.5 h-3.5 text-teal-600" />
+                        <ExternalLink className="w-3.5 h-3.5 text-rose-600" />
                         Email Client
                       </button>
                     </div>
@@ -494,9 +494,9 @@ export const InquiriesPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleOpenDetail(inquiry)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-teal-50 text-teal-800 hover:bg-teal-100 flex items-center gap-1.5 transition-colors"
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-800 hover:bg-rose-100 flex items-center gap-1.5 transition-colors"
                       >
-                        <Eye className="w-3.5 h-3.5 text-teal-600" />
+                        <Eye className="w-3.5 h-3.5 text-rose-600" />
                         View Details
                       </button>
 
@@ -609,7 +609,7 @@ export const InquiriesPage: React.FC = () => {
                 <div className="bg-slate-100/90 border-b border-slate-200/80 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-slate-500 uppercase text-[10px]">Topic:</span>
-                    <span className="font-extrabold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                    <span className="font-extrabold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
                       {selectedInquiry.subject || 'General Inquiry'}
                     </span>
                     {selectedInquiry.subject?.includes('[') && selectedInquiry.subject?.includes(']') && (
@@ -649,7 +649,7 @@ export const InquiriesPage: React.FC = () => {
                           className={`p-3.5 rounded-2xl text-xs leading-relaxed max-w-[85%] whitespace-pre-wrap ${
                             isClient
                               ? 'bg-white text-slate-800 border border-slate-200 shadow-2xs rounded-tl-xs'
-                              : 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs rounded-tr-xs font-medium'
+                              : 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-xs rounded-tr-xs font-medium'
                           }`}
                         >
                           {msg.message}
@@ -678,7 +678,7 @@ export const InquiriesPage: React.FC = () => {
                       key={t.label}
                       type="button"
                       onClick={() => setReplyText(t.text)}
-                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-teal-50 hover:text-teal-800 text-slate-600 text-[11px] font-semibold transition-colors border border-slate-200 shrink-0 cursor-pointer shadow-2xs"
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-rose-50 hover:text-rose-800 text-slate-600 text-[11px] font-semibold transition-colors border border-slate-200 shrink-0 cursor-pointer shadow-2xs"
                     >
                       + {t.label}
                     </button>
@@ -699,14 +699,14 @@ export const InquiriesPage: React.FC = () => {
                           handleSendReply();
                         }
                       }}
-                      className="flex-1 p-3 rounded-2xl border border-slate-300 focus:border-teal-500 focus:outline-none text-xs leading-relaxed resize-none bg-slate-50/50"
+                      className="flex-1 p-3 rounded-2xl border border-slate-300 focus:border-rose-500 focus:outline-none text-xs leading-relaxed resize-none bg-slate-50/50"
                     />
 
                     <button
                       type="button"
                       disabled={isSendingReply || !replyText.trim()}
                       onClick={handleSendReply}
-                      className="px-5 py-3 rounded-2xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 disabled:opacity-40 cursor-pointer shrink-0"
+                      className="px-5 py-3 rounded-2xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-teal-700 hover:to-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 disabled:opacity-40 cursor-pointer shrink-0"
                     >
                       <Send className={`w-4 h-4 ${isSendingReply ? 'animate-spin' : ''}`} />
                       <span>{isSendingReply ? 'Sending...' : 'Send'}</span>
@@ -719,7 +719,7 @@ export const InquiriesPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleLaunchEmailClient(selectedInquiry)}
-                        className="text-slate-500 hover:text-teal-700 font-semibold flex items-center gap-1 cursor-pointer"
+                        className="text-slate-500 hover:text-rose-700 font-semibold flex items-center gap-1 cursor-pointer"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                         Open in Mail App

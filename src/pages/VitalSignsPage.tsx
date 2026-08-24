@@ -80,8 +80,8 @@ export const VitalSignsPage: React.FC = () => {
           value={`${(vitals && vitals.length > 0) ? (vitals.reduce((acc, v) => acc + v.temperature, 0) / vitals.length).toFixed(1) : '38.5'}°C`}
           subtitle="Clinic Ward Average"
           icon={Thermometer}
-          iconBgColor="bg-teal-50"
-          iconTextColor="text-teal-600"
+          iconBgColor="bg-rose-50"
+          iconTextColor="text-rose-600"
           badgeText="Normal Range"
           badgeType="success"
         />
@@ -123,7 +123,7 @@ export const VitalSignsPage: React.FC = () => {
           <select
             value={selectedPetId}
             onChange={e => setSelectedPetId(e.target.value)}
-            className="px-3.5 py-2.5 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-teal-500 focus:outline-none"
+            className="px-3.5 py-2.5 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-rose-500 focus:outline-none"
           >
             <option value="All">All Patient Pets</option>
             {(pets ?? []).map(p => (
@@ -136,7 +136,7 @@ export const VitalSignsPage: React.FC = () => {
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="px-3.5 py-2.5 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-teal-500 focus:outline-none"
+            className="px-3.5 py-2.5 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:border-rose-500 focus:outline-none"
           >
             <option value="All">All Vital States</option>
             <option value="Normal">Normal</option>
@@ -147,7 +147,7 @@ export const VitalSignsPage: React.FC = () => {
 
         <button
           onClick={() => setAddVitalModalOpen(true)}
-          className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2"
+          className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
           Record New Vitals Reading
@@ -307,7 +307,7 @@ export const VitalSignsPage: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-teal-600 text-white font-bold"
+              className="px-5 py-2 rounded-xl bg-rose-600 text-white font-bold"
             >
               Record Vital Sign
             </button>

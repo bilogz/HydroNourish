@@ -140,14 +140,14 @@ export const FeedingPage: React.FC = () => {
   return (
     <DashboardLayout pageTitle="Automated Smart Feeding System" breadcrumbs={[{ label: 'Feeding' }]}>
       {/* Automated System Status Banner */}
-      <div className="clinic-card p-4 bg-teal-500/10 border-teal-200 flex items-center justify-between text-xs text-teal-900">
+      <div className="clinic-card p-4 bg-rose-500/10 border-rose-200 flex items-center justify-between text-xs text-rose-900">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-teal-600 shrink-0" />
+          <Sparkles className="w-4 h-4 text-rose-600 shrink-0" />
           <span>
             <strong>Automated Smart Feeding:</strong> All schedules are automated by default with high-torque precision. Use the <strong>Custom Manual Dispense</strong> button below whenever on-demand override is needed.
           </span>
         </div>
-        <span className="font-bold text-teal-700 hidden sm:inline flex items-center gap-1.5">
+        <span className="font-bold text-rose-700 hidden sm:inline flex items-center gap-1.5">
           <span className={`w-2 h-2 rounded-full ${isDeviceConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
           {isDeviceConnected ? `Node ${selectedDevice?.id} Online` : 'No Feeder Node Synced'}
         </span>
@@ -160,8 +160,8 @@ export const FeedingPage: React.FC = () => {
           value={isDeviceConnected ? (feedingLogs || []).length : 0}
           subtitle={isDeviceConnected ? "All Heritage Ward Patients" : "No device connected"}
           icon={Utensils}
-          iconBgColor={isDeviceConnected ? "bg-teal-50" : "bg-slate-100"}
-          iconTextColor={isDeviceConnected ? "text-teal-600" : "text-slate-400"}
+          iconBgColor={isDeviceConnected ? "bg-rose-50" : "bg-slate-100"}
+          iconTextColor={isDeviceConnected ? "text-rose-600" : "text-slate-400"}
           badgeText={isDeviceConnected ? "Active" : "Offline"}
           badgeType={isDeviceConnected ? "success" : "info"}
         />
@@ -210,7 +210,7 @@ export const FeedingPage: React.FC = () => {
             </button>
             <button
               onClick={() => setAddModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
             >
               <Plus className="w-4 h-4" />
               Add Schedule
@@ -244,9 +244,9 @@ export const FeedingPage: React.FC = () => {
                     <tr key={sch.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-4 py-3 font-bold text-slate-900">{sch.petName}</td>
                       <td className="px-4 py-3 text-slate-600">{sch.foodType}</td>
-                      <td className="px-4 py-3 font-bold text-teal-700">{sch.portionGrams} grams</td>
+                      <td className="px-4 py-3 font-bold text-rose-700">{sch.portionGrams} grams</td>
                       <td className="px-4 py-3 font-semibold text-slate-800 flex items-center gap-1.5 pt-3.5">
-                        <Clock className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <Clock className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                         <span>{sch.scheduledTime}</span>
                       </td>
                       <td className="px-4 py-3">
@@ -259,7 +259,7 @@ export const FeedingPage: React.FC = () => {
                           {sch.enabled === false ? 'Paused' : 'Automated'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-mono font-bold text-teal-600">{sch.deviceId}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-rose-600">{sch.deviceId}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {/* 1. Feed Now Instant Trigger */}
@@ -268,7 +268,7 @@ export const FeedingPage: React.FC = () => {
                             disabled={!isDeviceConnected}
                             className={`px-2.5 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-all ${
                               isDeviceConnected
-                                ? 'bg-teal-600 hover:bg-teal-700 text-white cursor-pointer active:scale-95 shadow-xs'
+                                ? 'bg-rose-600 hover:bg-rose-700 text-white cursor-pointer active:scale-95 shadow-xs'
                                 : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                             }`}
                             title="Trigger 90° Stepper Gate Cycle on ESP32 now"
@@ -333,7 +333,7 @@ export const FeedingPage: React.FC = () => {
                       onClick={() => setSchedulePage(page)}
                       className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
                         currentSchedulePage === page
-                          ? 'w-6 bg-teal-600 shadow-xs'
+                          ? 'w-6 bg-rose-600 shadow-xs'
                           : 'w-2 bg-slate-300 hover:bg-slate-400'
                       }`}
                       title={`Page ${page}`}
@@ -432,7 +432,7 @@ export const FeedingPage: React.FC = () => {
                       onClick={() => setHistoryPage(page)}
                       className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
                         currentHistoryPage === page
-                          ? 'w-6 bg-teal-600 shadow-xs'
+                          ? 'w-6 bg-rose-600 shadow-xs'
                           : 'w-2 bg-slate-300 hover:bg-slate-400'
                       }`}
                       title={`Page ${page}`}
@@ -546,7 +546,7 @@ export const FeedingPage: React.FC = () => {
                   deviceId: selected?.assignedDeviceId || formData.deviceId
                 });
               }}
-              className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-semibold"
+              className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none font-semibold"
             >
               {pets.map(p => (
                 <option key={p.id} value={p.id}>
@@ -563,7 +563,7 @@ export const FeedingPage: React.FC = () => {
               required
               value={formData.foodType}
               onChange={e => setFormData({ ...formData, foodType: e.target.value })}
-              className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
+              className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none"
               placeholder="e.g. Adult Protein Kibble"
             />
           </div>
@@ -578,7 +578,7 @@ export const FeedingPage: React.FC = () => {
                   max="500"
                   value={formData.portionGrams}
                   onChange={e => setFormData({ ...formData, portionGrams: Number(e.target.value) })}
-                  className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
+                  className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none"
                 />
                 <span className="font-bold text-slate-500">g</span>
               </div>
@@ -591,7 +591,7 @@ export const FeedingPage: React.FC = () => {
                 value={formData.scheduledTime}
                 onChange={e => setFormData({ ...formData, scheduledTime: e.target.value })}
                 placeholder="e.g. 08:00 AM or 14:30"
-                className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-semibold"
+                className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none font-semibold"
               />
             </div>
           </div>
@@ -602,7 +602,7 @@ export const FeedingPage: React.FC = () => {
               <select
                 value={formData.days}
                 onChange={e => setFormData({ ...formData, days: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-semibold"
+                className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none font-semibold"
               >
                 <option value="Everyday">Everyday (Daily)</option>
                 <option value="Weekdays">Weekdays (Mon – Fri)</option>
@@ -616,7 +616,7 @@ export const FeedingPage: React.FC = () => {
               <select
                 value={formData.deviceId}
                 onChange={e => setFormData({ ...formData, deviceId: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-semibold"
+                className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none font-semibold"
               >
                 {devices.map(d => (
                   <option key={d.id} value={d.id}>
@@ -637,7 +637,7 @@ export const FeedingPage: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold shadow-sm cursor-pointer active:scale-95"
+              className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-sm cursor-pointer active:scale-95"
             >
               Save Schedule
             </button>

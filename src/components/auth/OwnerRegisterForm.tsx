@@ -212,7 +212,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
   if (verificationPending) {
     return (
       <div className="space-y-6 text-center animate-fade-in py-2">
-        <div className="w-16 h-16 rounded-3xl bg-teal-100 text-teal-700 flex items-center justify-center mx-auto shadow-md ring-4 ring-teal-50">
+        <div className="w-16 h-16 rounded-3xl bg-rose-100 text-rose-700 flex items-center justify-center mx-auto shadow-md ring-4 ring-teal-50">
           <Mail className="w-8 h-8 animate-bounce" />
         </div>
 
@@ -226,12 +226,12 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-teal-50/70 border border-teal-200 text-left space-y-2 text-xs">
-          <div className="flex items-center gap-2 font-extrabold text-teal-900">
-            <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
+        <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200 text-left space-y-2 text-xs">
+          <div className="flex items-center gap-2 font-extrabold text-rose-900">
+            <ShieldCheck className="w-4 h-4 text-rose-600 shrink-0" />
             <span>Sender: {SYSTEM_OTP_SENDER_EMAIL}</span>
           </div>
-          <p className="text-[11px] text-teal-800 leading-relaxed">
+          <p className="text-[11px] text-rose-800 leading-relaxed">
             Please check your inbox (and Spam/Junk folder). Click the verification link inside the email to complete your Pet Owner registration.
           </p>
         </div>
@@ -245,7 +245,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
               showToast('success', 'EMAIL VERIFIED', 'Welcome to the HydroNourish Pet Owner Portal!');
               onSuccess(email);
             }}
-            className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <CheckCircle2 className="w-4 h-4" />
             ✓ I Have Verified My Email · Proceed to Portal
@@ -258,7 +258,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
               onClick={handleResendVerification}
               className="py-2.5 px-3 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5"
             >
-              <Send className="w-3.5 h-3.5 text-teal-600" />
+              <Send className="w-3.5 h-3.5 text-rose-600" />
               {resendCooldown > 0 ? resendCooldown + 's cooldown' : 'Resend Email'}
             </button>
 
@@ -317,7 +317,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
             className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1"
           >
             <span className="flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-teal-600" />
+              <User className="w-3.5 h-3.5 text-rose-600" />
               Full Name *
             </span>
           </label>
@@ -331,7 +331,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
               setError(null);
             }}
             disabled={isLoading}
-            className="w-full px-3.5 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 transition-all"
+            className="w-full px-3.5 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 disabled:opacity-60 transition-all"
             placeholder="e.g. Maria Santos"
           />
         </div>
@@ -344,7 +344,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
               className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1"
             >
               <span className="flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-teal-600" />
+                <Mail className="w-3.5 h-3.5 text-rose-600" />
                 Email Address *
               </span>
             </label>
@@ -358,7 +358,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
                 setError(null);
               }}
               disabled={isLoading}
-              className="w-full px-3.5 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 transition-all"
+              className="w-full px-3.5 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 disabled:opacity-60 transition-all"
               placeholder="owner@example.com"
             />
           </div>
@@ -369,7 +369,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
               className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1"
             >
               <span className="flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-teal-600" />
+                <Phone className="w-3.5 h-3.5 text-rose-600" />
                 Phone Number *
               </span>
             </label>
@@ -383,7 +383,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
                 setError(null);
               }}
               disabled={isLoading}
-              className="w-full px-3.5 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 transition-all"
+              className="w-full px-3.5 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 disabled:opacity-60 transition-all"
               placeholder="+63 912 345 6789"
             />
           </div>
@@ -396,7 +396,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
             className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1"
           >
             <span className="flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-teal-600" />
+              <MapPin className="w-3.5 h-3.5 text-rose-600" />
               Address / City
             </span>
           </label>
@@ -409,7 +409,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
               setError(null);
             }}
             disabled={isLoading}
-            className="w-full px-3.5 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 transition-all"
+            className="w-full px-3.5 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 disabled:opacity-60 transition-all"
             placeholder="Quezon City, Metro Manila"
           />
         </div>
@@ -422,7 +422,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
               className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1"
             >
               <span className="flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-teal-600" />
+                <Lock className="w-3.5 h-3.5 text-rose-600" />
                 Password *
               </span>
             </label>
@@ -437,7 +437,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
                   setError(null);
                 }}
                 disabled={isLoading}
-                className="w-full px-3.5 py-2.5 pr-8 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 transition-all"
+                className="w-full px-3.5 py-2.5 pr-8 text-xs font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 disabled:opacity-60 transition-all"
                 placeholder="Min 6 characters"
               />
               <button
@@ -456,7 +456,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
               className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1"
             >
               <span className="flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-teal-600" />
+                <Lock className="w-3.5 h-3.5 text-rose-600" />
                 Confirm Password *
               </span>
             </label>
@@ -470,7 +470,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
                 setError(null);
               }}
               disabled={isLoading}
-              className="w-full px-3.5 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 transition-all"
+              className="w-full px-3.5 py-2.5 text-xs font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 disabled:opacity-60 transition-all"
               placeholder="Re-enter password"
             />
           </div>
@@ -480,7 +480,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
         <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 pt-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs font-extrabold text-slate-900">
-              <Dog className="w-4 h-4 text-teal-600" />
+              <Dog className="w-4 h-4 text-rose-600" />
               <span>Pet Profile & Clinical Details</span>
             </div>
             <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer">
@@ -488,7 +488,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
                 type="checkbox"
                 checked={hasPet}
                 onChange={(e) => setHasPet(e.target.checked)}
-                className="rounded text-teal-600 focus:ring-teal-500"
+                className="rounded text-rose-600 focus:ring-rose-500"
               />
               Register pet now
             </label>
@@ -504,7 +504,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
                     required={hasPet}
                     value={petName}
                     onChange={(e) => setPetName(e.target.value)}
-                    className="w-full p-2 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none bg-white"
+                    className="w-full p-2 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none bg-white"
                     placeholder="e.g. Luna"
                   />
                 </div>
@@ -513,7 +513,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
                   <select
                     value={petSpecies}
                     onChange={(e) => setPetSpecies(e.target.value as any)}
-                    className="w-full p-2 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none bg-white"
+                    className="w-full p-2 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none bg-white"
                   >
                     <option value="Dog">Dog</option>
                     <option value="Cat">Cat</option>
@@ -529,7 +529,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
                     type="text"
                     value={petBreed}
                     onChange={(e) => setPetBreed(e.target.value)}
-                    className="w-full p-2 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none bg-white"
+                    className="w-full p-2 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none bg-white"
                     placeholder="e.g. Poodle"
                   />
                 </div>
@@ -542,7 +542,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
                     step="0.5"
                     value={petAge}
                     onChange={(e) => setPetAge(e.target.value)}
-                    className="w-full p-2 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none bg-white"
+                    className="w-full p-2 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none bg-white"
                   />
                 </div>
                 <div>
@@ -554,7 +554,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
                     step="0.1"
                     value={petWeight}
                     onChange={(e) => setPetWeight(e.target.value)}
-                    className="w-full p-2 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none bg-white"
+                    className="w-full p-2 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none bg-white"
                   />
                 </div>
               </div>
@@ -565,7 +565,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
                   rows={2}
                   value={petNotes}
                   onChange={(e) => setPetNotes(e.target.value)}
-                  className="w-full p-2 rounded-xl border border-slate-300 font-medium focus:border-teal-500 focus:outline-none bg-white"
+                  className="w-full p-2 rounded-xl border border-slate-300 font-medium focus:border-rose-500 focus:outline-none bg-white"
                   placeholder="Allergies, food preferences, medical conditions..."
                 />
               </div>
@@ -577,7 +577,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer mt-2"
+          className="w-full py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer mt-2"
         >
           <UserPlus className="w-4 h-4" />
           {isLoading ? 'Creating Account…' : 'Register Account & Send Verification'}
@@ -590,7 +590,7 @@ export const OwnerRegisterForm: React.FC<OwnerRegisterFormProps> = ({
         <button
           type="button"
           onClick={onSwitchToLogin}
-          className="inline-flex items-center gap-1.5 text-xs font-extrabold text-teal-700 hover:text-teal-900 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-xs font-extrabold text-rose-700 hover:text-rose-900 transition-colors cursor-pointer"
         >
           <LogIn className="w-4 h-4" />
           Sign In to Pet Owner Portal

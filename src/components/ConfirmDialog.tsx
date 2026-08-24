@@ -35,9 +35,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       btn: 'bg-amber-600 hover:bg-amber-700 text-white'
     },
     info: {
-      icon: <Info className="w-6 h-6 text-teal-600" />,
-      iconBg: 'bg-teal-50',
-      btn: 'bg-teal-600 hover:bg-teal-700 text-white'
+      icon: <Info className="w-6 h-6 text-rose-600" />,
+      iconBg: 'bg-rose-50',
+      btn: 'bg-rose-600 hover:bg-rose-700 text-white'
     }
   };
 

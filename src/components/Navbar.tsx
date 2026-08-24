@@ -19,11 +19,11 @@ export const Navbar: React.FC = () => {
 
         {/* Desktop Nav Items */}
         <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600">
-          <a href="#home" className="hover:text-teal-600 transition-colors">Home</a>
-          <a href="#features" className="hover:text-teal-600 transition-colors">Features</a>
-          <a href="#how-it-works" className="hover:text-teal-600 transition-colors">How It Works</a>
-          <a href="#about" className="hover:text-teal-600 transition-colors">About</a>
-          <a href="#contact" className="hover:text-teal-600 transition-colors">Contact</a>
+          <a href="#home" className="hover:text-rose-600 transition-colors">Home</a>
+          <a href="#features" className="hover:text-rose-600 transition-colors">Features</a>
+          <a href="#how-it-works" className="hover:text-rose-600 transition-colors">How It Works</a>
+          <a href="#about" className="hover:text-rose-600 transition-colors">About</a>
+          <a href="#contact" className="hover:text-rose-600 transition-colors">Contact</a>
         </nav>
 
         {/* Action Buttons */}
@@ -31,7 +31,7 @@ export const Navbar: React.FC = () => {
           {isOwnerLoggedIn ? (
             <Link
               to="/owner"
-              className="px-4.5 py-2.5 rounded-xl text-xs font-extrabold text-white bg-teal-600 hover:bg-teal-700 transition-all flex items-center gap-1.5 shadow-sm"
+              className="px-4.5 py-2.5 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700 transition-all flex items-center gap-1.5 shadow-sm"
             >
               <UserCheck className="w-4 h-4" />
               My Owner Dashboard
@@ -39,7 +39,7 @@ export const Navbar: React.FC = () => {
           ) : (
             <Link
               to="/owner/login"
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 via-teal-600 to-emerald-600 text-white font-extrabold text-xs shadow-md hover:shadow-lg transition-all hover:scale-[1.02] flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-700 via-rose-600 to-pink-600 text-white font-extrabold text-xs shadow-md hover:shadow-lg transition-all hover:scale-[1.02] flex items-center gap-2"
             >
               <UserCheck className="w-4 h-4" />
               Pet Owner Portal
@@ -101,7 +101,7 @@ export const Navbar: React.FC = () => {
               <Link
                 to="/owner"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-full text-center py-2.5 rounded-xl bg-teal-600 font-extrabold text-white shadow-sm"
+                className="w-full text-center py-2.5 rounded-xl bg-rose-600 font-extrabold text-white shadow-sm"
               >
                 My Owner Dashboard
               </Link>
@@ -109,7 +109,7 @@ export const Navbar: React.FC = () => {
               <Link
                 to="/owner/login"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-full text-center py-2.5 rounded-xl bg-teal-600 font-extrabold text-white shadow-sm"
+                className="w-full text-center py-2.5 rounded-xl bg-rose-600 font-extrabold text-white shadow-sm"
               >
                 Pet Owner Portal (Login / Register)
               </Link>

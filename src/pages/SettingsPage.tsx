@@ -328,7 +328,7 @@ export const SettingsPage: React.FC = () => {
                 }}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left ${
                   isActive
-                    ? 'bg-teal-600 text-white shadow-md'
+                    ? 'bg-rose-600 text-white shadow-md'
                     : isLocked
                     ? 'bg-slate-50 text-slate-400 hover:bg-slate-100/80 border border-slate-200/50 cursor-not-allowed opacity-75'
                     : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200/60'
@@ -356,14 +356,14 @@ export const SettingsPage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                      <User className="w-4 h-4 text-teal-600" />
+                      <User className="w-4 h-4 text-rose-600" />
                       User Profile Information
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
                       Manage your clinical identity, contact details, and display preferences
                     </p>
                   </div>
-                  <span className="px-3 py-1 rounded-full bg-teal-50 text-teal-700 border border-teal-200 font-extrabold text-[11px] capitalize">
+                  <span className="px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 font-extrabold text-[11px] capitalize">
                     {adminProfile?.role?.replace('_', ' ') || 'Staff Member'}
                   </span>
                 </div>
@@ -377,9 +377,9 @@ export const SettingsPage: React.FC = () => {
                         <img
                           src={profileAvatar}
                           alt={profileName}
-                          className="w-16 h-16 rounded-2xl object-cover ring-2 ring-teal-500/40 shadow-sm"
+                          className="w-16 h-16 rounded-2xl object-cover ring-2 ring-rose-500/40 shadow-sm"
                         />
-                        <span className="absolute -bottom-1 -right-1 p-1 rounded-full bg-teal-600 text-white shadow-xs">
+                        <span className="absolute -bottom-1 -right-1 p-1 rounded-full bg-rose-600 text-white shadow-xs">
                           <CheckCircle2 className="w-3 h-3" />
                         </span>
                       </div>
@@ -408,7 +408,7 @@ export const SettingsPage: React.FC = () => {
                               onClick={() => setProfileAvatar(av.url)}
                               title={av.label}
                               className={`relative p-0.5 rounded-xl transition-all ${
-                                profileAvatar === av.url ? 'ring-2 ring-teal-600 scale-105' : 'opacity-70 hover:opacity-100'
+                                profileAvatar === av.url ? 'ring-2 ring-rose-600 scale-105' : 'opacity-70 hover:opacity-100'
                               }`}
                             >
                               <img
@@ -431,7 +431,7 @@ export const SettingsPage: React.FC = () => {
                         value={profileName}
                         onChange={(e) => setProfileName(e.target.value)}
                         required
-                        className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-bold text-slate-900"
+                        className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none font-bold text-slate-900"
                         placeholder="e.g. Dr. Sarah Jenkins"
                       />
                     </div>
@@ -443,7 +443,7 @@ export const SettingsPage: React.FC = () => {
                         value={profileEmail}
                         onChange={(e) => setProfileEmail(e.target.value)}
                         required
-                        className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none text-slate-900"
+                        className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none text-slate-900"
                         placeholder="staff@heritageanimalclinic.com"
                       />
                     </div>
@@ -458,7 +458,7 @@ export const SettingsPage: React.FC = () => {
                           type="text"
                           value={profilePhone}
                           onChange={(e) => setProfilePhone(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none text-slate-900"
+                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none text-slate-900"
                           placeholder="(555) 123-4567"
                         />
                       </div>
@@ -469,7 +469,7 @@ export const SettingsPage: React.FC = () => {
                       <select
                         value={profileDept}
                         onChange={(e) => setProfileDept(e.target.value)}
-                        className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none bg-white text-slate-900 font-medium"
+                        className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none bg-white text-slate-900 font-medium"
                       >
                         {CLINIC_DEPARTMENTS.map((dept) => (
                           <option key={dept} value={dept}>
@@ -484,7 +484,7 @@ export const SettingsPage: React.FC = () => {
                     <button
                       type="submit"
                       disabled={isSavingProfile}
-                      className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                     >
                       {isSavingProfile ? (
                         <>
@@ -667,7 +667,7 @@ export const SettingsPage: React.FC = () => {
                         type="text"
                         value={form.clinicName}
                         onChange={(e) => setForm({ ...form, clinicName: e.target.value })}
-                        className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
+                        className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none"
                       />
                     </div>
                     <div>
@@ -676,7 +676,7 @@ export const SettingsPage: React.FC = () => {
                         type="text"
                         value={form.licenseId}
                         onChange={(e) => setForm({ ...form, licenseId: e.target.value })}
-                        className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-mono"
+                        className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none font-mono"
                       />
                     </div>
                   </div>
@@ -687,7 +687,7 @@ export const SettingsPage: React.FC = () => {
                       type="text"
                       value={form.clinicAddress}
                       onChange={(e) => setForm({ ...form, clinicAddress: e.target.value })}
-                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
+                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none"
                     />
                   </div>
 
@@ -697,7 +697,7 @@ export const SettingsPage: React.FC = () => {
                       type="text"
                       value={form.clinicPhone}
                       onChange={(e) => setForm({ ...form, clinicPhone: e.target.value })}
-                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
+                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -717,7 +717,7 @@ export const SettingsPage: React.FC = () => {
                       type="number"
                       value={form.defaultPortionGrams}
                       onChange={(e) => setForm({ ...form, defaultPortionGrams: Number(e.target.value) })}
-                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
+                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -737,7 +737,7 @@ export const SettingsPage: React.FC = () => {
                       type="number"
                       value={form.defaultHydrationMlPerKg}
                       onChange={(e) => setForm({ ...form, defaultHydrationMlPerKg: Number(e.target.value) })}
-                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
+                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -758,7 +758,7 @@ export const SettingsPage: React.FC = () => {
                         type="checkbox"
                         checked={form.emailNotifications}
                         onChange={(e) => setForm({ ...form, emailNotifications: e.target.checked })}
-                        className="w-4 h-4 text-teal-600 rounded"
+                        className="w-4 h-4 text-rose-600 rounded"
                       />
                     </label>
 
@@ -768,7 +768,7 @@ export const SettingsPage: React.FC = () => {
                         type="checkbox"
                         checked={form.browserNotifications}
                         onChange={(e) => setForm({ ...form, browserNotifications: e.target.checked })}
-                        className="w-4 h-4 text-teal-600 rounded"
+                        className="w-4 h-4 text-rose-600 rounded"
                       />
                     </label>
                   </div>
@@ -790,7 +790,7 @@ export const SettingsPage: React.FC = () => {
                         type="text"
                         value={form.apiEndpoint}
                         onChange={(e) => setForm({ ...form, apiEndpoint: e.target.value })}
-                        className="flex-1 p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-mono text-xs"
+                        className="flex-1 p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none font-mono text-xs"
                       />
                       <button
                         type="button"
@@ -809,7 +809,7 @@ export const SettingsPage: React.FC = () => {
                       type="password"
                       value={form.apiSecretKey}
                       onChange={(e) => setForm({ ...form, apiSecretKey: e.target.value })}
-                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none font-mono"
+                      className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none font-mono"
                     />
                   </div>
                 </div>
@@ -819,7 +819,7 @@ export const SettingsPage: React.FC = () => {
               <div className="pt-4 border-t border-slate-100 flex justify-end">
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                  className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   Save Clinic Configurations

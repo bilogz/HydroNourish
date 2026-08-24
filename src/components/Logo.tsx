@@ -4,59 +4,59 @@ import { Link } from 'react-router-dom';
 interface LogoProps {
   className?: string;
   iconOnly?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  showSubtitle?: boolean;
+  textClassName?: string;
 }
 
-export const Logo: React.FC<LogoProps> = ({ className = '', iconOnly = false, size = 'md' }) => {
+export const Logo: React.FC<LogoProps> = ({
+  className = '',
+  iconOnly = false,
+  size = 'md',
+  showSubtitle = true,
+  textClassName = ''
+}) => {
   const sizeClasses = {
     sm: 'w-7 h-7',
-    md: 'w-9 h-9',
-    lg: 'w-11 h-11'
+    md: 'w-10 h-10',
+    lg: 'w-12 h-12',
+    xl: 'w-16 h-16'
   };
 
   const textClasses = {
-    sm: 'text-lg',
-    md: 'text-xl',
-    lg: 'text-2xl'
+    sm: 'text-base',
+    md: 'text-lg',
+    lg: 'text-2xl',
+    xl: 'text-3xl'
   };
 
   return (
     <Link to="/" className={`inline-flex items-center gap-2.5 group focus:outline-none ${className}`}>
-      {/* Custom HydroNourish Logo: Droplet combined with Pet Paw */}
-      <div className={`relative flex items-center justify-center rounded-xl bg-gradient-to-br from-sky-600 via-teal-600 to-emerald-500 shadow-sm transition-transform group-hover:scale-105 ${sizeClasses[size]}`}>
-        <svg viewBox="0 0 100 100" fill="none" className="w-4/5 h-4/5 text-white">
-          {/* Water Droplet outline/fill shape */}
-          <path
-            d="M50 8 C50 8, 18 50, 18 66 A32 32 0 0 0 82 66 C82 50, 50 8, 50 8 Z"
-            fill="currentColor"
-            opacity="0.25"
-          />
-          <path
-            d="M50 12 C50 12, 22 52, 22 66 A28 28 0 0 0 78 66 C78 52, 50 12, 50 12 Z"
-            stroke="currentColor"
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          {/* Pet Paw in center */}
-          <ellipse cx="50" cy="70" rx="12" ry="8.5" fill="currentColor" />
-          <circle cx="36" cy="55" r="4" fill="currentColor" />
-          <circle cx="45" cy="49" r="4.5" fill="currentColor" />
-          <circle cx="55" cy="49" r="4.5" fill="currentColor" />
-          <circle cx="64" cy="55" r="4" fill="currentColor" />
-        </svg>
+      {/* Official Heritage Animal Clinic Round Logo Badge */}
+      <div
+        className={`relative flex items-center justify-center rounded-full shrink-0 overflow-hidden shadow-xs ring-2 ring-rose-200/70 group-hover:scale-105 transition-transform duration-200 bg-[#FDB0C0]/15 ${sizeClasses[size]}`}
+      >
+        <img
+          src="/heritage-logo.png"
+          alt="Heritage Animal Clinic Logo"
+          className="w-full h-full object-contain drop-shadow-2xs"
+          loading="eager"
+        />
       </div>
 
       {!iconOnly && (
         <div className="flex flex-col">
-          <span className={`font-extrabold tracking-tight text-slate-900 leading-none ${textClasses[size]}`}>
-            Hydro<span className="text-teal-600">Nourish</span>
+          <span className={`font-extrabold tracking-tight text-slate-900 leading-none ${textClasses[size]} ${textClassName}`}>
+            Hydro<span className="text-rose-600 font-black">Nourish</span>
           </span>
-          <span className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mt-0.5">
-            Heritage Animal Clinic
-          </span>
+          {showSubtitle && (
+            <span className="text-[10px] font-bold tracking-wider text-rose-900/80 uppercase mt-0.5">
+              Heritage Animal Clinic
+            </span>
+          )}
         </div>
       )}
     </Link>
   );
 };
+

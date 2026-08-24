@@ -27,7 +27,7 @@ export const AlertCard: React.FC<AlertCardProps> = ({ alert, compact = false }) 
           <span className="text-slate-300">•</span>
           <Link
             to={`/app/pets/${alert.petId}`}
-            className="text-sm font-bold text-slate-900 hover:text-teal-600 transition-colors inline-flex items-center gap-1"
+            className="text-sm font-bold text-slate-900 hover:text-rose-600 transition-colors inline-flex items-center gap-1"
           >
             {alert.petName}
             <ChevronRight className="w-3.5 h-3.5" />
@@ -53,14 +53,14 @@ export const AlertCard: React.FC<AlertCardProps> = ({ alert, compact = false }) 
         <>
           <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-xs space-y-2">
             <div className="flex items-start gap-2">
-              <Bot className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+              <Bot className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <div>
                 <span className="font-semibold text-slate-800">AI Observation:</span>{' '}
                 <span className="text-slate-600">{alert.aiObservation}</span>
               </div>
             </div>
             <div className="pt-2 border-t border-slate-200/60 font-medium text-slate-700">
-              <span className="font-bold text-teal-700">Recommended Action:</span> {alert.recommendedAction}
+              <span className="font-bold text-rose-700">Recommended Action:</span> {alert.recommendedAction}
             </div>
           </div>
 
@@ -82,7 +82,7 @@ export const AlertCard: React.FC<AlertCardProps> = ({ alert, compact = false }) 
               {alert.reviewStatus !== 'Resolved' && (
                 <button
                   onClick={() => resolveAlert(alert.id)}
-                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium transition-colors flex items-center gap-1.5"
                 >
                   <CheckCircle className="w-3.5 h-3.5" />
                   Resolve Alert

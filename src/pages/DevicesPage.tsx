@@ -542,7 +542,7 @@ export const DevicesPage: React.FC = () => {
             </button>
             <button
               onClick={() => setConnectModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
             >
               <Plus className="w-4 h-4" />
               Connect Device
@@ -576,7 +576,7 @@ export const DevicesPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setConnectModalOpen(true)}
-                className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 Register Node
@@ -688,7 +688,7 @@ export const DevicesPage: React.FC = () => {
                               featuredDevice.wifiSignalDbm >= -60
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : featuredDevice.wifiSignalDbm >= -75
-                                ? 'bg-teal-50 text-teal-700 border border-teal-200'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
                                 : 'bg-amber-50 text-amber-700 border border-amber-200'
                             }`}>
                               {featuredDevice.wifiSignalDbm >= -60 ? 'Strong' : featuredDevice.wifiSignalDbm >= -75 ? 'Good' : 'Fair'}
@@ -874,7 +874,7 @@ export const DevicesPage: React.FC = () => {
                             !isOnline
                               ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
                               : !featuredDevice.firmwareVersion?.includes('AUTO:OFF')
-                              ? 'bg-teal-50/60 border-teal-300 hover:bg-teal-100/60 cursor-pointer'
+                              ? 'bg-rose-50/60 border-rose-300 hover:bg-rose-100/60 cursor-pointer'
                               : 'bg-slate-100/80 border-slate-200 hover:bg-slate-200/80 cursor-pointer'
                           }`}
                           title="Toggle Autonomous Water Refilling below 25%"
@@ -882,14 +882,14 @@ export const DevicesPage: React.FC = () => {
                           <div className="flex items-center gap-2 min-w-0">
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
                               !featuredDevice.firmwareVersion?.includes('AUTO:OFF')
-                                ? 'bg-teal-200/80 text-teal-800'
+                                ? 'bg-rose-200/80 text-rose-800'
                                 : 'bg-slate-200 text-slate-600'
                             }`}>
                               <Zap className="w-3.5 h-3.5 fill-current" />
                             </div>
                             <div className="min-w-0">
                               <p className="font-bold text-xs text-slate-800 leading-tight">Auto-Refill</p>
-                              <p className={`text-[10px] font-extrabold ${!featuredDevice.firmwareVersion?.includes('AUTO:OFF') ? 'text-teal-700' : 'text-slate-500'}`}>
+                              <p className={`text-[10px] font-extrabold ${!featuredDevice.firmwareVersion?.includes('AUTO:OFF') ? 'text-rose-700' : 'text-slate-500'}`}>
                                 {!featuredDevice.firmwareVersion?.includes('AUTO:OFF') ? 'SMART ON' : 'PAUSED'}
                               </p>
                             </div>
@@ -898,7 +898,7 @@ export const DevicesPage: React.FC = () => {
                           {/* Real Sliding Toggle Track & Thumb */}
                           <div
                             className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-colors duration-300 shrink-0 ${
-                              !featuredDevice.firmwareVersion?.includes('AUTO:OFF') ? 'bg-teal-500' : 'bg-slate-300'
+                              !featuredDevice.firmwareVersion?.includes('AUTO:OFF') ? 'bg-rose-500' : 'bg-slate-300'
                             }`}
                           >
                             <div
@@ -907,7 +907,7 @@ export const DevicesPage: React.FC = () => {
                               }`}
                             >
                               {!featuredDevice.firmwareVersion?.includes('AUTO:OFF') ? (
-                                <Check className="w-2.5 h-2.5 text-teal-600 font-bold" />
+                                <Check className="w-2.5 h-2.5 text-rose-600 font-bold" />
                               ) : (
                                 <PowerOff className="w-2.5 h-2.5 text-slate-400" />
                               )}
@@ -1026,7 +1026,7 @@ export const DevicesPage: React.FC = () => {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Wifi className="w-3.5 h-3.5 text-teal-500" />
+              <Wifi className="w-3.5 h-3.5 text-rose-500" />
               Manual / Hidden SSID
             </button>
           </div>
@@ -1159,7 +1159,7 @@ export const DevicesPage: React.FC = () => {
                               isStrong
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : isMedium
-                                ? 'bg-teal-50 text-teal-700 border border-teal-200'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
                                 : 'bg-amber-50 text-amber-700 border border-amber-200'
                             }`}>
                               {isStrong ? 'Strong' : isMedium ? 'Good' : 'Fair'}
@@ -1216,12 +1216,12 @@ export const DevicesPage: React.FC = () => {
 
           {/* Tab 3: Manual / Custom SSID Notice */}
           {activeWifiTab === 'manual' && (
-            <div className="p-3.5 bg-teal-50/70 rounded-2xl border border-teal-200/70 text-teal-900 space-y-1">
-              <p className="font-bold flex items-center gap-1.5 text-xs text-teal-900">
-                <Globe className="w-4 h-4 text-teal-600" />
+            <div className="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-200/70 text-rose-900 space-y-1">
+              <p className="font-bold flex items-center gap-1.5 text-xs text-rose-900">
+                <Globe className="w-4 h-4 text-rose-600" />
                 Connect to Any Custom or Hidden Wi-Fi
               </p>
-              <p className="text-[11px] text-teal-700 leading-relaxed">
+              <p className="text-[11px] text-rose-700 leading-relaxed">
                 You can connect the ESP32 node to <strong>any 2.4 GHz Wi-Fi network</strong> by typing the exact SSID name and security key below. Hidden networks and open public hotspots are fully supported.
               </p>
             </div>
@@ -1428,7 +1428,7 @@ export const DevicesPage: React.FC = () => {
               <select
                 value={formData.petId}
                 onChange={e => setFormData({ ...formData, petId: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-teal-500 focus:outline-none bg-white text-slate-800"
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none bg-white text-slate-800"
               >
                 <option value="">Select a registered patient to assign (or Leave Standby)...</option>
                 {pets.map(p => (
@@ -1454,7 +1454,7 @@ export const DevicesPage: React.FC = () => {
               required
               value={formData.macAddress}
               onChange={e => setFormData({ ...formData, macAddress: e.target.value })}
-              className="w-full p-2.5 rounded-xl border border-slate-300 font-mono font-bold focus:border-teal-500 focus:outline-none"
+              className="w-full p-2.5 rounded-xl border border-slate-300 font-mono font-bold focus:border-rose-500 focus:outline-none"
               placeholder="1C:C3:AB:F9:F7:78"
             />
           </div>
@@ -1469,7 +1469,7 @@ export const DevicesPage: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold shadow-sm cursor-pointer"
+              className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-sm cursor-pointer"
             >
               Register & Pair Node
             </button>

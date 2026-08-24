@@ -250,8 +250,8 @@ export const HydrationPage: React.FC = () => {
           value={isDeviceConnected ? `${totalHydrationTargetMl.toLocaleString()} ml` : '0 ml'}
           subtitle={isDeviceConnected ? 'All Active Patients' : 'No device connected'}
           icon={CheckCircle2}
-          iconBgColor={isDeviceConnected ? 'bg-teal-50' : 'bg-slate-100'}
-          iconTextColor={isDeviceConnected ? 'text-teal-600' : 'text-slate-400'}
+          iconBgColor={isDeviceConnected ? 'bg-rose-50' : 'bg-slate-100'}
+          iconTextColor={isDeviceConnected ? 'text-rose-600' : 'text-slate-400'}
           badgeText={isDeviceConnected ? 'On Track' : 'Offline'}
           badgeType={isDeviceConnected ? 'success' : 'info'}
         />
@@ -293,7 +293,7 @@ export const HydrationPage: React.FC = () => {
             </div>
             <Link
               to="/app/devices"
-              className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition-all"
+              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition-all"
             >
               <Plus className="w-4 h-4" />
               Connect Device Node

@@ -104,7 +104,7 @@ export const PetProfilePage: React.FC = () => {
             <img
               src={pet.avatarUrl}
               alt={pet.name}
-              className="w-20 h-20 rounded-3xl object-cover ring-4 ring-teal-500/20 shadow-md"
+              className="w-20 h-20 rounded-3xl object-cover ring-4 ring-rose-500/20 shadow-md"
             />
             <div>
               <div className="flex items-center gap-3">
@@ -134,7 +134,7 @@ export const PetProfilePage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             <Link
               to="/app/feeding"
-              className="flex-1 md:flex-initial px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5"
+              className="flex-1 md:flex-initial px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5"
             >
               <Utensils className="w-4 h-4" />
               Feeding Plan
@@ -154,10 +154,10 @@ export const PetProfilePage: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="clinic-card p-5 space-y-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-            <Cpu className="w-3.5 h-3.5 text-teal-600" />
+            <Cpu className="w-3.5 h-3.5 text-rose-600" />
             Assigned Smart Cage
           </span>
-          <div className="text-xl font-extrabold text-teal-600">
+          <div className="text-xl font-extrabold text-rose-600">
             {pet.assignedDeviceId || 'Unassigned'}
           </div>
           <p className="text-[11px] text-slate-500">Automated Feeder & Hydrator Node</p>
@@ -203,7 +203,7 @@ export const PetProfilePage: React.FC = () => {
         <div className="clinic-card p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-teal-600" />
+              <Cpu className="w-4 h-4 text-rose-600" />
               Assigned Smart Cage Node
             </h3>
             {assignedDevice && <StatusBadge status={assignedDevice.status} size="sm" />}
@@ -212,7 +212,7 @@ export const PetProfilePage: React.FC = () => {
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-2">
               <div className="flex justify-between">
                 <span className="text-slate-500">Cage Unit:</span>
-                <span className="font-mono font-bold text-teal-600">{assignedDevice.id}</span>
+                <span className="font-mono font-bold text-rose-600">{assignedDevice.id}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Firmware:</span>
@@ -340,7 +340,7 @@ export const PetProfilePage: React.FC = () => {
         {/* Clinical Notes Editor */}
         <div className="lg:col-span-6 space-y-4">
           <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <Activity className="w-5 h-5 text-teal-600" />
+            <Activity className="w-5 h-5 text-rose-600" />
             Veterinary Clinical Notes
           </h3>
           <div className="clinic-card p-5 space-y-4">
@@ -348,13 +348,13 @@ export const PetProfilePage: React.FC = () => {
               rows={6}
               value={noteText}
               onChange={e => setNoteText(e.target.value)}
-              className="w-full p-3 text-xs font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none"
+              className="w-full p-3 text-xs font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none"
               placeholder="Enter detailed clinical observation notes..."
             />
             <div className="flex justify-end">
               <button
                 onClick={handleSaveNotes}
-                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs flex items-center gap-1.5"
               >
                 <Save className="w-4 h-4" />
                 Save Notes

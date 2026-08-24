@@ -161,13 +161,13 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="text-center space-y-2">
-        <div className="p-3 rounded-2xl bg-teal-50 text-teal-600 w-fit mx-auto">
+        <div className="p-3 rounded-2xl bg-rose-50 text-rose-600 w-fit mx-auto">
           <ShieldCheck className="w-6 h-6" />
         </div>
         <h2 className="text-xl font-extrabold text-slate-900">HydroNourish Administrator Login</h2>
         <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
           Enter your email and password. A 6-digit 2FA verification code titled{' '}
-          <strong className="text-teal-700">Admin Login Verification Code - HydroNourish</strong> will be sent.
+          <strong className="text-rose-700">Admin Login Verification Code - HydroNourish</strong> will be sent.
         </p>
       </div>
 
@@ -209,7 +209,7 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
             className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5"
           >
             <span className="flex items-center gap-1.5">
-              <Mail className="w-3.5 h-3.5 text-teal-600" />
+              <Mail className="w-3.5 h-3.5 text-rose-600" />
               Email Address *
             </span>
           </label>
@@ -225,7 +225,7 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
               setError(null);
             }}
             disabled={isLoading || lockout.isLocked}
-            className="w-full px-4 py-3 text-sm font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 disabled:bg-slate-50 transition-all"
+            className="w-full px-4 py-3 text-sm font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 disabled:opacity-60 disabled:bg-slate-50 transition-all"
             placeholder="admin@heritageanimalclinic.com"
           />
         </div>
@@ -237,7 +237,7 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
             className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5"
           >
             <span className="flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-teal-600" />
+              <Lock className="w-3.5 h-3.5 text-rose-600" />
               Password *
             </span>
           </label>
@@ -253,7 +253,7 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
                 setError(null);
               }}
               disabled={isLoading || lockout.isLocked}
-              className="w-full px-4 py-3 pr-10 text-sm font-medium rounded-xl border border-slate-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 disabled:bg-slate-50 transition-all"
+              className="w-full px-4 py-3 pr-10 text-sm font-medium rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 disabled:opacity-60 disabled:bg-slate-50 transition-all"
               placeholder="Enter password"
             />
             <button
@@ -272,7 +272,7 @@ export const AdminEmailForm: React.FC<AdminEmailFormProps> = ({ onSuccess }) => 
           id="send-otp-btn"
           type="submit"
           disabled={isLoading || lockout.isLocked}
-          className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+          className="w-full py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
         >
           {lockout.isLocked ? (
             <>
