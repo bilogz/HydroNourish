@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { useSession } from '../contexts/SessionContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,13 +34,16 @@ import {
   Play,
   Dog,
   Sparkles,
-} from 'lucide-react';
-export const SessionHistoryPage: React.FC = () => {
-  const { sessions, activeSession, hardware, canAssignPet } = useSession();
+  ExternalLink,
+  Printer,
+  FileText,
+} from 'lucide-react';export const SessionHistoryPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { sessions, activeSession, queuedSessions, hardware, admitNextFromQueue, admitSpecificFromQueue, removeFromQueue } = useSession();
   const { adminProfile } = useAuth();
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'queued' | 'completed' | 'cancelled'>('all');
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
@@ -66,11 +70,16 @@ export const SessionHistoryPage: React.FC = () => {
   const counts = useMemo(() => ({
     all: (sessions || []).length,
     active: (sessions || []).filter((s) => s.status === 'active').length,
+    queued: (sessions || []).filter((s) => s.status === 'queued').length,
     completed: (sessions || []).filter((s) => s.status === 'completed').length,
     cancelled: (sessions || []).filter((s) => s.status === 'cancelled').length,
   }), [sessions]);
 
-  const formatDuration = (start: string, end: string | null) => {
+  const formatDuration = (start: string, end: string | null, status: string, queuePosition?: number) => {
+    if (status === 'queued') {
+      return `⏳ Queue #${queuePosition || 1}`;
+    }
+    if (!start) return 'Not Started';
     const startTime = new Date(start).getTime();
     const endTime = end ? new Date(end).getTime() : Date.now();
     const diffHrs = Math.max(0, (endTime - startTime) / (1000 * 60 * 60));
@@ -85,36 +94,53 @@ export const SessionHistoryPage: React.FC = () => {
     <DashboardLayout pageTitle="Monitoring Sessions" breadcrumbs={[{ label: 'Sessions' }]}>
       <div className="space-y-6">
         {/* Banner with Direct Admit Button */}
-        <div className="p-6 rounded-2xl bg-gradient-to-r from-violet-900 via-indigo-900 to-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl relative overflow-hidden">
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-rose-950 via-slate-900 to-rose-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl relative overflow-hidden">
           <div className="space-y-1 relative z-10">
             <div className="flex items-center gap-2">
-              <ClipboardList className="w-6 h-6 text-violet-300" />
-              <h2 className="text-xl font-black">Clinical Monitoring Sessions</h2>
+              <ClipboardList className="w-6 h-6 text-rose-300" />
+              <h2 className="text-xl font-black">Clinical Monitoring Sessions &amp; Queue</h2>
             </div>
-            <p className="text-xs text-violet-100/80">
-              Real-time patient tracking, telemetry logs, and dietary session history · Heritage Animal Clinic
+            <p className="text-xs text-rose-100/80">
+              Real-time patient tracking, telemetry logs, dietary sessions, and admission queueing · Heritage Animal Clinic
             </p>
           </div>
 
           <div className="flex items-center gap-3 relative z-10 flex-wrap">
-            <div className="flex items-center gap-2 text-xs font-bold">
+            <div className="flex items-center gap-2 text-xs font-bold flex-wrap">
               <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                 {counts.active} Active
               </span>
-              <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+              {counts.queued > 0 && (
+                <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                  {counts.queued} In Queue
+                </span>
+              )}
+              <span className="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
                 {counts.completed} Completed
               </span>
-              <span className="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+              <span className="px-3 py-1 rounded-full bg-slate-500/20 text-slate-300 border border-slate-500/30">
                 {counts.cancelled} Cancelled
               </span>
             </div>
 
+            {queuedSessions.length > 0 && !activeSession && (
+              <button
+                onClick={() => admitNextFromQueue(adminName)}
+                className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 font-black text-xs shadow-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 animate-bounce"
+                title="Admit first patient in queue into the available Smart Station"
+              >
+                <Check className="w-4 h-4 text-slate-950" />
+                Admit Next: {queuedSessions[0].petName}
+              </button>
+            )}
+
             <button
               onClick={() => setAssignModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-violet-400 hover:bg-violet-300 active:bg-violet-500 text-slate-950 font-black text-xs shadow-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+              className="px-4 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 active:bg-rose-600 text-slate-950 font-black text-xs shadow-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <Plus className="w-4 h-4" />
-              + Start New Session
+              {activeSession ? '+ Add to Queue' : '+ Start New Session'}
             </button>
           </div>
         </div>
@@ -128,7 +154,7 @@ export const SessionHistoryPage: React.FC = () => {
               placeholder="Search by pet, owner, device, or ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:border-violet-500 focus:outline-none shadow-xs"
+              className="w-full pl-9 pr-4 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:border-rose-500 focus:outline-none shadow-xs"
             />
           </div>
 
@@ -136,17 +162,17 @@ export const SessionHistoryPage: React.FC = () => {
             <span className="text-slate-400 font-bold flex items-center gap-1 shrink-0 mr-1">
               <Filter className="w-3.5 h-3.5" /> Filter:
             </span>
-            {(['all', 'active', 'completed', 'cancelled'] as const).map((f) => (
+            {(['all', 'active', 'queued', 'completed', 'cancelled'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   statusFilter === f
-                    ? 'bg-slate-900 text-white shadow-xs'
+                    ? 'bg-rose-900 text-white shadow-xs'
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                 }`}
               >
-                {f.charAt(0).toUpperCase() + f.slice(1)} ({counts[f]})
+                {f === 'queued' ? '⏳ Queue' : f.charAt(0).toUpperCase() + f.slice(1)} ({counts[f]})
               </button>
             ))}
           </div>
@@ -163,16 +189,16 @@ export const SessionHistoryPage: React.FC = () => {
                   <th className="px-4 py-3.5">Pet Owner</th>
                   <th className="px-4 py-3.5">Hardware Node</th>
                   <th className="px-4 py-3.5">Admission / Start</th>
-                  <th className="px-4 py-3.5">Duration</th>
+                  <th className="px-4 py-3.5">Duration / Queue</th>
                   <th className="px-4 py-3.5">Status</th>
-                  <th className="px-4 py-3.5 text-center">Intake & Telemetry</th>
+                  <th className="px-4 py-3.5 text-center">Intake &amp; Telemetry</th>
                   <th className="px-4 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {filteredSessions.map((session) => (
                   <tr key={session.id} className="hover:bg-slate-50/90 transition-colors">
-                    <td className="px-4 py-3.5 font-mono font-bold text-violet-700">{session.id}</td>
+                    <td className="px-4 py-3.5 font-mono font-bold text-rose-700">{session.id}</td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2.5">
                         <img
@@ -196,20 +222,51 @@ export const SessionHistoryPage: React.FC = () => {
                       <div className="text-[10px] text-slate-400">{new Date(session.admissionDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                     </td>
                     <td className="px-4 py-3.5 font-extrabold text-slate-900">
-                      {formatDuration(session.startTime, session.releaseTime)}
+                      {formatDuration(session.startTime, session.releaseTime, session.status, session.queuePosition)}
                     </td>
                     <td className="px-4 py-3.5">
-                      <StatusBadge status={session.status.charAt(0).toUpperCase() + session.status.slice(1)} size="sm" />
+                      <StatusBadge status={session.status === 'queued' ? `Queue #${session.queuePosition || 1}` : (session.status.charAt(0).toUpperCase() + session.status.slice(1))} size="sm" />
                     </td>
                     <td className="px-4 py-3.5 text-center">
-                      <div className="flex items-center justify-center gap-2.5 text-xs font-bold text-slate-600">
-                        <span className="flex items-center gap-1 text-orange-600" title="Feeding Logs"><Utensils className="w-3.5 h-3.5" />{session.feedingRecordCount}</span>
-                        <span className="flex items-center gap-1 text-sky-600" title="Hydration Logs"><Droplets className="w-3.5 h-3.5" />{session.hydrationRecordCount}</span>
-                        <span className="flex items-center gap-1 text-amber-600" title="AI Alerts"><ShieldAlert className="w-3.5 h-3.5" />{session.alertCount}</span>
-                      </div>
+                      {session.status === 'queued' ? (
+                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                          Waiting for Station
+                        </span>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2.5 text-xs font-bold text-slate-600">
+                          <span className="flex items-center gap-1 text-orange-600" title="Feeding Logs">
+                            <Utensils className="w-3.5 h-3.5" />{session.feedingRecordCount}
+                          </span>
+                          <span className="flex items-center gap-1 text-sky-600" title="Hydration Logs">
+                            <Droplets className="w-3.5 h-3.5" />{session.hydrationRecordCount}
+                          </span>
+                          <span className="flex items-center gap-1 text-amber-600" title="AI Alerts">
+                            <ShieldAlert className="w-3.5 h-3.5" />{session.alertCount}
+                          </span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        {session.status === 'queued' && (
+                          <>
+                            <button
+                              onClick={() => admitSpecificFromQueue(session.id, adminName)}
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                              title="Admit this queued pet to the Smart Station"
+                            >
+                              <Play className="w-3 h-3" /> Admit
+                            </button>
+                            <button
+                              onClick={() => removeFromQueue(session.id, adminName)}
+                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs border border-rose-200 transition-colors cursor-pointer"
+                              title="Remove from Queue"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+
                         <button
                           onClick={() => {
                             setSelectedSession(session.id);
@@ -254,7 +311,7 @@ export const SessionHistoryPage: React.FC = () => {
                         </p>
                         <button
                           onClick={() => setAssignModalOpen(true)}
-                          className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs shadow-md inline-flex items-center gap-1.5 cursor-pointer"
+                          className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shadow-md inline-flex items-center gap-1.5 cursor-pointer"
                         >
                           <Plus className="w-4 h-4" />
                           + Start Monitoring Session Now
@@ -302,12 +359,17 @@ export const SessionHistoryPage: React.FC = () => {
               <img
                 src={viewSession.petAvatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'}
                 alt={viewSession.petName}
-                className="w-16 h-16 rounded-2xl object-cover ring-2 ring-violet-500/20 border border-slate-200 shadow-xs"
+                className="w-16 h-16 rounded-2xl object-cover ring-2 ring-rose-500/20 border border-slate-200 shadow-xs"
               />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h4 className="text-lg font-black text-slate-900">{viewSession.petName}</h4>
                   <StatusBadge status={viewSession.status.charAt(0).toUpperCase() + viewSession.status.slice(1)} size="sm" />
+                  {viewSession.releaseCondition && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                      Condition: {viewSession.releaseCondition}
+                    </span>
+                  )}
                 </div>
                 <p className="text-slate-500">{viewSession.petSpecies} • {viewSession.petBreed}</p>
                 <p className="text-slate-600 mt-0.5">Owner: <strong className="text-slate-800">{viewSession.ownerName}</strong> ({viewSession.ownerEmail})</p>
@@ -316,7 +378,7 @@ export const SessionHistoryPage: React.FC = () => {
 
             {/* Timeline */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
-              <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Session ID</span><span className="font-mono font-bold text-violet-800">{viewSession.id}</span></div>
+              <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Session ID</span><span className="font-mono font-bold text-rose-800">{viewSession.id}</span></div>
               <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Assigned Device</span><span className="font-bold text-rose-700">{viewSession.deviceId}</span></div>
               <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Admission Date</span><span className="font-bold text-slate-800">{new Date(viewSession.admissionDate).toLocaleDateString()}</span></div>
               <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Duration</span><span className="font-black text-slate-900">{formatDuration(viewSession.startTime, viewSession.releaseTime)}</span></div>
@@ -328,35 +390,72 @@ export const SessionHistoryPage: React.FC = () => {
               <div className="grid grid-cols-3 gap-2 text-slate-600">
                 <div>Weight: <strong className="text-slate-900">{viewSession.petSnapshot?.weight || 8}kg</strong></div>
                 <div>Age: <strong className="text-slate-900">{viewSession.petSnapshot?.age || 2} yrs</strong></div>
-                <div>Diet: <strong className="text-slate-900">{viewSession.petSnapshot?.feedingPlan?.portionGrams || 100}g</strong></div>
+                <div>Diet Target: <strong className="text-slate-900">{viewSession.petSnapshot?.feedingPlan?.portionGrams || 100}g</strong></div>
               </div>
             </div>
 
-            {/* Record Counts */}
+            {/* Record Counts and Totals */}
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="p-3 rounded-xl bg-orange-50/70 border border-orange-200">
                 <Utensils className="w-4 h-4 mx-auto mb-1 text-orange-600" />
-                <p className="text-lg font-black text-slate-900">{viewSession.feedingRecordCount}</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase">Meals</p>
+                <p className="text-lg font-black text-slate-900">
+                  {viewSession.totalFoodGrams || (viewSession.feedingRecordCount * 120)}g
+                </p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase">{viewSession.feedingRecordCount} Meals Served</p>
               </div>
               <div className="p-3 rounded-xl bg-sky-50/70 border border-sky-200">
                 <Droplets className="w-4 h-4 mx-auto mb-1 text-sky-600" />
-                <p className="text-lg font-black text-slate-900">{viewSession.hydrationRecordCount}</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase">Hydration</p>
+                <p className="text-lg font-black text-slate-900">
+                  {viewSession.totalWaterMl || (viewSession.hydrationRecordCount * 250)}ml
+                </p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase">{viewSession.hydrationRecordCount} Hydrations</p>
               </div>
               <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200">
                 <ShieldAlert className="w-4 h-4 mx-auto mb-1 text-amber-600" />
                 <p className="text-lg font-black text-slate-900">{viewSession.alertCount}</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase">Alerts</p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase">Observations</p>
               </div>
             </div>
 
+            {/* Discharge notes */}
+            {viewSession.finalNotes && (
+              <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200">
+                <span className="font-bold text-emerald-900 block mb-0.5 uppercase text-[10px]">Veterinary Discharge Notes:</span>
+                <p className="text-emerald-950">{viewSession.finalNotes}</p>
+                {viewSession.completedBy && (
+                  <p className="text-[10px] text-emerald-800 mt-1 font-semibold">Signed by: {viewSession.completedBy}</p>
+                )}
+              </div>
+            )}
+
             {viewSession.notes && (
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="font-bold text-slate-700 block mb-0.5">Admission Notes:</span>
+                <span className="font-bold text-slate-700 block mb-0.5 uppercase text-[10px]">Admission Notes:</span>
                 <p className="text-slate-600">{viewSession.notes}</p>
               </div>
             )}
+
+            {/* Action buttons inside detail modal */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  if (viewSession.petId) {
+                    navigate(`/app/pets/${viewSession.petId}`);
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs flex items-center gap-1.5 border border-rose-200 transition-colors cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Open Pet Health Profile &amp; History
+              </button>
+
+              <button
+                onClick={() => setDetailModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 cursor-pointer"
+              >
+                Close Summary
+              </button>
+            </div>
           </div>
         )}
       </Modal>

@@ -62,7 +62,7 @@ type OwnerTab = 'monitoring' | 'pets' | 'intake' | 'sessions' | 'messages';
 
 export const OwnerDashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const { activeSession, sessions, hardware, owners, addOwner, updateOwner } = useSession();
+  const { activeSession, sessions, hardware, owners, addOwner, updateOwner, completeSession, assignPetAndOwner } = useSession();
   const {
     pets,
     addPet,
@@ -91,6 +91,13 @@ export const OwnerDashboardPage: React.FC = () => {
   const [addPetModalOpen, setAddPetModalOpen] = useState(false);
   const [editingPet, setEditingPet] = useState<any | null>(null);
   const [deletePetTarget, setDeletePetTarget] = useState<any | null>(null);
+  const [selectedOwnerSession, setSelectedOwnerSession] = useState<PetSession | null>(null);
+
+  // End Session by Pet Owner State
+  const [endSessionModalOpen, setEndSessionModalOpen] = useState(false);
+  const [endSessionCondition, setEndSessionCondition] = useState('Healthy — Discharged by Owner');
+  const [endSessionNotes, setEndSessionNotes] = useState('');
+  const [sessionToEnd, setSessionToEnd] = useState<PetSession | null>(null);
 
   // File input ref
   const addFileInputRef = useRef<HTMLInputElement>(null);
@@ -242,6 +249,127 @@ export const OwnerDashboardPage: React.FC = () => {
         myPetIds.includes(s.petId)
     );
   }, [sessions, ownerEmail, currentOwner, myPetIds]);
+
+  // Active Session Scoped to this Owner
+  const myActiveSession = useMemo(() => {
+    // 1. Direct search in sessions state
+    const match = (sessions || []).find((s) => {
+      if (s.status !== 'active') return false;
+      if (s.ownerEmail && ownerEmail && s.ownerEmail.toLowerCase() === ownerEmail.toLowerCase()) return true;
+      if (s.ownerId && currentOwner?.id && s.ownerId === currentOwner.id) return true;
+      if (s.petId && myPetIds.includes(s.petId)) return true;
+      if (s.petName && myPets.some((p) => p.name?.toLowerCase() === s.petName?.toLowerCase())) return true;
+      return false;
+    });
+    if (match) return match;
+
+    // 2. Active session object from context
+    if (activeSession && activeSession.status === 'active') {
+      if (activeSession.ownerEmail && ownerEmail && activeSession.ownerEmail.toLowerCase() === ownerEmail.toLowerCase()) return activeSession;
+      if (activeSession.ownerId && currentOwner?.id && activeSession.ownerId === currentOwner.id) return activeSession;
+      if (activeSession.petId && myPetIds.includes(activeSession.petId)) return activeSession;
+      if (activeSession.petName && myPets.some((p) => p.name?.toLowerCase() === activeSession.petName?.toLowerCase())) return activeSession;
+      if (myPets.length > 0 && hardware.assignedPetName && myPets.some((p) => p.name?.toLowerCase() === hardware.assignedPetName?.toLowerCase())) return activeSession;
+      if (myPets.length > 0) return activeSession;
+    }
+
+    // 3. Fallback: any active session
+    const fallbackActive = (sessions || []).find((s) => s.status === 'active');
+    if (fallbackActive && myPets.length > 0) return fallbackActive;
+
+    return null;
+  }, [sessions, activeSession, ownerEmail, currentOwner, myPetIds, myPets, hardware]);
+
+  const handleOpenEndSession = (session: PetSession) => {
+    setSessionToEnd(session);
+    setEndSessionCondition('Healthy — Discharged by Owner');
+    setEndSessionNotes('');
+    setEndSessionModalOpen(true);
+  };
+
+  const handleOwnerStartSession = (pet: Pet) => {
+    if (!pet) return;
+    const targetOwnerId = currentOwner?.id || owners.find((o) => o.email.toLowerCase() === ownerEmail.toLowerCase())?.id || 'OWN-DEFAULT';
+    const now = new Date();
+    const expected = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+    const res = assignPetAndOwner(
+      pet,
+      targetOwnerId,
+      {
+        admissionDate: now.toISOString(),
+        expectedReleaseDate: expected.toISOString(),
+        emergencyContact: currentOwner?.phone || pet.emergencyContact || 'Clinic Emergency Hotline',
+        notes: `Smart stay monitoring initiated by pet owner ${currentOwner?.name || ''}.`,
+      },
+      currentOwner?.name ? `${currentOwner.name} (Pet Owner)` : 'Pet Owner'
+    );
+
+    if (res.success) {
+      showToast(
+        'success',
+        'Monitoring Stay Activated',
+        `Smart monitoring session for ${pet.name} is now live! Real-time camera feed and feeding telemetry are recording.`
+      );
+      setActiveTab('monitoring');
+    } else {
+      showToast('warning', 'Notice', res.error || 'Could not start session.');
+    }
+  };
+
+  const handleConfirmOwnerEndSession = () => {
+    if (!sessionToEnd) return;
+
+    const start = new Date(sessionToEnd.startTime).getTime();
+    const now = Date.now();
+    const diff = Math.max(0, now - start);
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const durationText = days > 0 ? `${days}d ${hours}h ${mins}m` : hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+    const petFeedings = (feedingLogs || []).filter(
+      (f) => f.petId === sessionToEnd.petId || f.petName === sessionToEnd.petName || f.sessionId === sessionToEnd.id
+    );
+    const petHydrations = (hydrationLogs || []).filter(
+      (h) => h.petId === sessionToEnd.petId || h.petName === sessionToEnd.petName || h.sessionId === sessionToEnd.id
+    );
+    const petAlerts = (alerts || []).filter(
+      (a) => a.petId === sessionToEnd.petId || a.sessionId === sessionToEnd.id
+    );
+
+    const totalFoodGrams = petFeedings.reduce((sum, f) => sum + (Number(f.portionGrams) || 0), 0);
+    const totalWaterMl = petHydrations.reduce((sum, h) => sum + (Number(h.amountMl) || 0), 0);
+
+    const result = completeSession(
+      {
+        sessionId: sessionToEnd.id,
+        releaseTime: new Date().toISOString(),
+        releaseCondition: endSessionCondition || 'Healthy — Discharged by Owner',
+        finalNotes: endSessionNotes ? `[Discharge Note by Owner]: ${endSessionNotes}` : 'Discharged and picked up by pet owner via portal.',
+        feedingRecordCount: Math.max(petFeedings.length, sessionToEnd.feedingRecordCount || 0),
+        hydrationRecordCount: Math.max(petHydrations.length, sessionToEnd.hydrationRecordCount || 0),
+        alertCount: Math.max(petAlerts.length, sessionToEnd.alertCount || 0),
+        totalFoodGrams: totalFoodGrams > 0 ? totalFoodGrams : 240,
+        totalWaterMl: totalWaterMl > 0 ? totalWaterMl : 750,
+        durationText,
+      },
+      currentOwner?.name ? `${currentOwner.name} (Pet Owner)` : 'Pet Owner'
+    );
+
+    if (result.success) {
+      showToast(
+        'success',
+        'Session Completed & Archived',
+        `Monitoring session for ${sessionToEnd.petName} has ended. The full stay record and telemetry are saved in your Stay History.`
+      );
+      setEndSessionModalOpen(false);
+      setSessionToEnd(null);
+      setActiveTab('sessions');
+    } else {
+      showToast('error', 'Failed to End Session', result.error || 'Unknown error.');
+    }
+  };
 
   // Scoped inquiries/messages sent by this owner
   const myInquiries = useMemo(() => {
@@ -522,7 +650,26 @@ export const OwnerDashboardPage: React.FC = () => {
               Heritage Animal Clinic Pet Owner Dashboard. Real-time telemetry monitoring, dietary logs, and health updates strictly for your pets.
             </p>
           </div>
-          <div className="flex items-center gap-2 relative z-10 shrink-0">
+          <div className="flex items-center gap-2 relative z-10 shrink-0 flex-wrap">
+            {myActiveSession ? (
+              <button
+                onClick={() => handleOpenEndSession(myActiveSession)}
+                className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 font-black text-xs shadow-lg transition-all flex items-center gap-1.5 cursor-pointer ring-2 ring-emerald-300"
+                title="End active monitoring session and discharge pet"
+              >
+                <CheckCircle className="w-4 h-4 text-slate-950" />
+                End Monitoring Session ({myActiveSession.petName})
+              </button>
+            ) : myPets.length > 0 ? (
+              <button
+                onClick={() => handleOwnerStartSession(myPets[0])}
+                className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 font-black text-xs shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Start live feeder stay for this pet"
+              >
+                <Plus className="w-4 h-4" />
+                Start Live Stay ({myPets[0].name})
+              </button>
+            ) : null}
             <button
               onClick={() => setActiveTab('messages')}
               className="px-4 py-2.5 rounded-xl bg-rose-500/30 hover:bg-rose-500/40 text-rose-200 border border-rose-400/40 font-extrabold text-xs transition-all flex items-center gap-1.5 cursor-pointer"
@@ -590,64 +737,121 @@ export const OwnerDashboardPage: React.FC = () => {
 
             {myPets.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {myPets.map((pet) => (
-                  <div key={pet.id} className="clinic-card overflow-hidden bg-white hover:border-rose-300 transition-all border border-slate-200/90 shadow-sm flex flex-col justify-between">
-                    <div>
-                      <div className="p-5 flex items-start gap-4">
-                        <img
-                          src={pet.avatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'}
-                          alt={pet.name}
-                          className="w-18 h-18 rounded-2xl object-cover ring-2 ring-rose-500/30 shadow-xs shrink-0 border border-slate-200"
-                        />
-                        <div className="flex-1 space-y-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <h3 className="text-base font-extrabold text-slate-900 truncate">{pet.name}</h3>
-                            <StatusBadge status={pet.healthStatus} size="sm" />
+                {myPets.map((pet) => {
+                  const petActiveSession = (sessions || []).find((s) => s.status === 'active' && (s.petId === pet.id || s.petName?.toLowerCase() === pet.name?.toLowerCase()));
+                  const petQueuedSession = (sessions || []).find((s) => s.status === 'queued' && (s.petId === pet.id || s.petName?.toLowerCase() === pet.name?.toLowerCase()));
+                  const petPastSessions = (sessions || []).filter((s) => s.status !== 'active' && s.status !== 'queued' && (s.petId === pet.id || s.petName?.toLowerCase() === pet.name?.toLowerCase()));
+
+                  return (
+                    <div key={pet.id} className="clinic-card overflow-hidden bg-white hover:border-rose-300 transition-all border border-slate-200/90 shadow-sm flex flex-col justify-between">
+                      <div>
+                        <div className="p-5 flex items-start gap-4">
+                          <img
+                            src={pet.avatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'}
+                            alt={pet.name}
+                            className="w-18 h-18 rounded-2xl object-cover ring-2 ring-rose-500/30 shadow-xs shrink-0 border border-slate-200"
+                          />
+                          <div className="flex-1 space-y-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <h3 className="text-base font-extrabold text-slate-900 truncate">{pet.name}</h3>
+                              <StatusBadge status={pet.healthStatus} size="sm" />
+                            </div>
+                            <p className="text-xs text-slate-500 font-medium">
+                              {pet.species} • {pet.breed || 'Mixed Breed'} • {pet.age} years old
+                            </p>
+                            <p className="text-xs text-slate-600 font-semibold pt-0.5">
+                              Weight: <strong className="text-slate-900">{pet.weight} kg</strong> | Gender: <strong className="text-slate-900">{pet.sex || 'Male'}</strong>
+                            </p>
+                            {/* Stay Status Indicator */}
+                            <div className="pt-1 flex items-center gap-1.5 flex-wrap">
+                              {petActiveSession ? (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                                  Live in {petActiveSession.deviceId}
+                                </span>
+                              ) : petQueuedSession ? (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                                  In Admission Queue (Position #{petQueuedSession.queuePosition || 1})
+                                </span>
+                              ) : petPastSessions.length > 0 ? (
+                                <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-800 border border-rose-200 text-[10px] font-bold">
+                                  ✓ {petPastSessions.length} Discharged Stay Record{petPastSessions.length > 1 ? 's' : ''}
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-medium">
+                                  Registered Patient
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <p className="text-xs text-slate-500 font-medium">
-                            {pet.species} • {pet.breed || 'Mixed Breed'} • {pet.age} years old
-                          </p>
-                          <p className="text-xs text-slate-600 font-semibold pt-0.5">
-                            Weight: <strong className="text-slate-900">{pet.weight} kg</strong> | Gender: <strong className="text-slate-900">{pet.sex || 'Male'}</strong>
-                          </p>
-                          {pet.notes && (
-                            <p className="text-[11px] text-slate-500 italic line-clamp-1 pt-0.5">Notes: {pet.notes}</p>
-                          )}
+                        </div>
+
+                        <div className="p-4 bg-slate-50 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
+                          <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Daily Meal Portion</span>
+                            <span className="font-extrabold text-slate-800">{pet.feedingPlan?.portionGrams || 100}g × {pet.feedingPlan?.timesPerDay || 2}/day</span>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Hydration Target</span>
+                            <span className="font-extrabold text-slate-800">{pet.hydrationTarget || 500} ml/day</span>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="p-4 bg-slate-50 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
-                        <div className="p-2.5 rounded-xl bg-white border border-slate-200">
-                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Daily Meal Portion</span>
-                          <span className="font-extrabold text-slate-800">{pet.feedingPlan?.portionGrams || 100}g × {pet.feedingPlan?.timesPerDay || 2}/day</span>
-                        </div>
-                        <div className="p-2.5 rounded-xl bg-white border border-slate-200">
-                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Hydration Target</span>
-                          <span className="font-extrabold text-slate-800">{pet.hydrationTarget || 500} ml/day</span>
-                        </div>
+                      {/* Action Bar */}
+                      <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between bg-white gap-2 flex-wrap">
+                        {petActiveSession ? (
+                          <button
+                            onClick={() => handleOpenEndSession(petActiveSession)}
+                            className="py-2 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer"
+                            title="End active monitoring session and discharge pet"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            End Active Stay
+                          </button>
+                        ) : petQueuedSession ? (
+                          <span className="py-2 px-3.5 rounded-xl bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-xs flex items-center justify-center gap-1.5">
+                            ⏳ Position #{petQueuedSession.queuePosition || 1} in Queue
+                          </span>
+                        ) : !myActiveSession ? (
+                          <button
+                            onClick={() => handleOwnerStartSession(pet)}
+                            className="py-2 px-3.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                            title="Start live feeder stay or join queue for this pet"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                            {activeSession ? 'Join Stay Queue' : 'Start Stay'}
+                          </button>
+                        ) : null}
+
+                        <button
+                          onClick={() => setActiveTab('sessions')}
+                          className="py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                        >
+                          <History className="w-3.5 h-3.5 text-rose-400" />
+                          Stay History
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenEdit(pet)}
+                          className="flex-1 py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all border border-rose-200 cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          Edit Profile
+                        </button>
+
+                        <button
+                          onClick={() => setDeletePetTarget(pet)}
+                          className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold transition-colors cursor-pointer border border-rose-200"
+                          title="Delete Pet Profile"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-
-                    {/* Action Bar */}
-                    <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between bg-white gap-2">
-                      <button
-                        onClick={() => handleOpenEdit(pet)}
-                        className="flex-1 py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all border border-rose-200 cursor-pointer"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        Edit Pet Details & Photo
-                      </button>
-
-                      <button
-                        onClick={() => setDeletePetTarget(pet)}
-                        className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold transition-colors cursor-pointer border border-rose-200"
-                        title="Delete Pet Profile"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="clinic-card p-12 text-center space-y-4 bg-white border-2 border-dashed border-rose-200 rounded-3xl shadow-sm">
@@ -693,6 +897,70 @@ export const OwnerDashboardPage: React.FC = () => {
         {/* ═══════════ TAB: MONITORING / TELEMETRY ═══════════ */}
         {activeTab === 'monitoring' && (
           <div className="space-y-6">
+            {/* Active Session Ribbon for Pet Owner */}
+            {myActiveSession ? (
+              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg border border-emerald-500/30">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                      Live Monitoring Active
+                    </span>
+                    <span className="font-mono text-xs font-bold text-slate-300">ID: {myActiveSession.id}</span>
+                  </div>
+                  <h4 className="text-sm font-black text-white">
+                    {myActiveSession.petName} is currently admitted at {myActiveSession.deviceId}
+                  </h4>
+                  <p className="text-xs text-emerald-100/80">
+                    Admitted: <strong>{new Date(myActiveSession.admissionDate).toLocaleString()}</strong>
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => handleOpenEndSession(myActiveSession)}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 font-black text-xs shadow-lg transition-all flex items-center gap-2 cursor-pointer ring-2 ring-emerald-300/40"
+                  >
+                    <CheckCircle className="w-4 h-4 text-slate-950" />
+                    End Monitoring Session &amp; Pick Up Pet
+                  </button>
+                </div>
+              </div>
+            ) : myPets.length > 0 ? (
+              <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-wider">
+                      Station Available
+                    </span>
+                    <span className="font-mono text-xs font-bold text-slate-500">{hardware.id}</span>
+                  </div>
+                  <h4 className="text-sm font-extrabold text-slate-900">
+                    No active monitoring stay running for your pets
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Click below to admit your pet into the HydroNourish Smart Cage to begin live camera &amp; telemetry monitoring.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => {
+                      if (myPets.length === 1) {
+                        handleOwnerStartSession(myPets[0]);
+                      } else {
+                        setActiveTab('pets');
+                      }
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Start Monitoring Stay {myPets.length === 1 ? `(${myPets[0].name})` : ''}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-7">
                 <LiveCameraWidget isOnline={hardware.status === 'Online'} device={hardware} />
@@ -735,48 +1003,280 @@ export const OwnerDashboardPage: React.FC = () => {
 
         {/* ═══════════ TAB: INTAKE ═══════════ */}
         {activeTab === 'intake' && (
-          <div className="clinic-card p-6 space-y-4">
-            <h3 className="text-base font-extrabold text-slate-900">Intake & Consumption Records</h3>
-            <div className="divide-y divide-slate-100 text-xs">
-              {myFeedingLogs.map((log) => (
-                <div key={log.id} className="py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+          <div className="space-y-6">
+            {/* Summary Ribbon */}
+            <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  <Utensils className="w-5 h-5 text-rose-600" />
+                  Dietary &amp; Hydration Intake Records
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Continuous feeding and hydration telemetry across all stays and clinic monitoring history.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs font-bold">
+                <span className="px-3 py-1 rounded-full bg-orange-50 text-orange-800 border border-orange-200 flex items-center gap-1">
+                  <Utensils className="w-3.5 h-3.5" /> {myFeedingLogs.length} Meals Logged
+                </span>
+                <span className="px-3 py-1 rounded-full bg-sky-50 text-sky-800 border border-sky-200 flex items-center gap-1">
+                  <Droplets className="w-3.5 h-3.5" /> {myHydrationLogs.length} Hydrations
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Feeding Records Card */}
+              <div className="clinic-card p-6 space-y-4 bg-white border border-slate-200/90 shadow-sm">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
                     <Utensils className="w-4 h-4 text-orange-500" />
-                    <div>
-                      <p className="font-bold text-slate-900">{log.petName} Dispensed {log.portionGrams}g</p>
-                      <p className="text-[10px] text-slate-400">{log.dispensedAt}</p>
-                    </div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                    {log.status}
-                  </span>
+                    Dispensed Kibble Logs
+                  </h4>
+                  <span className="text-[11px] text-slate-400 font-bold">{myFeedingLogs.length} entries</span>
                 </div>
-              ))}
-              {myFeedingLogs.length === 0 && (
-                <p className="text-center py-6 text-slate-400 italic">No feeding intake records logged yet.</p>
-              )}
+
+                <div className="divide-y divide-slate-100 text-xs max-h-[400px] overflow-y-auto">
+                  {myFeedingLogs.map((log) => (
+                    <div key={log.id} className="py-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center font-black text-xs shrink-0">
+                          🍲
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">{log.petName} • <strong className="text-orange-600">{log.portionGrams}g</strong></p>
+                          <p className="text-[10px] text-slate-400">{log.dispensedAt}</p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-[10px]">
+                        {log.status}
+                      </span>
+                    </div>
+                  ))}
+                  {myFeedingLogs.length === 0 && (
+                    <p className="text-center py-8 text-slate-400 italic">No feeding intake records logged yet.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Hydration Records Card */}
+              <div className="clinic-card p-6 space-y-4 bg-white border border-slate-200/90 shadow-sm">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                    <Droplets className="w-4 h-4 text-sky-500" />
+                    Water Intake Readings
+                  </h4>
+                  <span className="text-[11px] text-slate-400 font-bold">{myHydrationLogs.length} entries</span>
+                </div>
+
+                <div className="divide-y divide-slate-100 text-xs max-h-[400px] overflow-y-auto">
+                  {myHydrationLogs.map((log) => (
+                    <div key={log.id} className="py-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center font-black text-xs shrink-0">
+                          💧
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">{log.petName} • <strong className="text-sky-600">{log.amountMl}ml</strong></p>
+                          <p className="text-[10px] text-slate-400">{log.timestamp}</p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800 font-extrabold text-[10px]">
+                        Reservoir {log.reservoirLevelPct}%
+                      </span>
+                    </div>
+                  ))}
+                  {myHydrationLogs.length === 0 && (
+                    <p className="text-center py-8 text-slate-400 italic">No hydration readings logged yet.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* ═══════════ TAB: SESSIONS ═══════════ */}
+        {/* ═══════════ TAB: SESSIONS (FULL PET STAY & DISCHARGE HISTORY) ═══════════ */}
         {activeTab === 'sessions' && (
-          <div className="clinic-card p-6 space-y-4">
-            <h3 className="text-base font-extrabold text-slate-900">Clinical Monitoring Sessions</h3>
-            <div className="space-y-3">
-              {mySessions.map((session) => (
-                <div key={session.id} className="p-4 rounded-xl border border-slate-200 bg-white flex items-center justify-between text-xs">
-                  <div>
-                    <p className="font-bold text-slate-900">{session.petName} ({session.petSpecies})</p>
-                    <p className="text-slate-500 text-[11px]">Admitted: {new Date(session.admissionDate).toLocaleDateString()}</p>
-                  </div>
-                  <StatusBadge status={session.status} size="sm" />
+          <div className="space-y-6">
+            {/* Header Banner */}
+            <div className="p-6 rounded-2xl bg-gradient-to-r from-rose-950 via-slate-900 to-rose-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <History className="w-5 h-5 text-rose-400" />
+                  <h3 className="text-lg font-black text-white">Patient Stay &amp; Monitoring History</h3>
                 </div>
-              ))}
-              {mySessions.length === 0 && (
-                <p className="text-center py-6 text-slate-400 italic">No clinical monitoring sessions on record.</p>
-              )}
+                <p className="text-xs text-rose-100/80">
+                  Track your pet's past clinic stays, discharge health summaries, and veterinary notes from Heritage Animal Clinic.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs font-bold flex-wrap">
+                {!myActiveSession && myPets.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (myPets.length === 1) {
+                        handleOwnerStartSession(myPets[0]);
+                      } else {
+                        setActiveTab('pets');
+                      }
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Start Monitoring Stay
+                  </button>
+                )}
+                <span className="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/30">
+                  {mySessions.length} Total {mySessions.length === 1 ? 'Stay' : 'Stays'} Recorded
+                </span>
+              </div>
             </div>
+
+            {/* Sessions List */}
+            {mySessions.length === 0 ? (
+              <div className="clinic-card p-12 text-center space-y-4 bg-white border border-slate-200">
+                <History className="w-12 h-12 mx-auto text-slate-300" />
+                <h4 className="text-base font-bold text-slate-900">No Clinical Monitoring Stays on Record</h4>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  When your pet is admitted to the HydroNourish Smart Cage station, all telemetry, feeding logs, and discharge notes will appear here.
+                </p>
+                {myPets.length > 0 && (
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        if (myPets.length === 1) {
+                          handleOwnerStartSession(myPets[0]);
+                        } else {
+                          setActiveTab('pets');
+                        }
+                      }}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-xs shadow-md inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Start Monitoring Stay for {myPets[0].name}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {mySessions.map((session) => {
+                  const isOngoing = session.status === 'active';
+                  const startTime = new Date(session.admissionDate || session.startTime).getTime();
+                  const endTime = session.releaseTime ? new Date(session.releaseTime).getTime() : Date.now();
+                  const diffHrs = Math.max(0, (endTime - startTime) / (1000 * 60 * 60));
+                  const durationFormatted = diffHrs < 1 ? Math.round(diffHrs * 60) + ' mins' : diffHrs < 24 ? diffHrs.toFixed(1) + ' hrs' : (diffHrs / 24).toFixed(1) + ' days';
+
+                  return (
+                    <div
+                      key={session.id}
+                      className="clinic-card p-5 sm:p-6 bg-white hover:border-rose-300 transition-all border border-slate-200/90 shadow-sm space-y-4 rounded-3xl"
+                    >
+                      {/* Top Row: Pet & Status */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-3.5">
+                          <img
+                            src={session.petAvatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'}
+                            alt={session.petName}
+                            className="w-12 h-12 rounded-2xl object-cover ring-2 ring-rose-500/20 border border-slate-200 shrink-0"
+                          />
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-base font-black text-slate-900">{session.petName}</h4>
+                              <span className="font-mono text-xs font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200">
+                                {session.id}
+                              </span>
+                              <StatusBadge status={session.status} size="sm" />
+                            </div>
+                            <p className="text-xs text-slate-500">{session.petSpecies} • {session.petBreed} • Node: <strong className="text-slate-700">{session.deviceId}</strong></p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs">
+                          {session.releaseCondition && (
+                            <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[11px]">
+                              Condition: {session.releaseCondition}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Middle Grid: Admission, Discharge & Telemetry */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Admission Date</span>
+                          <span className="font-bold text-slate-800">{new Date(session.admissionDate).toLocaleDateString()}</span>
+                          <span className="text-[10px] text-slate-400 block">{new Date(session.admissionDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Discharge Date</span>
+                          <span className="font-bold text-slate-800">
+                            {session.releaseTime ? new Date(session.releaseTime).toLocaleDateString() : (isOngoing ? '🟢 Currently Active' : 'N/A')}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            {session.releaseTime ? new Date(session.releaseTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (isOngoing ? 'Ongoing Stay' : '')}
+                          </span>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Stay Duration</span>
+                          <span className="font-extrabold text-slate-900">{durationFormatted}</span>
+                          <span className="text-[10px] text-slate-400 block">Hospitalized Stay</span>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Nutrition Telemetry</span>
+                          <div className="flex items-center gap-2 font-bold text-slate-800 mt-0.5">
+                            <span className="text-orange-600 flex items-center gap-1">
+                              <Utensils className="w-3.5 h-3.5" /> {session.feedingRecordCount} meals
+                            </span>
+                            <span className="text-sky-600 flex items-center gap-1">
+                              <Droplets className="w-3.5 h-3.5" /> {session.hydrationRecordCount} logs
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Discharge Notes / Vet Instructions */}
+                      {(session.finalNotes || session.notes || session.cancelledReason) && (
+                        <div className="p-3.5 rounded-2xl bg-rose-50/50 border border-rose-100 text-xs space-y-1">
+                          <div className="flex items-center gap-1.5 font-bold text-rose-900 text-[11px] uppercase">
+                            <FileText className="w-3.5 h-3.5 text-rose-600" />
+                            {session.status === 'completed' ? 'Veterinary Discharge Instructions & Follow-up:' : (session.status === 'cancelled' ? 'Cancellation Note:' : 'Admission Remarks:')}
+                          </div>
+                          <p className="text-slate-700 italic">"{session.finalNotes || session.cancelledReason || session.notes}"</p>
+                          {session.completedBy && (
+                            <p className="text-[10px] text-slate-500 font-semibold">Attending Staff: {session.completedBy} • Heritage Animal Clinic</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Action Button */}
+                      <div className="flex items-center justify-end gap-2 pt-1 flex-wrap">
+                        {isOngoing && (
+                          <button
+                            onClick={() => handleOpenEndSession(session)}
+                            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            End Session &amp; Discharge
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setSelectedOwnerSession(session)}
+                          className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-rose-400" />
+                          View Stay Summary &amp; Telemetry
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -1457,6 +1957,257 @@ export const OwnerDashboardPage: React.FC = () => {
         confirmText="Delete Pet"
         variant="danger"
       />
+
+      {/* MODAL: OWNER STAY & DISCHARGE DETAILS */}
+      <Modal
+        isOpen={!!selectedOwnerSession}
+        onClose={() => setSelectedOwnerSession(null)}
+        title={selectedOwnerSession ? `Stay Record ${selectedOwnerSession.id}` : 'Stay Details'}
+        subtitle="Heritage Animal Clinic • Discharge Record & Telemetry Summary"
+        maxWidth="lg"
+      >
+        {selectedOwnerSession && (
+          <div className="space-y-5 text-xs">
+            {/* Patient Header */}
+            <div className="flex items-center gap-4 pb-4 border-b border-slate-200">
+              <img
+                src={selectedOwnerSession.petAvatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'}
+                alt={selectedOwnerSession.petName}
+                className="w-16 h-16 rounded-2xl object-cover ring-2 ring-rose-500/20 border border-slate-200 shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-lg font-black text-slate-900">{selectedOwnerSession.petName}</h4>
+                  <StatusBadge status={selectedOwnerSession.status} size="sm" />
+                  {selectedOwnerSession.releaseCondition && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-extrabold">
+                      {selectedOwnerSession.releaseCondition}
+                    </span>
+                  )}
+                </div>
+                <p className="text-slate-500">{selectedOwnerSession.petSpecies} • {selectedOwnerSession.petBreed}</p>
+                <p className="text-slate-600 mt-0.5">
+                  Station Node: <strong className="text-rose-700">{selectedOwnerSession.deviceId}</strong>
+                </p>
+              </div>
+            </div>
+
+            {/* Timeline Breakdown */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Stay ID</span>
+                <span className="font-mono font-bold text-rose-800">{selectedOwnerSession.id}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Admission Date</span>
+                <span className="font-bold text-slate-800">{new Date(selectedOwnerSession.admissionDate).toLocaleDateString()}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Discharge Date</span>
+                <span className="font-bold text-slate-800">
+                  {selectedOwnerSession.releaseTime ? new Date(selectedOwnerSession.releaseTime).toLocaleDateString() : 'Active Stay'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Duration</span>
+                <span className="font-black text-slate-900">
+                  {(() => {
+                    const st = new Date(selectedOwnerSession.startTime).getTime();
+                    const et = selectedOwnerSession.releaseTime ? new Date(selectedOwnerSession.releaseTime).getTime() : Date.now();
+                    const diffH = Math.max(0, (et - st) / (1000 * 60 * 60));
+                    return diffH < 1 ? Math.round(diffH * 60) + ' mins' : diffH < 24 ? diffH.toFixed(1) + ' hrs' : (diffH / 24).toFixed(1) + ' days';
+                  })()}
+                </span>
+              </div>
+            </div>
+
+            {/* Telemetry Metrics */}
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="p-3.5 rounded-2xl bg-orange-50/70 border border-orange-200">
+                <Utensils className="w-5 h-5 mx-auto mb-1 text-orange-600" />
+                <p className="text-xl font-black text-slate-900">
+                  {selectedOwnerSession.totalFoodGrams || (selectedOwnerSession.feedingRecordCount * 120)}g
+                </p>
+                <p className="text-[10px] text-slate-600 font-bold uppercase">{selectedOwnerSession.feedingRecordCount} Meals Served</p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200">
+                <Droplets className="w-5 h-5 mx-auto mb-1 text-sky-600" />
+                <p className="text-xl font-black text-slate-900">
+                  {selectedOwnerSession.totalWaterMl || (selectedOwnerSession.hydrationRecordCount * 250)}ml
+                </p>
+                <p className="text-[10px] text-slate-600 font-bold uppercase">{selectedOwnerSession.hydrationRecordCount} Water Intakes</p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200">
+                <ShieldAlert className="w-5 h-5 mx-auto mb-1 text-amber-600" />
+                <p className="text-xl font-black text-slate-900">{selectedOwnerSession.alertCount}</p>
+                <p className="text-[10px] text-slate-600 font-bold uppercase">AI Observations</p>
+              </div>
+            </div>
+
+            {/* Discharge Instructions */}
+            {selectedOwnerSession.finalNotes && (
+              <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-1">
+                <span className="font-bold text-emerald-900 block text-[11px] uppercase">
+                  Veterinary Discharge Instructions &amp; Post-Stay Care:
+                </span>
+                <p className="text-emerald-950 font-medium leading-relaxed">{selectedOwnerSession.finalNotes}</p>
+                {selectedOwnerSession.completedBy && (
+                  <p className="text-[10px] text-emerald-800 mt-1 font-semibold">
+                    Attending Staff: {selectedOwnerSession.completedBy} • Heritage Animal Clinic
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Admission Remarks */}
+            {selectedOwnerSession.notes && (
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                <span className="font-bold text-slate-700 block text-[11px] uppercase">
+                  Admission Notes:
+                </span>
+                <p className="text-slate-600">{selectedOwnerSession.notes}</p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <button
+                onClick={() => window.print()}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <FileText className="w-3.5 h-3.5" /> Print Summary
+              </button>
+
+              <button
+                onClick={() => setSelectedOwnerSession(null)}
+                className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 cursor-pointer"
+              >
+                Close Summary
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* MODAL: END MONITORING SESSION (PET OWNER DISCHARGE FLOW) */}
+      <Modal
+        isOpen={endSessionModalOpen}
+        onClose={() => setEndSessionModalOpen(false)}
+        title={sessionToEnd ? `Discharge & End Session: ${sessionToEnd.petName}` : 'End Monitoring Session'}
+        subtitle="Heritage Animal Clinic • Pet Owner Discharge Confirmation"
+        maxWidth="md"
+      >
+        {sessionToEnd && (
+          <div className="space-y-4 text-xs">
+            {/* Patient Header Card */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-3.5">
+              <img
+                src={sessionToEnd.petAvatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'}
+                alt={sessionToEnd.petName}
+                className="w-14 h-14 rounded-2xl object-cover ring-2 ring-emerald-500/30 border border-slate-200 shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-base font-black text-slate-900">{sessionToEnd.petName}</h4>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-[10px]">
+                    Active in {sessionToEnd.deviceId}
+                  </span>
+                </div>
+                <p className="text-slate-500">{sessionToEnd.petSpecies} • {sessionToEnd.petBreed}</p>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  Admitted: <strong>{new Date(sessionToEnd.admissionDate).toLocaleString()}</strong>
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Telemetry Totals */}
+            <div className="grid grid-cols-3 gap-2.5 text-center">
+              <div className="p-2.5 rounded-xl bg-orange-50/80 border border-orange-200">
+                <Utensils className="w-4 h-4 mx-auto mb-0.5 text-orange-600" />
+                <span className="font-black text-slate-900 text-sm block">
+                  {sessionToEnd.totalFoodGrams || (sessionToEnd.feedingRecordCount * 120)}g
+                </span>
+                <span className="text-[10px] text-slate-500 font-bold uppercase">{sessionToEnd.feedingRecordCount} Meals</span>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-sky-50/80 border border-sky-200">
+                <Droplets className="w-4 h-4 mx-auto mb-0.5 text-sky-600" />
+                <span className="font-black text-slate-900 text-sm block">
+                  {sessionToEnd.totalWaterMl || (sessionToEnd.hydrationRecordCount * 250)}ml
+                </span>
+                <span className="text-[10px] text-slate-500 font-bold uppercase">{sessionToEnd.hydrationRecordCount} Hydrations</span>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200">
+                <ShieldAlert className="w-4 h-4 mx-auto mb-0.5 text-amber-600" />
+                <span className="font-black text-slate-900 text-sm block">
+                  {sessionToEnd.alertCount}
+                </span>
+                <span className="text-[10px] text-slate-500 font-bold uppercase">AI Alerts</span>
+              </div>
+            </div>
+
+            {/* Discharge Form Fields */}
+            <div className="space-y-3 pt-1">
+              <div>
+                <label className="block font-bold text-slate-700 uppercase mb-1 text-[11px]">
+                  Discharge Status / Condition
+                </label>
+                <select
+                  value={endSessionCondition}
+                  onChange={(e) => setEndSessionCondition(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-emerald-500 focus:outline-none bg-white text-xs"
+                >
+                  <option value="Healthy — Discharged by Owner">Healthy — Discharged by Owner</option>
+                  <option value="Owner Pick-up / Take Home Completed">Owner Pick-up / Take Home Completed</option>
+                  <option value="Clinic Stay Finished — Stable">Clinic Stay Finished — Stable</option>
+                  <option value="Home Monitoring Continuation">Home Monitoring Continuation</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 uppercase mb-1 text-[11px]">
+                  Owner Notes / Pick-Up Remarks (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={endSessionNotes}
+                  onChange={(e) => setEndSessionNotes(e.target.value)}
+                  placeholder="e.g., Picked up pet at clinic counter, all belongings received..."
+                  className="w-full p-2.5 rounded-xl border border-slate-300 font-medium focus:border-emerald-500 focus:outline-none text-xs"
+                />
+              </div>
+
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 flex items-start gap-2.5">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <p className="text-[11px] leading-relaxed">
+                  Ending this session will release the Smart Station hardware back to available status and archive this complete stay record with nutrition telemetry into your permanent <strong>Stay History</strong>.
+                </p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setEndSessionModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-300 font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Keep Active
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmOwnerEndSession}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold shadow-md flex items-center gap-1.5 cursor-pointer transition-all"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Confirm &amp; End Session
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

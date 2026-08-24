@@ -16,6 +16,7 @@ import { Logo } from '../components/Logo';
 import { ToastContainer } from '../components/ToastContainer';
 import { useAppContext } from '../hooks/useAppContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useSession } from '../contexts/SessionContext';
 import {
   Home,
   Dog,
@@ -70,6 +71,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   } = useAppContext();
 
   const { adminProfile, signOut, isAdmin, isStaff } = useAuth();
+  const { activeSession, sessions } = useSession();
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -81,6 +83,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  const activeSessionCount = (sessions || []).filter((s) => s.status === 'active').length;
 
   const unreviewedAlerts = (alerts || []).filter(
     (a) => a && a.reviewStatus === 'Unreviewed'
@@ -130,6 +134,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     icon: React.ElementType;
     color?: string;
     badge?: number;
+    badgeText?: string;
   }
 
   // ─── Navigation Items (Filtered by Admin vs Staff Permissions) ────────
@@ -137,7 +142,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     ? [
         { label: 'Dashboard', path: '/app', icon: Home, color: 'text-blue-600' },
         { label: 'Inquiries', path: '/app/inquiries', icon: Inbox, color: 'text-rose-600', badge: unreadInquiriesCount },
-        { label: 'Session History', path: '/app/sessions', icon: ClipboardList, color: 'text-violet-600' },
         { label: 'Users', path: '/app/users', icon: Users, color: 'text-emerald-600' },
         { label: 'Reports', path: '/app/reports', icon: FileText, color: 'text-purple-600' },
         { label: 'Settings', path: '/app/settings', icon: Settings, color: 'text-slate-600' },
@@ -145,13 +149,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     : [
         { label: 'Dashboard', path: '/app', icon: Home, color: 'text-blue-600' },
         { label: 'Inquiries', path: '/app/inquiries', icon: Inbox, color: 'text-rose-600', badge: unreadInquiriesCount },
-        { label: 'Session History', path: '/app/sessions', icon: ClipboardList, color: 'text-violet-600' },
         { label: 'Reports', path: '/app/reports', icon: FileText, color: 'text-purple-600' },
       ];
 
   const healthGroup: NavItem[] = [
     { label: 'Pets', path: '/app/pets', icon: Dog, color: 'text-amber-600' },
     { label: 'Pet Owners', path: '/app/pet-owners', icon: HeartHandshake, color: 'text-rose-600' },
+    { label: 'Sessions', path: '/app/sessions', icon: ClipboardList, color: 'text-violet-600', badgeText: activeSessionCount > 0 ? `${activeSessionCount} Active` : undefined },
     { label: 'Feeding', path: '/app/feeding', icon: Utensils, color: 'text-orange-600' },
     { label: 'Hydration', path: '/app/hydration', icon: Droplets, color: 'text-sky-600' },
   ];
@@ -161,7 +165,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   ];
 
   const renderNavLink = (
-    item: { label: string; path: string; icon: React.ElementType; color?: string; badge?: number },
+    item: { label: string; path: string; icon: React.ElementType; color?: string; badge?: number; badgeText?: string },
     isSubItem = false
   ) => {
     const Icon = item.icon;
@@ -192,9 +196,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           <span className="px-2 py-0.5 text-[10px] font-extrabold bg-rose-500 text-white rounded-full">
             {item.badge}
           </span>
+        ) : !sidebarCollapsed && item.badgeText ? (
+          <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+            {item.badgeText}
+          </span>
         ) : null}
-        {sidebarCollapsed && item.badge ? (
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
+        {sidebarCollapsed && (item.badge || item.badgeText) ? (
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white" />
         ) : null}
       </NavLink>
     );
@@ -354,6 +363,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                         <span className="px-2 py-0.5 text-[10px] font-extrabold bg-rose-500 text-white rounded-full">
                           {item.badge}
                         </span>
+                      ) : item.badgeText ? (
+                        <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                          {item.badgeText}
+                        </span>
                       ) : null}
                     </NavLink>
                   ))}
@@ -368,7 +382,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <div className="space-y-1">
                   {healthGroup.map((item) => (
                     <NavLink
-                      key={item.path}
+                      key={item.path + item.label}
                       to={item.path}
                       onClick={() => setMobileSidebarOpen(false)}
                       className={({ isActive }) =>
@@ -380,7 +394,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       }
                     >
                       <item.icon className={`w-4 h-4 ${item.color}`} />
-                      <span>{item.label}</span>
+                      <span className="flex-1">{item.label}</span>
+                      {item.badge ? (
+                        <span className="px-2 py-0.5 text-[10px] font-extrabold bg-rose-500 text-white rounded-full">
+                          {item.badge}
+                        </span>
+                      ) : item.badgeText ? (
+                        <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                          {item.badgeText}
+                        </span>
+                      ) : null}
                     </NavLink>
                   ))}
                 </div>

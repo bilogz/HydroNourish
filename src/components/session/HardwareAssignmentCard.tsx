@@ -42,7 +42,7 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
   onCompleteSession,
   onCancelSession,
 }) => {
-  const { activeSession, hardware, canAssignPet } = useSession();
+  const { activeSession, queuedSessions, hardware, canAssignPet, admitNextFromQueue } = useSession();
   const [elapsed, setElapsed] = useState('');
   const isOnline = hardware.status === 'Online';
 
@@ -96,33 +96,68 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
         </div>
 
         {/* Empty State Body */}
-        <div className="p-8 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-4">
+        <div className="p-8 text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mx-auto">
             <Cpu className="w-8 h-8" />
           </div>
-          <h4 className="text-base font-bold text-slate-900 mb-1">
-            {isConnected ? 'The HydroNourish hardware is currently available.' : 'No Hardware Device Connected'}
-          </h4>
-          <p className="text-xs text-slate-500 mb-5 max-w-md mx-auto">
-            {isConnected
-              ? 'No pet is currently assigned to the monitoring device. Assign a pet and owner to begin a monitoring session.'
-              : 'Pair or connect an ESP32 hardware cage node to begin monitoring patient food and water telemetry.'}
-          </p>
+          <div className="space-y-1">
+            <h4 className="text-base font-bold text-slate-900">
+              {isConnected ? 'The HydroNourish hardware is currently available.' : 'No Hardware Device Connected'}
+            </h4>
+            <p className="text-xs text-slate-500 max-w-md mx-auto">
+              {isConnected
+                ? 'No pet is currently active in the feeder station. You can assign a new pet or admit from the queue.'
+                : 'Pair or connect an ESP32 hardware cage node to begin monitoring patient food and water telemetry.'}
+            </p>
+          </div>
 
-          {canAssignPet() && isConnected ? (
-            <button
-              onClick={onAssignClick}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Assign Pet and Owner
-            </button>
-          ) : (
-            <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold">
-              <AlertTriangle className="w-4 h-4" />
-              {isConnected ? `Hardware is ${hardware.hardwareStatus}. Assignment unavailable.` : 'Hardware Offline. Pair a device node first.'}
+          {queuedSessions.length > 0 && isConnected && (
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 max-w-md mx-auto text-left space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase text-amber-900 tracking-wider flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                  Next in Admission Queue (1 of {queuedSessions.length})
+                </span>
+                <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-200/70 px-2 py-0.5 rounded">
+                  {queuedSessions[0].id}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <img
+                  src={queuedSessions[0].petAvatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'}
+                  alt={queuedSessions[0].petName}
+                  className="w-10 h-10 rounded-xl object-cover ring-1 ring-amber-300"
+                />
+                <div className="flex-1 min-w-0">
+                  <h5 className="font-extrabold text-slate-900 text-xs truncate">{queuedSessions[0].petName}</h5>
+                  <p className="text-[11px] text-slate-500 truncate">Owner: {queuedSessions[0].ownerName} • {queuedSessions[0].petSpecies}</p>
+                </div>
+                <button
+                  onClick={() => admitNextFromQueue('Clinic Staff')}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition-all shrink-0 cursor-pointer"
+                >
+                  Admit Now
+                </button>
+              </div>
             </div>
           )}
+
+          <div className="flex items-center justify-center gap-2 pt-2">
+            {canAssignPet() && isConnected ? (
+              <button
+                onClick={onAssignClick}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Assign Pet &amp; Owner
+              </button>
+            ) : (
+              <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold">
+                <AlertTriangle className="w-4 h-4" />
+                {isConnected ? `Hardware is ${hardware.hardwareStatus}. Assignment unavailable.` : 'Hardware Offline. Pair a device node first.'}
+              </div>
+            )}
+          </div>
 
           {/* Device quick info */}
           <div className="mt-6 pt-4 border-t border-slate-100 grid grid-cols-3 gap-4 text-xs max-w-sm mx-auto">
@@ -284,6 +319,25 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
           </div>
         </div>
 
+        {/* Queue Notice if any pets are waiting */}
+        {queuedSessions.length > 0 && (
+          <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
+              <span>
+                <strong>{queuedSessions.length} pet{queuedSessions.length > 1 ? 's' : ''}</strong> currently waiting in Admission Queue.
+                Next in line: <strong>{queuedSessions[0].petName}</strong>
+              </span>
+            </div>
+            <button
+              onClick={onAssignClick}
+              className="px-2.5 py-1 rounded-lg bg-amber-200/80 hover:bg-amber-300 text-amber-900 font-bold text-[11px] cursor-pointer shrink-0 transition-colors"
+            >
+              + Queue Another
+            </button>
+          </div>
+        )}
+
         {/* Demonstration Data Notice */}
         <div className="mt-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-700 font-medium flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
@@ -294,26 +348,32 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
         <div className="mt-5 pt-4 border-t border-slate-100 flex flex-wrap gap-2">
           <button
             onClick={onViewSession}
-            className="px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center gap-1.5 transition-all border border-indigo-200"
+            className="px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center gap-1.5 transition-all border border-indigo-200 cursor-pointer"
           >
             <Eye className="w-3.5 h-3.5" /> View Active Session
           </button>
           <button
             onClick={() => onViewPet(activeSession.petId)}
-            className="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center gap-1.5 transition-all border border-rose-200"
+            className="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center gap-1.5 transition-all border border-rose-200 cursor-pointer"
           >
             <Dog className="w-3.5 h-3.5" /> View Pet Details
+          </button>
+          <button
+            onClick={onAssignClick}
+            className="px-4 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1.5 transition-all border border-amber-200 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5 text-amber-600" /> + Add to Queue
           </button>
           <div className="flex-1" />
           <button
             onClick={onCancelSession}
-            className="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs flex items-center gap-1.5 transition-all border border-rose-200"
+            className="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs flex items-center gap-1.5 transition-all border border-rose-200 cursor-pointer"
           >
             <XCircle className="w-3.5 h-3.5" /> Cancel Session
           </button>
           <button
             onClick={onCompleteSession}
-            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm"
+            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
           >
             <CheckCircle className="w-3.5 h-3.5" /> Complete Session
           </button>

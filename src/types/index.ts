@@ -6,7 +6,7 @@ export type UserRole = 'Super Admin' | 'Administrator' | 'Veterinarian' | 'Clini
 
 // ─── New Session Workflow Status Types ────────────────────────────────────
 export type HardwareStatus = 'available' | 'occupied' | 'offline' | 'maintenance';
-export type PetSessionStatus = 'active' | 'completed' | 'cancelled';
+export type PetSessionStatus = 'queued' | 'active' | 'completed' | 'cancelled';
 export type UserAccessStatus = 'active' | 'inactive' | 'archived';
 
 export interface Pet {
@@ -235,7 +235,12 @@ export interface PetSession {
   hydrationRecordCount: number;
   vitalSignRecordCount: number;
   alertCount: number;
+  totalFoodGrams?: number;
+  totalWaterMl?: number;
+  durationText?: string;
   notes: string;
+  queuePosition?: number;
+  queuedAt?: string;
   actualReleaseDate?: string;
   admissionNotes?: string;
   releaseNotes?: string;

@@ -6,7 +6,7 @@
  * integrated dynamically with Supabase PostgreSQL and real-time database channels.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   PetOwner,
   PetSession,
@@ -20,14 +20,6 @@ import {
   NotificationType,
   Pet,
 } from '../types';
-
-import {
-  initialOwners,
-  initialSessions,
-  initialDevices,
-  initialActivityLogs,
-  initialNotifications,
-} from '../data/mockData';
 
 import {
   fetchOwnersFromSupabase,
@@ -51,7 +43,6 @@ function loadFromStorage<T>(key: string, fallback: T): T {
   }
 }
 
-
 function saveToStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -60,6 +51,7 @@ function saveToStorage<T>(key: string, value: T): void {
 
 interface SessionContextType {
   activeSession: PetSession | null;
+  queuedSessions: PetSession[];
   sessions: PetSession[];
   owners: PetOwner[];
   hardware: Device;
@@ -72,13 +64,32 @@ interface SessionContextType {
     expectedReleaseDate: string;
     emergencyContact: string;
     notes: string;
-  }, adminName: string) => { success: boolean; error: string | null };
+  }, adminName: string) => { success: boolean; isQueued?: boolean; queuePosition?: number; error: string | null };
+  admitNextFromQueue: (adminName: string) => { success: boolean; error: string | null };
+  admitSpecificFromQueue: (sessionId: string, adminName: string) => { success: boolean; error: string | null };
+  removeFromQueue: (sessionId: string, adminName: string) => void;
   completeSession: (releaseData: {
+    sessionId?: string;
     releaseTime: string;
     releaseCondition: string;
     finalNotes: string;
+    feedingRecordCount?: number;
+    hydrationRecordCount?: number;
+    vitalSignRecordCount?: number;
+    alertCount?: number;
+    totalFoodGrams?: number;
+    totalWaterMl?: number;
+    durationText?: string;
   }, adminName: string) => { success: boolean; error: string | null };
-  cancelSession: (reason: string, adminName: string) => { success: boolean; error: string | null };
+  cancelSession: (reason: string, adminName: string, telemetrySummary?: {
+    feedingRecordCount?: number;
+    hydrationRecordCount?: number;
+    vitalSignRecordCount?: number;
+    alertCount?: number;
+    totalFoodGrams?: number;
+    totalWaterMl?: number;
+    durationText?: string;
+  }) => { success: boolean; error: string | null };
 
   addOwner: (owner: Omit<PetOwner, 'id' | 'dateCreated' | 'currentSessionId' | 'accessStatus' | 'lastLogin'>) => PetOwner;
   updateOwner: (id: string, data: Partial<PetOwner>) => void;
@@ -140,6 +151,11 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   });
 
   const activeSession = sessions.find(s => s.status === 'active') ?? null;
+  const queuedSessions = useMemo(() => {
+    return sessions
+      .filter(s => s.status === 'queued')
+      .sort((a, b) => (a.queuePosition || 0) - (b.queuePosition || 0));
+  }, [sessions]);
 
   // ─── Supabase Initial Sync ───────────────────────────────────────────
   useEffect(() => {
@@ -259,8 +275,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // ─── Session Lifecycle ────────────────────────────────────────────────
   const canAssignPet = useCallback((): boolean => {
-    return !activeSession && hardware.status === 'Online' && hardware.hardwareStatus === 'available';
-  }, [activeSession, hardware.status, hardware.hardwareStatus]);
+    return true; // Any pet can be assigned directly or placed in the admission queue
+  }, []);
 
   const assignPetAndOwner = useCallback((
     pet: Pet,
@@ -272,26 +288,15 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       notes: string;
     },
     adminName: string
-  ): { success: boolean; error: string | null } => {
-    if (activeSession) {
-      return {
-        success: false,
-        error: 'The HydroNourish hardware is currently assigned to another pet. Complete or cancel the existing session first.'
-      };
-    }
-
-    if (hardware.hardwareStatus !== 'available') {
-      return {
-        success: false,
-        error: `The hardware is currently ${hardware.hardwareStatus}. It must be available to assign a new pet.`
-      };
-    }
-
+  ): { success: boolean; isQueued?: boolean; queuePosition?: number; error: string | null } => {
     const owner = owners.find(o => o.id === ownerId);
     if (!owner) return { success: false, error: 'Owner not found.' };
 
     const now = new Date().toISOString();
     const sessionId = `SES-${Date.now().toString().slice(-6)}`;
+    const shouldQueue = !!activeSession || hardware.hardwareStatus === 'occupied';
+    const currentQueued = sessions.filter(s => s.status === 'queued');
+    const queuePosition = shouldQueue ? currentQueued.length + 1 : undefined;
 
     const newSession: PetSession = {
       id: sessionId,
@@ -303,11 +308,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ownerId: owner.id,
       ownerName: owner.name,
       ownerEmail: owner.email,
-      deviceId: hardware.id,
-      status: 'active',
+      deviceId: hardware.id || 'HN-NODE-F778',
+      status: shouldQueue ? 'queued' : 'active',
+      queuePosition,
+      queuedAt: shouldQueue ? now : undefined,
       admissionDate: sessionData.admissionDate || now,
       expectedReleaseDate: sessionData.expectedReleaseDate,
-      startTime: now,
+      startTime: shouldQueue ? '' : now,
       releaseTime: null,
       releaseCondition: null,
       finalNotes: null,
@@ -318,6 +325,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       hydrationRecordCount: 0,
       vitalSignRecordCount: 0,
       alertCount: 0,
+      totalFoodGrams: 0,
+      totalWaterMl: 0,
       notes: sessionData.notes,
       petSnapshot: {
         weight: pet.weight,
@@ -330,44 +339,145 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setSessions(prev => [newSession, ...prev]);
 
+    if (!shouldQueue) {
+      setHardware(prev => ({
+        ...prev,
+        hardwareStatus: 'occupied' as HardwareStatus,
+        assignedPetId: pet.id,
+        assignedPetName: pet.name,
+      }));
+
+      setOwners(prev => prev.map(o =>
+        o.id === ownerId
+          ? { ...o, accessStatus: 'active' as UserAccessStatus, currentSessionId: sessionId, lastLogin: now }
+          : o
+      ));
+
+      updateDeviceInSupabase(hardware.id, { hardwareStatus: 'occupied', assignedPetId: pet.id, assignedPetName: pet.name });
+      updateOwnerInSupabase(ownerId, { accessStatus: 'active', currentSessionId: sessionId, lastLogin: now });
+      addLog(adminName, 'started_session', owner.name, pet.name, sessionId, 'success', `Assigned to ${hardware.id}`);
+      addNotification('pet_assigned', 'Pet Assigned', `${pet.name} assigned to ${hardware.deviceName || hardware.id}.`, 'success', { petName: pet.name, sessionId });
+    } else {
+      addLog(adminName, 'created_owner', owner.name, pet.name, sessionId, 'info', `Added to admission queue (Position #${queuePosition})`);
+      addNotification('pet_assigned', 'Pet Queued', `${pet.name} was placed in the admission queue (Position #${queuePosition}) waiting for ${hardware.id}.`, 'info', { petName: pet.name, sessionId });
+    }
+
+    insertSessionToSupabase(newSession);
+
+    return { success: true, isQueued: shouldQueue, queuePosition, error: null };
+  }, [activeSession, hardware, owners, sessions, addLog, addNotification]);
+
+  const admitSpecificFromQueue = useCallback((sessionId: string, adminName: string): { success: boolean; error: string | null } => {
+    const sessionToAdmit = sessions.find(s => s.id === sessionId);
+    if (!sessionToAdmit) return { success: false, error: 'Queued session not found.' };
+
+    const now = new Date().toISOString();
+
+    setSessions(prev => {
+      let currentPos = 1;
+      return prev.map(s => {
+        if (s.id === sessionId) {
+          return {
+            ...s,
+            status: 'active' as PetSessionStatus,
+            startTime: now,
+            queuePosition: undefined,
+          };
+        }
+        if (s.status === 'queued') {
+          const updated = { ...s, queuePosition: currentPos };
+          currentPos++;
+          return updated;
+        }
+        return s;
+      });
+    });
+
     setHardware(prev => ({
       ...prev,
       hardwareStatus: 'occupied' as HardwareStatus,
-      assignedPetId: pet.id,
-      assignedPetName: pet.name,
+      assignedPetId: sessionToAdmit.petId,
+      assignedPetName: sessionToAdmit.petName,
     }));
 
     setOwners(prev => prev.map(o =>
-      o.id === ownerId
-        ? { ...o, accessStatus: 'active' as UserAccessStatus, currentSessionId: sessionId, lastLogin: now }
+      o.id === sessionToAdmit.ownerId
+        ? { ...o, accessStatus: 'active' as UserAccessStatus, currentSessionId: sessionToAdmit.id, lastLogin: now }
         : o
     ));
 
-    // Database persistence
-    insertSessionToSupabase(newSession);
-    updateDeviceInSupabase(hardware.id, { hardwareStatus: 'occupied', assignedPetId: pet.id, assignedPetName: pet.name });
-    updateOwnerInSupabase(ownerId, { accessStatus: 'active', currentSessionId: sessionId, lastLogin: now });
+    updateSessionInSupabase(sessionToAdmit.id, { status: 'active', startTime: now });
+    updateDeviceInSupabase(hardware.id, { hardwareStatus: 'occupied', assignedPetId: sessionToAdmit.petId, assignedPetName: sessionToAdmit.petName });
+    updateOwnerInSupabase(sessionToAdmit.ownerId, { accessStatus: 'active', currentSessionId: sessionToAdmit.id, lastLogin: now });
 
-    addLog(adminName, 'started_session', owner.name, pet.name, sessionId, 'success', `Assigned to ${hardware.id}`);
-    addNotification('pet_assigned', 'Pet Assigned', `${pet.name} assigned to ${hardware.deviceName || hardware.id}.`, 'success', { petName: pet.name, sessionId });
+    addLog(adminName, 'started_session', sessionToAdmit.ownerName, sessionToAdmit.petName, sessionToAdmit.id, 'success', `Admitted from queue to ${hardware.id}`);
+    addNotification('pet_assigned', 'Pet Admitted from Queue', `${sessionToAdmit.petName} is now active in ${hardware.deviceName || hardware.id}.`, 'success', { petName: sessionToAdmit.petName, sessionId: sessionToAdmit.id });
 
     return { success: true, error: null };
-  }, [activeSession, hardware, owners, addLog, addNotification]);
+  }, [sessions, hardware, addLog, addNotification]);
+
+  const admitNextFromQueue = useCallback((adminName: string): { success: boolean; error: string | null } => {
+    if (activeSession) {
+      return { success: false, error: `Station is currently occupied by ${activeSession.petName}. Complete their session first.` };
+    }
+    const queuedList = sessions.filter(s => s.status === 'queued').sort((a, b) => (a.queuePosition || 0) - (b.queuePosition || 0));
+    if (queuedList.length === 0) {
+      return { success: false, error: 'No pets currently in the admission queue.' };
+    }
+    return admitSpecificFromQueue(queuedList[0].id, adminName);
+  }, [activeSession, sessions, admitSpecificFromQueue]);
+
+  const removeFromQueue = useCallback((sessionId: string, adminName: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    setSessions(prev => {
+      let currentPos = 1;
+      return prev.map(s => {
+        if (s.id === sessionId) {
+          return {
+            ...s,
+            status: 'cancelled' as PetSessionStatus,
+            cancelledReason: 'Removed from admission queue.',
+            releaseTime: new Date().toISOString(),
+          };
+        }
+        if (s.status === 'queued') {
+          const updated = { ...s, queuePosition: currentPos };
+          currentPos++;
+          return updated;
+        }
+        return s;
+      });
+    });
+
+    updateSessionInSupabase(sessionId, { status: 'cancelled', releaseNotes: 'Removed from queue' });
+    addLog(adminName, 'cancelled_session', session.ownerName, session.petName, sessionId, 'info', 'Removed from admission queue');
+  }, [sessions, addLog]);
 
   const completeSession = useCallback((
     releaseData: {
+      sessionId?: string;
       releaseTime: string;
       releaseCondition: string;
       finalNotes: string;
+      feedingRecordCount?: number;
+      hydrationRecordCount?: number;
+      vitalSignRecordCount?: number;
+      alertCount?: number;
+      totalFoodGrams?: number;
+      totalWaterMl?: number;
+      durationText?: string;
     },
     adminName: string
   ): { success: boolean; error: string | null } => {
-    if (!activeSession) return { success: false, error: 'No active session to complete.' };
+    const targetSession = (releaseData.sessionId ? sessions.find(s => s.id === releaseData.sessionId) : null) || activeSession || sessions.find(s => s.status === 'active');
+    if (!targetSession) return { success: false, error: 'No active session to complete.' };
 
     const now = releaseData.releaseTime || new Date().toISOString();
 
     setSessions(prev => prev.map(s =>
-      s.id === activeSession.id
+      s.id === targetSession.id
         ? {
             ...s,
             status: 'completed' as PetSessionStatus,
@@ -375,6 +485,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
             releaseCondition: releaseData.releaseCondition,
             finalNotes: releaseData.finalNotes,
             completedBy: adminName,
+            feedingRecordCount: releaseData.feedingRecordCount !== undefined ? releaseData.feedingRecordCount : s.feedingRecordCount,
+            hydrationRecordCount: releaseData.hydrationRecordCount !== undefined ? releaseData.hydrationRecordCount : s.hydrationRecordCount,
+            vitalSignRecordCount: releaseData.vitalSignRecordCount !== undefined ? releaseData.vitalSignRecordCount : s.vitalSignRecordCount,
+            alertCount: releaseData.alertCount !== undefined ? releaseData.alertCount : s.alertCount,
+            totalFoodGrams: releaseData.totalFoodGrams !== undefined ? releaseData.totalFoodGrams : s.totalFoodGrams,
+            totalWaterMl: releaseData.totalWaterMl !== undefined ? releaseData.totalWaterMl : s.totalWaterMl,
+            durationText: releaseData.durationText || s.durationText,
           }
         : s
     ));
@@ -387,13 +504,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }));
 
     setOwners(prev => prev.map(o =>
-      o.id === activeSession.ownerId
+      o.id === targetSession.ownerId
         ? { ...o, accessStatus: 'inactive' as UserAccessStatus, currentSessionId: null }
         : o
     ));
 
     // Database persistence
-    updateSessionInSupabase(activeSession.id, {
+    updateSessionInSupabase(targetSession.id, {
       status: 'completed',
       actualReleaseDate: now,
       releaseCondition: releaseData.releaseCondition,
@@ -401,19 +518,28 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       releaseAdmin: adminName,
     });
     updateDeviceInSupabase(hardware.id, { hardwareStatus: 'available', assignedPetId: '', assignedPetName: '' });
-    if (activeSession.ownerId) {
-      updateOwnerInSupabase(activeSession.ownerId, { accessStatus: 'inactive', currentSessionId: null });
+    if (targetSession.ownerId) {
+      updateOwnerInSupabase(targetSession.ownerId, { accessStatus: 'inactive', currentSessionId: null });
     }
 
-    addLog(adminName, 'completed_session', activeSession.ownerName, activeSession.petName, activeSession.id, 'success', releaseData.releaseCondition);
-    addNotification('session_completed', 'Session Completed', `${activeSession.petName}'s monitoring session completed.`, 'success', { petName: activeSession.petName, sessionId: activeSession.id });
+    addLog(adminName, 'completed_session', targetSession.ownerName, targetSession.petName, targetSession.id, 'success', releaseData.releaseCondition);
+    addNotification('session_completed', 'Session Completed', `${targetSession.petName}'s monitoring session completed. Station is now available.`, 'success', { petName: targetSession.petName, sessionId: targetSession.id });
 
     return { success: true, error: null };
-  }, [activeSession, hardware.id, addLog, addNotification]);
+  }, [activeSession, sessions, hardware.id, addLog, addNotification]);
 
   const cancelSession = useCallback((
     reason: string,
-    adminName: string
+    adminName: string,
+    telemetrySummary?: {
+      feedingRecordCount?: number;
+      hydrationRecordCount?: number;
+      vitalSignRecordCount?: number;
+      alertCount?: number;
+      totalFoodGrams?: number;
+      totalWaterMl?: number;
+      durationText?: string;
+    }
   ): { success: boolean; error: string | null } => {
     if (!activeSession) return { success: false, error: 'No active session to cancel.' };
 
@@ -421,7 +547,19 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setSessions(prev => prev.map(s =>
       s.id === activeSession.id
-        ? { ...s, status: 'cancelled' as PetSessionStatus, releaseTime: now, cancelledReason: reason }
+        ? {
+            ...s,
+            status: 'cancelled' as PetSessionStatus,
+            releaseTime: now,
+            cancelledReason: reason,
+            feedingRecordCount: telemetrySummary?.feedingRecordCount !== undefined ? telemetrySummary.feedingRecordCount : s.feedingRecordCount,
+            hydrationRecordCount: telemetrySummary?.hydrationRecordCount !== undefined ? telemetrySummary.hydrationRecordCount : s.hydrationRecordCount,
+            vitalSignRecordCount: telemetrySummary?.vitalSignRecordCount !== undefined ? telemetrySummary.vitalSignRecordCount : s.vitalSignRecordCount,
+            alertCount: telemetrySummary?.alertCount !== undefined ? telemetrySummary.alertCount : s.alertCount,
+            totalFoodGrams: telemetrySummary?.totalFoodGrams !== undefined ? telemetrySummary.totalFoodGrams : s.totalFoodGrams,
+            totalWaterMl: telemetrySummary?.totalWaterMl !== undefined ? telemetrySummary.totalWaterMl : s.totalWaterMl,
+            durationText: telemetrySummary?.durationText || s.durationText,
+          }
         : s
     ));
 
@@ -446,7 +584,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     addLog(adminName, 'cancelled_session', activeSession.ownerName, activeSession.petName, activeSession.id, 'success', reason);
-    addNotification('hardware_available', 'Session Cancelled', `${activeSession.petName}'s session cancelled.`, 'warning');
+    addNotification('hardware_available', 'Session Cancelled', `${activeSession.petName}'s session cancelled. History archived.`, 'warning');
 
     return { success: true, error: null };
   }, [activeSession, hardware.id, addLog, addNotification]);
@@ -538,6 +676,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const value: SessionContextType = {
     activeSession,
+    queuedSessions,
     sessions,
     owners,
     hardware,
@@ -545,6 +684,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     notifications,
     canAssignPet,
     assignPetAndOwner,
+    admitNextFromQueue,
+    admitSpecificFromQueue,
+    removeFromQueue,
     completeSession,
     cancelSession,
     addOwner,

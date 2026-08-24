@@ -6,6 +6,7 @@ import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
 import { useAppContext } from '../hooks/useAppContext';
+import { useSession } from '../contexts/SessionContext';
 import { Pet, HealthStatus } from '../types';
 import {
   Dog,
@@ -18,7 +19,8 @@ import {
   Edit,
   Trash2,
   Cpu,
-  UserCheck
+  UserCheck,
+  History,
 } from 'lucide-react';
 import { formatWeight, formatTemperature } from '../utils/formatters';
 
@@ -26,6 +28,7 @@ export const PetsPage: React.FC = () => {
   const addPetFileRef = React.useRef<HTMLInputElement>(null);
   const editPetFileRef = React.useRef<HTMLInputElement>(null);
   const { pets, devices, addPet, updatePet, deletePet } = useAppContext();
+  const { sessions, activeSession } = useSession();
   const navigate = useNavigate();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -272,89 +275,112 @@ export const PetsPage: React.FC = () => {
       ) : viewMode === 'grid' ? (
         /* GRID VIEW */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredPets.map(pet => (
-            <div key={pet.id} className="clinic-card p-5 space-y-4 flex flex-col justify-between">
-              <div>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={pet.avatarUrl}
-                      alt={pet.name}
-                      className="w-14 h-14 rounded-2xl object-cover ring-2 ring-rose-500/20"
-                    />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-extrabold text-slate-900">{pet.name}</h3>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">{pet.id}</span>
+          {filteredPets.map(pet => {
+            const petActiveSession = (sessions || []).find(s => s.status === 'active' && (s.petId === pet.id || s.petName?.toLowerCase() === pet.name?.toLowerCase()));
+            const petPastSessions = (sessions || []).filter(s => s.status !== 'active' && (s.petId === pet.id || s.petName?.toLowerCase() === pet.name?.toLowerCase()));
+
+            return (
+              <div key={pet.id} className="clinic-card p-5 space-y-4 flex flex-col justify-between hover:border-rose-300 transition-all">
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={pet.avatarUrl}
+                        alt={pet.name}
+                        className="w-14 h-14 rounded-2xl object-cover ring-2 ring-rose-500/20 shrink-0"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-extrabold text-slate-900">{pet.name}</h3>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">{pet.id}</span>
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium">
+                          {pet.species} • {pet.breed}
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-500 font-medium">
-                        {pet.species} • {pet.breed}
+                    </div>
+                    <StatusBadge status={pet.healthStatus} size="sm" />
+                  </div>
+
+                  {/* Session Stay Indicator */}
+                  <div className="pt-2">
+                    {petActiveSession ? (
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold flex items-center gap-1.5 w-fit">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                        Active in {petActiveSession.deviceId}
+                      </span>
+                    ) : petPastSessions.length > 0 ? (
+                      <span className="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-800 border border-rose-200 text-[10px] font-bold w-fit">
+                        ✓ {petPastSessions.length} Past Clinic Stay{petPastSessions.length > 1 ? 's' : ''}
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-medium w-fit">
+                        Registered Patient
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs">
+                    <div className="p-2 rounded-lg bg-slate-50">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Age &amp; Weight</span>
+                      <p className="font-bold text-slate-800 mt-0.5">{pet.age} yrs • {formatWeight(pet.weight)}</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-50">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Assigned Station</span>
+                      <p className="font-bold text-rose-600 mt-0.5 flex items-center gap-1">
+                        <Cpu className="w-3.5 h-3.5" />
+                        {petActiveSession ? petActiveSession.deviceId : (!pet.assignedDeviceId || pet.assignedDeviceId.startsWith('HN-DEV') ? 'Cage 1' : pet.assignedDeviceId)}
                       </p>
                     </div>
                   </div>
-                  <StatusBadge status={pet.healthStatus} size="sm" />
+
+                  <div className="mt-3 text-xs text-slate-500 space-y-1">
+                    <p className="flex items-center gap-1.5">
+                      <UserCheck className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Owner: <strong className="text-slate-800">{pet.ownerName}</strong> ({pet.ownerPhone})</span>
+                    </p>
+                    {pet.ownerEmail && (
+                      <p className="text-[11px] text-slate-400 pl-5 truncate">
+                        {pet.ownerEmail}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-3 text-[11px] font-medium text-slate-600 pt-1">
+                      <span className="text-emerald-700 font-bold">Meal: {pet.feedingPlan?.portionGrams || 100}g</span>
+                      <span>•</span>
+                      <span className="text-sky-700 font-bold">Target: {pet.hydrationTarget || 500}ml</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-100 text-xs">
-                  <div className="p-2 rounded-lg bg-slate-50">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Age & Weight</span>
-                    <p className="font-bold text-slate-800 mt-0.5">{pet.age} yrs • {formatWeight(pet.weight)}</p>
-                  </div>
-                  <div className="p-2 rounded-lg bg-slate-50">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Assigned Unit</span>
-                    <p className="font-bold text-rose-600 mt-0.5 flex items-center gap-1">
-                      <Cpu className="w-3.5 h-3.5" />
-                      {!pet.assignedDeviceId || pet.assignedDeviceId.startsWith('HN-DEV') ? 'Cage 1' : pet.assignedDeviceId}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 text-xs text-slate-500 space-y-1">
-                  <p className="flex items-center gap-1.5">
-                    <UserCheck className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Owner: <strong>{pet.ownerName}</strong> ({pet.ownerPhone})</span>
-                  </p>
-                  {pet.ownerEmail && (
-                    <p className="text-[11px] text-slate-400 pl-5 truncate">
-                      {pet.ownerEmail}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-3 text-[11px] font-medium text-slate-600 pt-1">
-                    <span className="text-emerald-700 font-bold">Meal: {pet.feedingPlan?.portionGrams || 100}g</span>
-                    <span>•</span>
-                    <span className="text-sky-700 font-bold">Target: {pet.hydrationTarget || 500}ml</span>
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                  <button
+                    onClick={() => navigate(`/app/pets/${pet.id}`)}
+                    className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-rose-200"
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    Profile &amp; Stays
+                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleOpenEdit(pet)}
+                      className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors cursor-pointer"
+                      title="Edit Pet"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleOpenDelete(pet)}
+                      className="p-2 rounded-lg hover:bg-rose-50 text-rose-500 transition-colors cursor-pointer"
+                      title="Delete Pet"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                <button
-                  onClick={() => navigate(`/app/pets/${pet.id}`)}
-                  className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold flex items-center gap-1.5 transition-colors"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  View Profile
-                </button>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleOpenEdit(pet)}
-                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
-                    title="Edit Pet"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleOpenDelete(pet)}
-                    className="p-2 rounded-lg hover:bg-rose-50 text-rose-500 transition-colors"
-                    title="Delete Pet"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         /* TABLE VIEW */
@@ -364,7 +390,8 @@ export const PetsPage: React.FC = () => {
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                 <tr>
                   <th className="p-4 font-bold">Patient</th>
-                  <th className="p-4 font-bold">Species & Breed</th>
+                  <th className="p-4 font-bold">Stay Status</th>
+                  <th className="p-4 font-bold">Species &amp; Breed</th>
                   <th className="p-4 font-bold">Owner Contact</th>
                   <th className="p-4 font-bold">Health Status</th>
                   <th className="p-4 font-bold">Hardware Unit</th>
@@ -373,69 +400,87 @@ export const PetsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredPets.map(pet => (
-                  <tr key={pet.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={pet.avatarUrl}
-                          alt={pet.name}
-                          className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200"
-                        />
-                        <div>
-                          <p className="font-extrabold text-slate-900">{pet.name}</p>
-                          <span className="text-[10px] text-slate-400 font-mono">{pet.id}</span>
+                {filteredPets.map(pet => {
+                  const petActiveSession = (sessions || []).find(s => s.status === 'active' && (s.petId === pet.id || s.petName?.toLowerCase() === pet.name?.toLowerCase()));
+                  const petPastSessions = (sessions || []).filter(s => s.status !== 'active' && (s.petId === pet.id || s.petName?.toLowerCase() === pet.name?.toLowerCase()));
+
+                  return (
+                    <tr key={pet.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={pet.avatarUrl}
+                            alt={pet.name}
+                            className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200 shrink-0"
+                          />
+                          <div>
+                            <p className="font-extrabold text-slate-900">{pet.name}</p>
+                            <span className="text-[10px] text-slate-400 font-mono">{pet.id}</span>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <p className="font-semibold text-slate-700">{pet.species}</p>
-                      <p className="text-[11px] text-slate-500">{pet.breed}</p>
-                    </td>
-                    <td className="p-4">
-                      <p className="font-semibold text-slate-800">{pet.ownerName}</p>
-                      <p className="text-[11px] text-slate-500">{pet.ownerPhone}</p>
-                    </td>
-                    <td className="p-4">
-                      <StatusBadge status={pet.healthStatus} size="sm" />
-                    </td>
-                    <td className="p-4">
-                      <span className="px-2 py-1 rounded-md bg-rose-50 text-rose-800 text-[11px] font-bold">
-                        {!pet.assignedDeviceId || pet.assignedDeviceId.startsWith('HN-DEV') ? 'Cage 1' : pet.assignedDeviceId}
-                      </span>
-                    </td>
-                    <td className="p-4 text-[11px]">
-                      <span className="font-bold text-emerald-700">{pet.feedingPlan?.portionGrams || 100}g portion</span>
-                      <span className="text-slate-400 mx-1">•</span>
-                      <span className="font-bold text-sky-700">{pet.hydrationTarget || 500}ml target</span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => navigate(`/app/pets/${pet.id}`)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 text-rose-700 font-bold"
-                          title="View Profile"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleOpenEdit(pet)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"
-                          title="Edit"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleOpenDelete(pet)}
-                          className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-500"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="p-4">
+                        {petActiveSession ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                            🟢 Live Stay
+                          </span>
+                        ) : petPastSessions.length > 0 ? (
+                          <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-800 text-[10px] font-bold">
+                            ✓ {petPastSessions.length} Past
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">—</span>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        <p className="font-semibold text-slate-700">{pet.species}</p>
+                        <p className="text-[11px] text-slate-500">{pet.breed}</p>
+                      </td>
+                      <td className="p-4">
+                        <p className="font-semibold text-slate-800">{pet.ownerName}</p>
+                        <p className="text-[11px] text-slate-500">{pet.ownerPhone}</p>
+                      </td>
+                      <td className="p-4">
+                        <StatusBadge status={pet.healthStatus} size="sm" />
+                      </td>
+                      <td className="p-4">
+                        <span className="px-2 py-1 rounded-md bg-rose-50 text-rose-800 text-[11px] font-bold font-mono">
+                          {petActiveSession ? petActiveSession.deviceId : (!pet.assignedDeviceId || pet.assignedDeviceId.startsWith('HN-DEV') ? 'Cage 1' : pet.assignedDeviceId)}
+                        </span>
+                      </td>
+                      <td className="p-4 text-[11px]">
+                        <span className="font-bold text-emerald-700">{pet.feedingPlan?.portionGrams || 100}g portion</span>
+                        <span className="text-slate-400 mx-1">•</span>
+                        <span className="font-bold text-sky-700">{pet.hydrationTarget || 500}ml target</span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => navigate(`/app/pets/${pet.id}`)}
+                            className="p-1.5 rounded-lg hover:bg-slate-100 text-rose-700 font-bold cursor-pointer"
+                            title="View Profile & Stay History"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenEdit(pet)}
+                            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenDelete(pet)}
+                            className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-500 cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

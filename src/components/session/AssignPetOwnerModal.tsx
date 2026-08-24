@@ -37,7 +37,7 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { owners, addOwner, updateOwner, assignPetAndOwner, canAssignPet } = useSession();
+  const { owners, addOwner, updateOwner, assignPetAndOwner, canAssignPet, activeSession, queuedSessions, hardware } = useSession();
   const { pets, addPet, showToast } = useAppContext();
   const { adminProfile } = useAuth();
 
@@ -147,10 +147,6 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
 
   const handleConfirm = () => {
     if (!selectedPet || !selectedOwnerId) return;
-    if (!canAssignPet()) {
-      showToast('error', 'Assignment Blocked', 'The HydroNourish hardware is currently assigned to another pet. Complete or cancel the existing session before assigning a new pet.');
-      return;
-    }
 
     const result = assignPetAndOwner(
       selectedPet,
@@ -165,7 +161,19 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
     );
 
     if (result.success) {
-      showToast('success', 'Pet Assigned Successfully', `${selectedPet.name} has been assigned to HydroNourish Station Alpha. Monitoring session is now active.`);
+      if (result.isQueued) {
+        showToast(
+          'info',
+          'Added to Admission Queue',
+          `${selectedPet.name} has been placed in the Admission Queue at Position #${result.queuePosition}. They will be next when Station is available.`
+        );
+      } else {
+        showToast(
+          'success',
+          'Pet Assigned Successfully',
+          `${selectedPet.name} has been assigned to ${hardware.deviceName || hardware.id}. Monitoring session is now active.`
+        );
+      }
       resetForm();
       onSuccess?.();
     } else {
@@ -464,22 +472,41 @@ export const AssignPetOwnerModal: React.FC<AssignPetOwnerModalProps> = ({
           </div>
 
           {/* What happens on confirm */}
-          <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 space-y-1.5">
-            <p className="font-bold text-indigo-800 flex items-center gap-1.5"><Cpu className="w-3.5 h-3.5" /> Upon confirmation:</p>
-            <ul className="space-y-1 text-indigo-700 ml-5 list-disc">
-              <li>An active monitoring session will be created.</li>
-              <li>{selectedOwner.name}'s access will be set to <strong>active</strong>.</li>
-              <li>The HydroNourish hardware status will change to <strong>occupied</strong>.</li>
-              <li>No other pet can be assigned until this session is completed.</li>
-            </ul>
-          </div>
+          {activeSession ? (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 space-y-1.5">
+              <p className="font-extrabold text-amber-900 flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                Station Alpha is Currently Monitoring {activeSession.petName}
+              </p>
+              <ul className="space-y-1 text-amber-800 ml-5 list-disc text-[11px]">
+                <li><strong>{selectedPet.name}</strong> will be placed in the <strong>Admission Queue (Position #{queuedSessions.length + 1})</strong>.</li>
+                <li>When {activeSession.petName}'s stay is discharged, {selectedPet.name} will be next in line to enter the smart station.</li>
+                <li>{selectedOwner.name} can track their queue status and waitlist in their Pet Owner portal.</li>
+              </ul>
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 space-y-1.5">
+              <p className="font-bold text-indigo-800 flex items-center gap-1.5"><Cpu className="w-3.5 h-3.5" /> Upon confirmation:</p>
+              <ul className="space-y-1 text-indigo-700 ml-5 list-disc">
+                <li>An active monitoring session will be created immediately.</li>
+                <li>{selectedOwner.name}'s access will be set to <strong>active</strong>.</li>
+                <li>The HydroNourish hardware status will change to <strong>occupied</strong>.</li>
+              </ul>
+            </div>
+          )}
 
           <div className="flex justify-between pt-3 border-t border-slate-100">
-            <button onClick={() => setStep('details')} className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700 text-xs flex items-center gap-1">
+            <button onClick={() => setStep('details')} className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-slate-700 text-xs flex items-center gap-1 cursor-pointer">
               <ChevronLeft className="w-3.5 h-3.5" /> Back
             </button>
-            <button onClick={handleConfirm} className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md">
-              <Check className="w-4 h-4" /> Confirm & Start Session
+            <button
+              onClick={handleConfirm}
+              className={`px-6 py-2.5 rounded-xl text-white font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all ${
+                activeSession ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800' : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700'
+              }`}
+            >
+              <Check className="w-4 h-4" />
+              {activeSession ? `Add to Admission Queue (Position #${queuedSessions.length + 1})` : 'Confirm & Start Session'}
             </button>
           </div>
         </div>
