@@ -178,13 +178,13 @@ export const OverviewPage: React.FC = () => {
           />
           <StatCard
             title="Water Reservoir"
-            value={hasDeviceConnected ? hardware.waterLevelPct + '%' : 'N/A'}
-            subtitle={hasDeviceConnected ? 'Hydration container level' : 'No device active'}
+            value={hasDeviceConnected ? `${(hardware.waterLiters !== undefined ? hardware.waterLiters : ((hardware.waterLevelPct || 0) / 100) * 2.50).toFixed(2)} L` : 'N/A'}
+            subtitle={hasDeviceConnected ? 'Reservoir volume (2.50 L max)' : 'No device active'}
             icon={Droplets}
             iconBgColor="bg-sky-50"
             iconTextColor="text-sky-600"
-            badgeText={hasDeviceConnected ? (hardware.waterLevelPct > 30 ? 'OK' : 'Low') : 'Offline'}
-            badgeType={hasDeviceConnected ? (hardware.waterLevelPct > 30 ? 'success' : 'alert') : 'info'}
+            badgeText={hasDeviceConnected ? ((hardware.waterLiters !== undefined ? hardware.waterLiters > 0.60 : hardware.waterLevelPct > 30) ? 'OK' : 'Low') : 'Offline'}
+            badgeType={hasDeviceConnected ? ((hardware.waterLiters !== undefined ? hardware.waterLiters > 0.60 : hardware.waterLevelPct > 30) ? 'success' : 'alert') : 'info'}
           />
           <StatCard
             title="Device Connection"
@@ -378,7 +378,7 @@ export const OverviewPage: React.FC = () => {
               </div>
               <div className="p-4 bg-slate-50 border-t border-slate-100 grid grid-cols-3 gap-2 text-xs text-center">
                 <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Food Level</span><span className="font-bold text-slate-800">{hardware.foodLevelPct}%</span></div>
-                <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Water Level</span><span className="font-bold text-slate-800">{hardware.waterLevelPct}%</span></div>
+                <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Water Volume</span><span className="font-bold text-slate-800">{(hardware.waterLiters !== undefined ? hardware.waterLiters : ((hardware.waterLevelPct || 0) / 100) * 2.50).toFixed(2)} L</span></div>
                 <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Assignment</span><span className="font-bold text-rose-700">{hardware.assignedPetName || 'Vacant'}</span></div>
               </div>
             </div>

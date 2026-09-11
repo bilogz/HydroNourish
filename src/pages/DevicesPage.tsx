@@ -86,7 +86,7 @@ export const DevicesPage: React.FC = () => {
   const [isScanningWifi, setIsScanningWifi] = useState(false);
   const [scannedNetworks, setScannedNetworks] = useState<ScannedWifiNetwork[]>([]);
   const [wifiSearchTerm, setWifiSearchTerm] = useState('');
-  const [activeWifiTab, setActiveWifiTab] = useState<'scanned' | 'presets' | 'manual'>('scanned');
+  const [activeWifiTab, setActiveWifiTab] = useState<'scanned' | 'manual'>('scanned');
   const [lastScanTimestamp, setLastScanTimestamp] = useState<Date | null>(new Date());
   const [pairingSuccessMsg, setPairingSuccessMsg] = useState<string | null>(null);
 
@@ -221,20 +221,12 @@ export const DevicesPage: React.FC = () => {
     setConnectModalOpen(false);
   };
 
-  // Scan for nearby 2.4 GHz Wi-Fi Networks across USB Serial, SoftAP & LAN Endpoints
+  // Scan for real nearby 2.4 GHz Wi-Fi Networks across ESP32 telemetry, LAN & WebSerial Endpoints
   const handleScanNearbyWifi = async () => {
     setIsScanningWifi(true);
     const discoveredMap = new Map<string, ScannedWifiNetwork>();
 
-    // 1. Direct WebSerial hardware scan trigger (requests port if not connected)
-    if (!usbSerialService.getIsConnected() && 'serial' in navigator) {
-      try {
-        await usbSerialService.connect();
-      } catch (err) {
-        console.warn('USB Connect prompt cancelled:', err);
-      }
-    }
-
+    // 1. Direct WebSerial hardware scan trigger (only if already connected)
     if (usbSerialService.getIsConnected()) {
       try {
         await usbSerialService.scanWifi();
@@ -257,7 +249,7 @@ export const DevicesPage: React.FC = () => {
 
     for (const url of scanCandidates) {
       try {
-        const resp = await fetch(url, { signal: AbortSignal.timeout(3500) });
+        const resp = await fetch(url, { signal: AbortSignal.timeout(3000) });
         if (resp.ok) {
           const data = await resp.json();
           const netList = Array.isArray(data) ? data : (data.networks || []);
@@ -286,11 +278,12 @@ export const DevicesPage: React.FC = () => {
       });
     }
 
-    // Include current paired SSID if not already discovered
-    if (wifiSsid && !discoveredMap.has(wifiSsid.trim())) {
-      discoveredMap.set(wifiSsid.trim(), {
-        ssid: wifiSsid.trim(),
-        rssi: -45,
+    // 4. Also check device reported paired SSID if available
+    const activeDevSsid = selectedDevice?.wifiSsid;
+    if (activeDevSsid && activeDevSsid.trim().length > 0 && !discoveredMap.has(activeDevSsid.trim())) {
+      discoveredMap.set(activeDevSsid.trim(), {
+        ssid: activeDevSsid.trim(),
+        rssi: selectedDevice?.wifiSignalDbm || -55,
         auth: 'Secured',
         encrypted: true
       });
@@ -300,22 +293,17 @@ export const DevicesPage: React.FC = () => {
     setScannedNetworks(sortedList);
     setLastScanTimestamp(new Date());
     setIsScanningWifi(false);
-    showToast('success', 'Scan Complete', `Discovered ${sortedList.length} 2.4 GHz Wi-Fi networks in range.`);
+    if (sortedList.length > 0) {
+      showToast('success', 'Scan Complete', `Discovered ${sortedList.length} 2.4 GHz Wi-Fi networks in physical range.`);
+    } else {
+      showToast('info', 'Scanning Complete', 'No broadcasted networks returned. You may enter your Wi-Fi SSID manually below.');
+    }
   };
 
   const handleSelectScannedNetwork = (net: ScannedWifiNetwork) => {
     setWifiSsid(net.ssid);
     if (!net.encrypted || net.auth === 'Open') {
       setWifiPassword('');
-    } else {
-      const presets: Record<string, string> = {
-        'brrt rrt': 'GaRCi4F4m',
-        'HydroNourish': '12345678',
-        'iPhone Hotspot': '12345678',
-      };
-      if (presets[net.ssid]) {
-        setWifiPassword(presets[net.ssid]);
-      }
     }
   };
 
@@ -757,11 +745,16 @@ export const DevicesPage: React.FC = () => {
 
                           <div>
                             <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
-                              <span className="flex items-center gap-1.5"><Droplets className="w-3.5 h-3.5 text-sky-600" /> Water Reservoir Depth</span>
-                              <span className="font-mono text-sky-600">{featuredDevice.waterLevelPct}%</span>
+                              <span className="flex items-center gap-1.5"><Droplets className="w-3.5 h-3.5 text-sky-600" /> Water Reservoir Volume</span>
+                              <span className="font-mono text-sky-600">
+                                {(featuredDevice.waterLiters !== undefined ? featuredDevice.waterLiters : ((featuredDevice.waterLevelPct || 0) / 100) * 2.50).toFixed(2)} Liters
+                              </span>
                             </div>
                             <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                              <div style={{ width: `${featuredDevice.waterLevelPct}%` }} className="h-full bg-gradient-to-r from-sky-500 to-blue-500 rounded-full transition-all duration-500" />
+                              <div
+                                style={{ width: `${Math.min(100, Math.max(0, ((featuredDevice.waterLiters !== undefined ? featuredDevice.waterLiters : ((featuredDevice.waterLevelPct || 0) / 100) * 2.50) / (featuredDevice.reservoirCapacityLiters || 2.50)) * 100))}%` }}
+                                className="h-full bg-gradient-to-r from-sky-500 to-blue-500 rounded-full transition-all duration-500"
+                              />
                             </div>
                           </div>
                         </div>
@@ -1003,19 +996,7 @@ export const DevicesPage: React.FC = () => {
               }`}
             >
               <Radio className="w-3.5 h-3.5 text-indigo-500" />
-              Nearby Scanner ({scannedNetworks.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveWifiTab('presets')}
-              className={`flex-1 py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                activeWifiTab === 'presets'
-                  ? 'bg-white text-indigo-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
-              Quick Presets
+              Live 2.4 GHz Nearby Scanner ({scannedNetworks.length})
             </button>
             <button
               type="button"
@@ -1178,43 +1159,7 @@ export const DevicesPage: React.FC = () => {
             </div>
           )}
 
-          {/* Tab 2: Quick Presets */}
-          {activeWifiTab === 'presets' && (
-            <div className="space-y-2">
-              <label className="block font-bold text-slate-700 uppercase text-[11px]">Quick Select Clinic / Hotspot Network:</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {[
-                  { label: 'brrt rrt', pass: '12345678', desc: 'Personal Mobile Hotspot' },
-                  { label: 'brrt rrt', pass: 'GaRCi4F4m', desc: 'Clinic Main AP' },
-                  { label: 'HydroNourish', pass: '12345678', desc: 'Feeder Node Network' },
-                  { label: 'iPhone Hotspot', pass: '12345678', desc: 'Mobile Hotspot' },
-                  { label: 'HydroNourish-ESP32-Setup', pass: '', desc: 'Direct Node SoftAP (Open)' }
-                ].map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() => {
-                      setWifiSsid(preset.label);
-                      setWifiPassword(preset.pass);
-                    }}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      wifiSsid === preset.label
-                        ? 'bg-indigo-50 border-indigo-500 text-indigo-950 font-bold shadow-xs'
-                        : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs">{preset.label}</span>
-                      {wifiSsid === preset.label && <Check className="w-3.5 h-3.5 text-indigo-600" />}
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{preset.desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Tab 3: Manual / Custom SSID Notice */}
+          {/* Tab 2: Manual / Custom SSID Notice */}
           {activeWifiTab === 'manual' && (
             <div className="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-200/70 text-rose-900 space-y-1">
               <p className="font-bold flex items-center gap-1.5 text-xs text-rose-900">
@@ -1371,34 +1316,34 @@ export const DevicesPage: React.FC = () => {
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
             <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
               <Droplets className="w-4 h-4 text-sky-600" />
-              Target Water Dispense Level
+              Target Water Dispense Volume
             </h4>
             <div className="flex justify-between items-center">
-              <span className="text-slate-500 font-semibold">Target Level:</span>
-              <span className="font-bold text-sky-600 text-sm">{customWaterLevelPct}% Level</span>
+              <span className="text-slate-500 font-semibold">Target Volume:</span>
+              <span className="font-bold text-sky-600 text-sm">{((customWaterLevelPct / 100) * 2.50).toFixed(2)} Liters ({Math.round((customWaterLevelPct / 100) * 2500)} ml)</span>
             </div>
             <input
               type="range"
-              min="1"
+              min="5"
               max="100"
-              step="1"
+              step="5"
               value={customWaterLevelPct}
               onChange={e => setCustomWaterLevelPct(Number(e.target.value))}
               className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-500"
             />
             <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-              <span>1%</span>
-              <span>25%</span>
-              <span>50%</span>
-              <span>75%</span>
-              <span>100%</span>
+              <span>0.15 L (Sip)</span>
+              <span>0.60 L</span>
+              <span>1.25 L (Half)</span>
+              <span>1.88 L</span>
+              <span>2.50 L (Full)</span>
             </div>
             <button
               type="button"
               onClick={handleExecuteCustomWater}
               className="w-full py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-xs cursor-pointer active:scale-95"
             >
-              Pump to {customWaterLevelPct}% Level Now
+              Pump {((customWaterLevelPct / 100) * 2.50).toFixed(2)} Liters Now
             </button>
           </div>
 
@@ -1562,8 +1507,10 @@ export const DevicesPage: React.FC = () => {
                 <p className="font-bold text-emerald-600">{selectedDevice.foodLevelPct}% Level</p>
               </div>
               <div>
-                <span className="text-slate-400 font-bold uppercase text-[10px]">Water Reservoir:</span>
-                <p className="font-bold text-sky-600">{selectedDevice.waterLevelPct}% Depth</p>
+                <span className="text-slate-400 font-bold uppercase text-[10px]">Water Reservoir Volume:</span>
+                <p className="font-bold text-sky-600">
+                  {(selectedDevice.waterLiters !== undefined ? selectedDevice.waterLiters : ((selectedDevice.waterLevelPct || 0) / 100) * 2.50).toFixed(2)} Liters
+                </p>
               </div>
               <div>
                 <span className="text-slate-400 font-bold uppercase text-[10px]">Water Quality (TDS):</span>

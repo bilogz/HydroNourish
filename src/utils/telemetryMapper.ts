@@ -36,11 +36,18 @@ export function validateTelemetryPayload(body: any): { valid: boolean; error?: s
 
   const timestamp = body.timestamp ? String(body.timestamp) : new Date().toISOString();
   const uptimeSeconds = Number(body.uptimeSeconds ?? body.uptime_seconds ?? 0);
+  const reservoirCapacity = Number(body.reservoirCapacityLiters ?? body.reservoir_capacity_liters ?? 2.50);
+  const waterLitersRaw = body.waterLiters !== undefined ? Number(body.waterLiters) : (body.water_liters !== undefined ? Number(body.water_liters) : NaN);
+  const waterLiters = !isNaN(waterLitersRaw) ? Math.round(waterLitersRaw * 100) / 100 : Math.round((waterLevel / 100) * reservoirCapacity * 100) / 100;
+  const foodGateOpen = Boolean(body.foodGateOpen ?? body.food_gate_open ?? false);
+  const petEatingActive = Boolean(body.petEatingActive ?? body.pet_eating ?? false);
 
   const data: DeviceTelemetryPayload = {
     deviceId,
     timestamp,
     waterLevelPercent: Math.round(waterLevel * 10) / 10,
+    waterLiters,
+    reservoirCapacityLiters: reservoirCapacity,
     waterRawAdc,
     foodLevelPercent: Math.round(foodLevel * 10) / 10,
     tdsPpm: Math.max(0, Math.round(tdsPpm)),
@@ -48,6 +55,8 @@ export function validateTelemetryPayload(body: any): { valid: boolean; error?: s
     pumpActive,
     firmwareVersion: rawFwOriginal,
     cameraIp,
+    foodGateOpen,
+    petEatingActive,
     uptimeSeconds: Math.max(0, uptimeSeconds),
   };
 
@@ -62,6 +71,7 @@ export function mapPayloadToDeviceRow(payload: DeviceTelemetryPayload, receivedA
     id: payload.deviceId,
     status: 'Online',
     water_level_pct: payload.waterLevelPercent,
+    water_liters: payload.waterLiters ?? Math.round((payload.waterLevelPercent / 100) * 2.50 * 100) / 100,
     water_raw_adc: payload.waterRawAdc ?? 0,
     food_level_pct: payload.foodLevelPercent,
     water_quality_ppm: payload.tdsPpm,
@@ -202,6 +212,12 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
     wifiSsid: parsedSsid || 'brrt rrt',
     foodLevelPct: item.food_level_pct !== null && item.food_level_pct !== undefined ? Number(item.food_level_pct) : 0,
     waterLevelPct: item.water_level_pct !== null && item.water_level_pct !== undefined ? Number(item.water_level_pct) : 0,
+    waterLiters: item.water_liters !== null && item.water_liters !== undefined 
+      ? Number(item.water_liters) 
+      : Math.round(((Number(item.water_level_pct || 0)) / 100) * 2.50 * 100) / 100,
+    reservoirCapacityLiters: item.reservoir_capacity_liters !== null && item.reservoir_capacity_liters !== undefined
+      ? Number(item.reservoir_capacity_liters)
+      : 2.50,
     waterRawAdc: item.water_raw_adc !== null && item.water_raw_adc !== undefined ? Number(item.water_raw_adc) : 0,
     foodBowlWeightGrams: parsedWeight,
     waterQualityPpm: parsedTds,
@@ -213,6 +229,8 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
     ipAddress: parsedIp || undefined,
     cameraIp: parsedCamIp || undefined,
     isPumping: Boolean(item.is_pumping),
+    foodGateOpen: Boolean(item.food_gate_open),
+    petEatingActive: Boolean(item.pet_eating_active),
     lastSeenAt: item.last_seen_at || item.last_transmission || null,
     uptimeSeconds: Number(item.uptime_seconds) || 0,
   };

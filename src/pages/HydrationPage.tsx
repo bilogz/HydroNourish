@@ -83,11 +83,6 @@ export const HydrationPage: React.FC = () => {
 
   const isDeviceConnected = Boolean(selectedDevice && selectedDevice.status === 'Online');
 
-  const lowWaterDevices = useMemo(() => {
-    if (!isDeviceConnected || !selectedDevice) return [];
-    return selectedDevice.waterLevelPct < 30 ? [selectedDevice] : [];
-  }, [isDeviceConnected, selectedDevice]);
-
   // Clean deduplicated logs
   const displayLogs = useMemo(() => {
     if (!hydrationLogs || hydrationLogs.length === 0) return [];
@@ -122,9 +117,14 @@ export const HydrationPage: React.FC = () => {
     return pets.reduce((acc, pet) => acc + (pet.hydrationTarget || 850), 0);
   }, [isDeviceConnected, pets]);
 
-  const avgWaterLevelPct = useMemo(() => {
-    if (!isDeviceConnected || !selectedDevice) return null;
-    return selectedDevice.waterLevelPct;
+  const reservoirCapacityL = selectedDevice?.reservoirCapacityLiters || 2.50;
+  const currentLiters = selectedDevice
+    ? (selectedDevice.waterLiters !== undefined ? selectedDevice.waterLiters : Number(((selectedDevice.waterLevelPct || 0) / 100 * reservoirCapacityL).toFixed(2)))
+    : null;
+
+  const lowWaterDevices = useMemo(() => {
+    if (!isDeviceConnected || !selectedDevice) return [];
+    return (selectedDevice.waterLiters !== undefined ? selectedDevice.waterLiters < 0.60 : selectedDevice.waterLevelPct < 25) ? [selectedDevice] : [];
   }, [isDeviceConnected, selectedDevice]);
 
   // Dynamic Intake Rate Curve
@@ -169,8 +169,8 @@ export const HydrationPage: React.FC = () => {
 
   const handleExecuteCustomWater = async () => {
     if (selectedDevice) {
-      // Calculate duration/volume mapped from 1-100%
-      const volumeMl = Math.round((customWaterLevelPct / 100) * 350);
+      // Calculate duration/volume mapped from Liters
+      const volumeMl = Math.round((customWaterLevelPct / 100) * (reservoirCapacityL * 1000));
       await dispenseWaterDirect(selectedDevice.id, volumeMl);
       setCustomWaterModalOpen(false);
     }
@@ -186,6 +186,7 @@ export const HydrationPage: React.FC = () => {
     );
   }, [schedules]);
 
+  // Pagination for Water Schedules
   const totalWaterSchedulePages = Math.max(1, Math.ceil(waterSchedules.length / PAGE_SIZE));
   const currentWaterSchedulePage = Math.min(waterSchedulePage, totalWaterSchedulePages);
   const paginatedWaterSchedules = waterSchedules.slice(
@@ -218,7 +219,10 @@ export const HydrationPage: React.FC = () => {
   };
 
   return (
-    <DashboardLayout pageTitle="Automated Smart Hydration System" breadcrumbs={[{ label: 'Hydration' }]}>
+    <DashboardLayout
+      pageTitle="Hydration & Fluid Intake Monitoring"
+      breadcrumbs={[{ label: 'Hydration' }]}
+    >
       {/* Automated System Status Banner */}
       <div className="clinic-card p-4 bg-sky-500/10 border-sky-200 flex items-center justify-between text-xs text-sky-900 mb-2">
         <div className="flex items-center gap-2">
@@ -236,17 +240,17 @@ export const HydrationPage: React.FC = () => {
       {/* ================= STAT CARDS ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
-          title="Daily Water Consumed"
+          title="Total Daily Intake"
           value={isDeviceConnected ? `${totalWaterConsumedMl.toLocaleString()} ml` : '0 ml'}
-          subtitle={isDeviceConnected ? 'Cumulative Clinic Intake' : 'No device connected'}
+          subtitle={selectedDevice?.assignedPetName ? `Intake for ${selectedDevice.assignedPetName}` : 'All Hospital Patients'}
           icon={Droplets}
           iconBgColor={isDeviceConnected ? 'bg-sky-50' : 'bg-slate-100'}
           iconTextColor={isDeviceConnected ? 'text-sky-600' : 'text-slate-400'}
-          badgeText={isDeviceConnected ? 'Active Intake' : 'Offline'}
+          badgeText={isDeviceConnected ? 'Live Data' : 'Offline'}
           badgeType={isDeviceConnected ? 'info' : 'info'}
         />
         <StatCard
-          title="Daily Hydration Target"
+          title="Daily Fluid Target"
           value={isDeviceConnected ? `${totalHydrationTargetMl.toLocaleString()} ml` : '0 ml'}
           subtitle={isDeviceConnected ? 'All Active Patients' : 'No device connected'}
           icon={CheckCircle2}
@@ -256,9 +260,9 @@ export const HydrationPage: React.FC = () => {
           badgeType={isDeviceConnected ? 'success' : 'info'}
         />
         <StatCard
-          title="Avg Reservoir Level"
-          value={isDeviceConnected && avgWaterLevelPct !== null ? `${avgWaterLevelPct}%` : 'N/A'}
-          subtitle={isDeviceConnected ? '1 Smart Dispenser Station' : 'No device connected'}
+          title="Reservoir Water Volume"
+          value={isDeviceConnected && currentLiters !== null ? `${currentLiters.toFixed(2)} L` : 'N/A'}
+          subtitle={isDeviceConnected ? `Capacity: ${reservoirCapacityL.toFixed(2)} Liters` : 'No device connected'}
           icon={Cpu}
           iconBgColor={isDeviceConnected ? 'bg-indigo-50' : 'bg-slate-100'}
           iconTextColor={isDeviceConnected ? 'text-indigo-600' : 'text-slate-400'}
@@ -303,8 +307,8 @@ export const HydrationPage: React.FC = () => {
           <div className="lg:col-span-5 clinic-card p-6 flex flex-col justify-between space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-extrabold text-slate-900">Reservoir Water Level Gauge</h3>
-                <p className="text-xs text-slate-500">Live ultrasonic depth sensor measurement</p>
+                <h3 className="text-base font-extrabold text-slate-900">Reservoir Water Volume Gauge</h3>
+                <p className="text-xs text-slate-500">Live ultrasonic depth measurement in Liters (L)</p>
               </div>
               <span className="px-3 py-1 text-xs font-mono font-bold bg-slate-100 text-slate-700 border border-slate-300 rounded-xl">
                 {selectedDevice.id}
@@ -313,16 +317,21 @@ export const HydrationPage: React.FC = () => {
 
             {/* Visual Cylinder Level Gauge */}
             <div className="flex items-center gap-6 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-              <div className="relative w-20 h-44 rounded-2xl border-4 border-slate-300 bg-white overflow-hidden shadow-inner flex flex-col justify-end">
+              <div className="relative w-24 h-44 rounded-2xl border-4 border-slate-300 bg-white overflow-hidden shadow-inner flex flex-col justify-end">
                 <div
-                  style={{ height: `${selectedDevice.waterLevelPct}%` }}
+                  style={{ height: `${Math.min(100, Math.max(0, ((currentLiters ?? 0) / reservoirCapacityL) * 100))}%` }}
                   className="w-full bg-gradient-to-t from-sky-600 via-teal-500 to-sky-400 transition-all duration-700 relative"
                 >
                   <div className="absolute top-0 inset-x-0 h-2 bg-white/40 animate-pulse" />
                 </div>
-                <span className="absolute inset-0 flex items-center justify-center font-extrabold text-slate-900 text-lg drop-shadow-xs">
-                  {selectedDevice.waterLevelPct}%
-                </span>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="font-extrabold text-slate-900 text-lg drop-shadow-xs">
+                    {(currentLiters ?? 0).toFixed(2)} L
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                    / {reservoirCapacityL.toFixed(2)} L
+                  </span>
+                </div>
               </div>
 
               <div className="flex-1 space-y-3 text-xs">
@@ -333,10 +342,16 @@ export const HydrationPage: React.FC = () => {
                   </p>
                 </div>
                 <div>
+                  <span className="text-slate-400 font-bold uppercase text-[10px]">Reservoir Volume</span>
+                  <p className="text-sm font-extrabold text-sky-700">
+                    {(currentLiters ?? 0).toFixed(2)} Liters <span className="text-xs font-normal text-slate-500">({Math.round((currentLiters ?? 0) * 1000)} ml)</span>
+                  </p>
+                </div>
+                <div>
                   <span className="text-slate-400 font-bold uppercase text-[10px]">Refill Status</span>
                   <div className="mt-1">
                     <StatusBadge
-                      status={selectedDevice.waterLevelPct < 25 ? 'Warning' : 'Online'}
+                      status={(currentLiters ?? 0) < 0.60 ? 'Warning' : 'Online'}
                       size="sm"
                     />
                   </div>
@@ -673,7 +688,9 @@ export const HydrationPage: React.FC = () => {
                     <span className="text-xs font-bold text-slate-900">
                       {dev.assignedPetName || pets.find(p => p.id === dev.assignedPetId)?.name || pets[0]?.name || 'Max'} ({dev.id})
                     </span>
-                    <p className="text-xs text-amber-700 font-semibold mt-0.5">Reservoir Level: {dev.waterLevelPct}%</p>
+                    <p className="text-xs text-amber-700 font-semibold mt-0.5">
+                      Reservoir Volume: {(dev.waterLiters !== undefined ? dev.waterLiters : ((dev.waterLevelPct || 0) / 100) * 2.50).toFixed(2)} Liters
+                    </p>
                   </div>
                   <button
                     onClick={handleOpenRefillModal}
@@ -702,7 +719,7 @@ export const HydrationPage: React.FC = () => {
                     <th className="px-4 py-3">Patient</th>
                     <th className="px-4 py-3">Intake / Refill Volume</th>
                     <th className="px-4 py-3">Timestamp</th>
-                    <th className="px-4 py-3">Level After Event</th>
+                    <th className="px-4 py-3">Reservoir Volume</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -718,7 +735,9 @@ export const HydrationPage: React.FC = () => {
                         <td className="px-4 py-3 font-bold text-slate-900">{log.petName}</td>
                         <td className="px-4 py-3 font-bold text-sky-700">{formatHydration(log.amountMl)}</td>
                         <td className="px-4 py-3 text-slate-500">{log.timestamp}</td>
-                        <td className="px-4 py-3 font-semibold text-slate-800">{log.reservoirLevelPct}%</td>
+                        <td className="px-4 py-3 font-semibold text-slate-800">
+                          {(log.reservoirLiters !== undefined ? log.reservoirLiters : ((log.reservoirLevelPct || 0) / 100) * 2.50).toFixed(2)} L
+                        </td>
                       </tr>
                     ))
                   )}
@@ -775,44 +794,44 @@ export const HydrationPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ================= CUSTOM MANUAL WATER PUMP MODAL (1-100% LEVEL SCALE) ================= */}
+      {/* ================= CUSTOM MANUAL WATER PUMP MODAL (LITERS SCALE) ================= */}
       <Modal
         isOpen={customWaterModalOpen}
         onClose={() => setCustomWaterModalOpen(false)}
         title="Custom Manual Water Pump Override"
-        subtitle="On-Demand Water Level Trigger (1% - 100%)"
+        subtitle="On-Demand Reservoir Dispense Trigger"
       >
         <div className="space-y-4 text-xs">
           <p className="text-slate-600 leading-relaxed">
-            The system maintains hydration <strong>automatically</strong>. Use this tool to trigger an immediate custom water level for the bowl.
+            The system maintains hydration <strong>automatically</strong>. Use this tool to trigger an immediate custom water volume for the station.
           </p>
 
           <div>
             <div className="flex justify-between items-center mb-1">
-              <label className="font-bold text-slate-700 uppercase">Target Water Dispense Level</label>
-              <span className="font-bold text-sky-600 text-sm">{customWaterLevelPct}% Level</span>
+              <label className="font-bold text-slate-700 uppercase">Target Water Dispense Volume</label>
+              <span className="font-bold text-sky-600 text-sm">{((customWaterLevelPct / 100) * reservoirCapacityL).toFixed(2)} Liters ({Math.round((customWaterLevelPct / 100) * reservoirCapacityL * 1000)} ml)</span>
             </div>
             <input
               type="range"
-              min="1"
+              min="5"
               max="100"
-              step="1"
+              step="5"
               value={customWaterLevelPct}
               onChange={e => setCustomWaterLevelPct(Number(e.target.value))}
               className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-500"
             />
             <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
-              <span>1% (Sip)</span>
-              <span>25%</span>
-              <span>50% (Half)</span>
-              <span>75%</span>
-              <span>100% (Full Fill)</span>
+              <span>0.15 L (Sip)</span>
+              <span>0.60 L</span>
+              <span>1.25 L (Half)</span>
+              <span>1.88 L</span>
+              <span>{reservoirCapacityL.toFixed(2)} L (Full)</span>
             </div>
           </div>
 
           <div className="p-3 bg-sky-50 rounded-xl border border-sky-200/60 text-sky-800 text-[11px] flex items-center gap-2">
             <Droplets className="w-4 h-4 text-sky-600 shrink-0" />
-            <span>Water pump on node <strong>{selectedDevice?.id || 'HN-NODE-F778'}</strong> will activate to reach <strong>{customWaterLevelPct}% Level</strong> (~{Math.round(customWaterLevelPct * 30)} ms).</span>
+            <span>Water pump on node <strong>{selectedDevice?.id || 'HN-NODE-F778'}</strong> will activate to dispense <strong>{((customWaterLevelPct / 100) * reservoirCapacityL).toFixed(2)} Liters</strong> (~{Math.round(customWaterLevelPct * 30)} ms).</span>
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
@@ -828,7 +847,7 @@ export const HydrationPage: React.FC = () => {
               onClick={handleExecuteCustomWater}
               className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-sm cursor-pointer active:scale-95"
             >
-              Pump to {customWaterLevelPct}% Level Now
+              Pump {((customWaterLevelPct / 100) * reservoirCapacityL).toFixed(2)} L Now
             </button>
           </div>
         </div>

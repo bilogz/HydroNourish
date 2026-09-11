@@ -106,15 +106,23 @@ interface AppContextType {
   toggleSchedule: (id: string) => Promise<void>;
   dispenseNow: (scheduleId: string) => void;
   dispenseDirect: (deviceId: string, grams?: number, foodType?: string) => void;
+  openGateDirect: (deviceId: string) => Promise<void>;
+  closeGateDirect: (deviceId: string) => Promise<void>;
+  setPetEatingDirect: (deviceId: string, isEating: boolean) => Promise<void>;
   dispenseWaterDirect: (deviceId: string, amountMl?: number) => void;
   startPumpDirect: (deviceId: string) => Promise<void>;
   stopPumpDirect: (deviceId: string) => Promise<void>;
+  dispenseCleaningWaterDirect: (deviceId: string, amountMl?: number) => Promise<void>;
+  startDrainPumpDirect: (deviceId: string, durationMs?: number) => Promise<void>;
+  stopDrainPumpDirect: (deviceId: string) => Promise<void>;
+  runBowlSanitationCycle: (deviceId: string) => Promise<boolean>;
   toggleAutoRefillDirect: (deviceId: string, enable?: boolean) => Promise<void>;
   togglePumpMasterDirect: (deviceId: string) => Promise<void>;
   deactivatePumpDirect: (deviceId: string, deactivate?: boolean) => Promise<void>;
 
   refillWater: (deviceId: string) => void;
 
+  addAlert: (alertData: Omit<AIHealthAlert, 'id' | 'timestamp' | 'reviewStatus'>) => Promise<AIHealthAlert>;
   acknowledgeAlert: (alertId: string) => void;
   resolveAlert: (alertId: string) => void;
 
@@ -693,6 +701,30 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       isWater ? '💧 Automated Water Schedule Created' : '🍖 Automated Feeding Schedule Created',
       `Scheduled ${data.portionGrams}${isWater ? 'ml' : 'g'} at ${data.scheduledTime} for ${data.petName}.`
     );
+
+    // Push schedule directly to ESP32 node via LAN
+    try {
+      const targetDev = (devices || []).find((d) => d.id === newSch.deviceId) || devices[0];
+      const cleanIp = targetDev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+      if (cleanIp) {
+        fetch(`http://${cleanIp}/api/schedule/add`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: newSch.id,
+            type: newSch.type,
+            time: newSch.scheduledTime,
+            days: newSch.days || 'Everyday',
+            amount: newSch.portionGrams,
+            enabled: newSch.enabled,
+            pet_name: newSch.petName,
+            pet_id: newSch.petId
+          }),
+          mode: 'no-cors'
+        }).catch(() => {});
+      }
+    } catch {}
+
     await insertScheduleToSupabase(newSch);
   };
 
@@ -718,6 +750,19 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     const sch = (schedules ?? []).find((s) => s.id === id);
     setSchedules((prev) => prev.filter((s) => s.id !== id));
     showToast('info', 'Schedule Removed', `Schedule rule for ${sch?.petName || 'patient'} removed.`);
+
+    // Delete directly on ESP32 node if reachable
+    try {
+      const targetDev = (devices || []).find((d) => d.id === sch?.deviceId) || devices[0];
+      const cleanIp = targetDev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+      if (cleanIp && sch?.id) {
+        fetch(`http://${cleanIp}/api/schedule/delete?id=${encodeURIComponent(sch.id)}`, {
+          method: 'POST',
+          mode: 'no-cors'
+        }).catch(() => {});
+      }
+    } catch {}
+
     await deleteScheduleFromSupabase(id);
   };
 
@@ -731,6 +776,19 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       newEnabled ? 'Schedule Resumed' : 'Schedule Paused',
       `${sch.petName}'s schedule at ${sch.scheduledTime} is now ${newEnabled ? 'active' : 'paused'}.`
     );
+
+    // Toggle on ESP32
+    try {
+      const targetDev = (devices || []).find((d) => d.id === sch?.deviceId) || devices[0];
+      const cleanIp = targetDev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+      if (cleanIp && sch?.id) {
+        fetch(`http://${cleanIp}/api/schedule/toggle?id=${encodeURIComponent(sch.id)}&enabled=${newEnabled ? '1' : '0'}`, {
+          method: 'POST',
+          mode: 'no-cors'
+        }).catch(() => {});
+      }
+    } catch {}
+
     await updateScheduleInSupabase(id, { dispenseStatus: newEnabled ? 'Dispensed' : 'Failed' });
   };
 
@@ -782,7 +840,71 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       fetch('http://192.168.4.1/api/dispense/food', { method: 'POST', mode: 'no-cors' }).catch(() => {});
     } catch {}
 
+    // Optimistically update device gate state
+    setDevices((prev) =>
+      prev.map((d) => (d.id === targetDeviceId ? { ...d, foodGateOpen: true } : d))
+    );
+
     await insertScheduleToSupabase(newSch);
+  };
+
+  const openGateDirect = async (deviceId: string) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    setDevices((prev) =>
+      prev.map((d) => (d.id === deviceId ? { ...d, foodGateOpen: true } : d))
+    );
+    try {
+      if (cleanIp) {
+        fetch(`http://${cleanIp}/api/gate/open`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(`http://${cleanIp}/api/dispense/open`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      }
+      fetch('http://hydronourish.local/api/gate/open', { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      fetch('http://192.168.4.1/api/gate/open', { method: 'POST', mode: 'no-cors' }).catch(() => {});
+    } catch {}
+  };
+
+  const closeGateDirect = async (deviceId: string) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    setDevices((prev) =>
+      prev.map((d) => (d.id === deviceId ? { ...d, foodGateOpen: false, petEatingActive: false } : d))
+    );
+    try {
+      if (cleanIp) {
+        fetch(`http://${cleanIp}/api/gate/close`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(`http://${cleanIp}/api/dispense/close`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      }
+      fetch('http://hydronourish.local/api/gate/close', { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      fetch('http://192.168.4.1/api/gate/close', { method: 'POST', mode: 'no-cors' }).catch(() => {});
+    } catch {}
+
+    const newSch: FeedingSchedule = {
+      id: `SCH-CLOSE-${Date.now()}`,
+      deviceId: deviceId,
+      foodType: 'Close Food Gate',
+      portionGrams: 0,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      petId: dev?.assignedPetId || 'PET-001',
+      petName: dev?.assignedPetName || 'Pet',
+    };
+    await insertScheduleToSupabase(newSch);
+  };
+
+  const setPetEatingDirect = async (deviceId: string, isEating: boolean) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    setDevices((prev) =>
+      prev.map((d) => (d.id === deviceId ? { ...d, petEatingActive: isEating } : d))
+    );
+    try {
+      if (cleanIp) {
+        fetch(`http://${cleanIp}/api/pet/eating?eating=${isEating ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      }
+      fetch(`http://hydronourish.local/api/pet/eating?eating=${isEating ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      fetch(`http://192.168.4.1/api/pet/eating?eating=${isEating ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+    } catch {}
   };
 
   const dispenseWaterDirect = async (deviceId: string, amountMl: number = 500) => {
@@ -925,6 +1047,141 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     showToast('info', 'Water Pump Stopped', `Deactivated water pump relay on node ${deviceId}.`);
 
     await insertScheduleToSupabase(newSch);
+  };
+
+  // ─── Dual-Pump Sanitation & Drainage Handlers (Clean Water & 19W 12V Drain) ─
+  const dispenseCleaningWaterDirect = async (deviceId: string, amountMl: number = 200) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const petName = dev?.assignedPetName || 'Max';
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
+
+    // Update state to indicate cleaning rinse pump is running
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId
+          ? { ...d, isCleaningRinse: true, sanitationStatus: 'rinsing_water' }
+          : d
+      )
+    );
+
+    try {
+      const endpoints = [
+        `http://${cleanIp}/api/dispense/clean-water?amount=${amountMl}`,
+        `http://${cleanIp}/api/dispense/water?type=rinse&amount=${amountMl}`,
+        `http://192.168.100.159/api/dispense/clean-water?amount=${amountMl}`,
+        `http://hydronourish.local/api/dispense/clean-water?amount=${amountMl}`
+      ];
+      endpoints.forEach((url) => {
+        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+        const img = new Image();
+        img.src = `${url}&_t=${Date.now()}`;
+      });
+    } catch {}
+
+    showToast('info', '🚿 Cleaning Water Dispensed', `Dispensing fresh rinse water into bowl for ${petName} (${amountMl}ml).`);
+
+    setTimeout(() => {
+      setDevices((prev) =>
+        prev.map((d) => (d.id === deviceId ? { ...d, isCleaningRinse: false } : d))
+      );
+    }, 4500);
+  };
+
+  const startDrainPumpDirect = async (deviceId: string, durationMs: number = 8000) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
+
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId
+          ? { ...d, isDrainPumping: true, sanitationStatus: 'draining_19w' }
+          : d
+      )
+    );
+
+    try {
+      const endpoints = [
+        `http://${cleanIp}/api/pump/drain?duration=${durationMs}`,
+        `http://${cleanIp}/api/pump/drainage?state=1`,
+        `http://192.168.100.159/api/pump/drain?duration=${durationMs}`,
+        `http://hydronourish.local/api/pump/drain`
+      ];
+      endpoints.forEach((url) => {
+        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+        const img = new Image();
+        img.src = `${url}?_t=${Date.now()}`;
+      });
+    } catch {}
+
+    showToast('warning', '⚡ 19W 12V Drain Pump Active', `Pumping out rinse wastewater from bowl (${Math.round(durationMs / 1000)}s cycle)...`);
+
+    setTimeout(() => {
+      setDevices((prev) =>
+        prev.map((d) =>
+          d.id === deviceId
+            ? { ...d, isDrainPumping: false, sanitationStatus: 'completed' }
+            : d
+        )
+      );
+    }, durationMs);
+  };
+
+  const stopDrainPumpDirect = async (deviceId: string) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
+
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId
+          ? { ...d, isDrainPumping: false, isCleaningRinse: false, sanitationStatus: 'idle' }
+          : d
+      )
+    );
+
+    try {
+      const endpoints = [
+        `http://${cleanIp}/api/pump/drain?state=0`,
+        `http://${cleanIp}/api/pump/drain/stop`,
+        `http://192.168.100.159/api/pump/drain?state=0`
+      ];
+      endpoints.forEach((url) => {
+        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+      });
+    } catch {}
+
+    showToast('info', 'Drain Pump Stopped', '19W 12V drainage pump halted.');
+  };
+
+  const runBowlSanitationCycle = async (deviceId: string): Promise<boolean> => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const petName = dev?.assignedPetName || 'Max';
+
+    showToast('info', '🔄 Automated Sanitation Sequence Initiated', `Phase 1: Dispensing clean rinse water for ${petName}...`);
+
+    // Stage 1: Dispense Cleaning Rinse Water (Pump 1)
+    await dispenseCleaningWaterDirect(deviceId, 200);
+
+    // Allow 4.5 seconds for water flush & debris detachment
+    await new Promise((res) => setTimeout(res, 4500));
+
+    // Stage 2: 19W 12V High-Power Evacuation Drainage Pump (Pump 2)
+    showToast('warning', '⚡ Phase 2: Evacuating Water', '19W 12V water pump engaged to drain wastewater.');
+    await startDrainPumpDirect(deviceId, 7000);
+
+    // Allow 7.5 seconds for evacuation
+    await new Promise((res) => setTimeout(res, 7500));
+
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId ? { ...d, sanitationStatus: 'completed' } : d
+      )
+    );
+
+    showToast('success', '✨ Sanitation Cycle Completed', 'Food bowl washed with clean water and drained by 19W 12V pump.');
+    return true;
   };
 
   const toggleAutoRefillDirect = async (deviceId: string, enable?: boolean) => {
@@ -1151,17 +1408,22 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
           if (executedMinutes.has(runKey)) continue;
           executedMinutes.add(runKey);
 
-          // Day match check
-          const daysStr = (sch.days || sch.scheduledTime).toLowerCase();
+          // Accurate Day-of-week match check
+          const daysStr = (sch.days || sch.scheduledTime || '').toLowerCase();
           let dayMatches = true;
-          if (daysStr.includes('weekday') && (curDay === 0 || curDay === 6)) dayMatches = false;
-          if (daysStr.includes('weekend') && curDay >= 1 && curDay <= 5) dayMatches = false;
 
-          // Day token check
-          if (daysStr.includes(',') || daysStr.includes('mon') || daysStr.includes('tue') || daysStr.includes('wed') || daysStr.includes('thu') || daysStr.includes('fri') || daysStr.includes('sat') || daysStr.includes('sun')) {
+          if (daysStr.includes('everyday') || daysStr.includes('daily') || daysStr.length === 0) {
+            dayMatches = true;
+          } else if (daysStr.includes('weekday')) {
+            dayMatches = (curDay >= 1 && curDay <= 5);
+          } else if (daysStr.includes('weekend')) {
+            dayMatches = (curDay === 0 || curDay === 6);
+          } else {
             const dayTokens = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-            const tokenMatched = dayTokens.some((tok, idx) => daysStr.includes(tok) && curDay === idx);
-            if (tokenMatched) dayMatches = true;
+            const hasDayToken = dayTokens.some((tok) => daysStr.includes(tok));
+            if (hasDayToken) {
+              dayMatches = dayTokens.some((tok, idx) => daysStr.includes(tok) && curDay === idx);
+            }
           }
 
           if (dayMatches) {
@@ -1183,7 +1445,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
           }
         }
       }
-    }, 12000);
+    }, 5000);
 
     return () => clearInterval(schedulerTimer);
   }, [schedules]);
@@ -1214,6 +1476,25 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   // ─── Alert Handlers ──────────────────────────────────────────────────
+  const addAlert = async (alertData: Omit<AIHealthAlert, 'id' | 'timestamp' | 'reviewStatus'>): Promise<AIHealthAlert> => {
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const newAlert: AIHealthAlert = {
+      ...alertData,
+      id: `ALT-${Date.now().toString().slice(-4)}`,
+      timestamp,
+      reviewStatus: 'Unreviewed',
+    };
+    setAlerts((prev) => [newAlert, ...prev]);
+    if (newAlert.severity === 'Critical') {
+      playNotificationChime();
+      showToast('error', 'Critical Health Alert', `${newAlert.petName}: ${newAlert.alertType}`);
+    } else {
+      showToast('warning', 'AI Health Observation', `${newAlert.petName}: ${newAlert.alertType}`);
+    }
+    await insertAIAlertToSupabase(newAlert);
+    return newAlert;
+  };
+
   const acknowledgeAlert = async (alertId: string) => {
     setAlerts((prev) =>
       prev.map((a) => (a.id === alertId ? { ...a, reviewStatus: 'In Review' } : a))
@@ -1568,13 +1849,21 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         toggleSchedule,
         dispenseNow,
         dispenseDirect,
+        openGateDirect,
+        closeGateDirect,
+        setPetEatingDirect,
         dispenseWaterDirect,
         startPumpDirect,
         stopPumpDirect,
+        dispenseCleaningWaterDirect,
+        startDrainPumpDirect,
+        stopDrainPumpDirect,
+        runBowlSanitationCycle,
         toggleAutoRefillDirect,
         togglePumpMasterDirect,
         deactivatePumpDirect,
         refillWater,
+        addAlert,
         acknowledgeAlert,
         resolveAlert,
         addDevice,

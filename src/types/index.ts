@@ -75,6 +75,7 @@ export interface HydrationLog {
   amountMl: number;
   timestamp: string;
   reservoirLevelPct: number;
+  reservoirLiters?: number;
   sessionId?: string;
 }
 
@@ -116,6 +117,8 @@ export interface Device {
   wifiSsid?: string;
   foodLevelPct: number;
   waterLevelPct: number;
+  waterLiters?: number;
+  reservoirCapacityLiters?: number;
   waterRawAdc?: number;
   foodBowlWeightGrams?: number;
   waterQualityPpm?: number;
@@ -127,8 +130,13 @@ export interface Device {
   ipAddress?: string;
   cameraIp?: string;
   isPumping?: boolean;
+  isDrainPumping?: boolean;
+  isCleaningRinse?: boolean;
   autoRefillEnabled?: boolean;
   isPumpDeactivated?: boolean;
+  sanitationStatus?: 'idle' | 'pet_eating' | 'rinsing_water' | 'draining_19w' | 'completed' | 'aborted_pet_returned';
+  foodGateOpen?: boolean;
+  petEatingActive?: boolean;
   lastSeenAt?: string | null;
   uptimeSeconds?: number;
 }
@@ -137,6 +145,8 @@ export interface DeviceTelemetryPayload {
   deviceId: string;
   timestamp: string;
   waterLevelPercent: number;
+  waterLiters?: number;
+  reservoirCapacityLiters?: number;
   waterRawAdc?: number;
   foodLevelPercent: number;
   tdsPpm?: number;
@@ -145,6 +155,8 @@ export interface DeviceTelemetryPayload {
   pumpActive?: boolean;
   firmwareVersion?: string;
   cameraIp?: string;
+  foodGateOpen?: boolean;
+  petEatingActive?: boolean;
   uptimeSeconds?: number;
 }
 
@@ -339,5 +351,58 @@ export interface ContactInquiry {
   repliedAt?: string;
   replyMessage?: string;
   messagesThread?: ChatMessageItem[];
+}
+
+// ─── AI Camera Control & Vision Analytics Types ─────────────────────────
+
+export type AIControlMode = 'manual' | 'advisory' | 'autopilot';
+export type CameraSourceType = 'esp32' | 'webcam' | 'demo';
+export type BowlSanitationStage = 'idle' | 'pet_eating' | 'rinsing_water' | 'draining_19w' | 'completed' | 'aborted_pet_returned';
+
+export interface VisionActionRecommendation {
+  dispenseFood?: boolean;
+  portionGrams?: number;
+  refillWater?: boolean;
+  waterAmountMl?: number;
+  cleanRinse?: boolean;
+  drain19WPump?: boolean;
+  petEatingActive?: boolean;
+  toggleFlash?: boolean;
+  triggerAlert?: boolean;
+  alertReason?: string;
+  safetyLockout?: boolean;
+}
+
+export interface PetVisionAnalyticsRecord {
+  id: string;
+  petId: string;
+  petName: string;
+  species: string;
+  breed: string;
+  timestamp: string;
+  confidenceScore: number;
+  activity: 'Feeding' | 'Hydrating' | 'Stationary / Resting' | 'Approaching Bowl' | 'None Detected';
+  healthScore: number;
+  dwellTimeSeconds: number;
+  ambientLux: number;
+  actionTriggered:
+    | 'None'
+    | 'Auto-Dispensed'
+    | 'Auto-Refilled'
+    | 'Auto-Flashlight'
+    | 'Distress Alert'
+    | 'Clean-Rinse-Water'
+    | '19W-Drain-Pump'
+    | 'Full-Sanitation-Cycle';
+  actionDetails?: string;
+  snapshotThumbnail?: string;
+  clinicalNotes: string[];
+  provider: string;
+  boundingBox?: {
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  };
 }
 

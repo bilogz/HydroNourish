@@ -346,6 +346,18 @@ class USBSerialService {
     return this.sendCommand({ action: 'motor', state, steps });
   }
 
+  public async dispenseCleaningWater(durationMs: number = 4500): Promise<boolean> {
+    return this.sendCommand({ action: 'clean_water', duration: durationMs });
+  }
+
+  public async run19WDrainPump(durationMs: number = 7000): Promise<boolean> {
+    return this.sendCommand({ action: 'drain_19w', duration: durationMs });
+  }
+
+  public async runBowlSanitationCycle(): Promise<boolean> {
+    return this.sendCommand({ action: 'sanitation_cycle' });
+  }
+
   public async getTelemetry(): Promise<boolean> {
     return this.sendCommand({ action: 'status' });
   }
