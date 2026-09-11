@@ -103,6 +103,9 @@ export const DevicesPage: React.FC = () => {
     ? (devices || []).find(d => d.id === selectedDeviceId) || null
     : null;
 
+  // Primary active/featured device node
+  const featuredDevice = (devices || []).find(d => d.id === 'HN-NODE-F778') || (devices || [])[0] || null;
+
   // Auto-trigger live hardware scan on modal open
   useEffect(() => {
     if (pairWifiModalOpen) {
