@@ -158,7 +158,7 @@ export const FeedingPage: React.FC = () => {
         <StatCard
           title="Total Meals Served Today"
           value={isDeviceConnected ? (feedingLogs || []).length : 0}
-          subtitle={isDeviceConnected ? "All Heritage Ward Patients" : "No device connected"}
+          subtitle={isDeviceConnected ? "All Heritage Clinic Pets" : "No device connected"}
           icon={Utensils}
           iconBgColor={isDeviceConnected ? "bg-rose-50" : "bg-slate-100"}
           iconTextColor={isDeviceConnected ? "text-rose-600" : "text-slate-400"}
@@ -192,7 +192,7 @@ export const FeedingPage: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-extrabold text-slate-900">Automated Feeding Schedules</h2>
-            <p className="text-xs text-slate-500">Scheduled automated dispensing rules per patient (10 per page)</p>
+            <p className="text-xs text-slate-500">Scheduled automated dispensing rules per pet (10 per page)</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -467,7 +467,7 @@ export const FeedingPage: React.FC = () => {
           </p>
 
           <div>
-            <label className="block font-bold text-slate-700 uppercase mb-1">Target Patient</label>
+            <label className="block font-bold text-slate-700 uppercase mb-1">Target Pet</label>
             <select
               value={customPetId}
               onChange={e => setCustomPetId(e.target.value)}
@@ -535,7 +535,7 @@ export const FeedingPage: React.FC = () => {
       >
         <form onSubmit={handleAddSubmit} className="space-y-4 text-xs">
           <div>
-            <label className="block font-bold text-slate-700 uppercase mb-1">Select Patient *</label>
+            <label className="block font-bold text-slate-700 uppercase mb-1">Select Pet *</label>
             <select
               value={formData.petId}
               onChange={e => {

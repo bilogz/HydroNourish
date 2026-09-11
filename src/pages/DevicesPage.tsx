@@ -205,7 +205,7 @@ export const DevicesPage: React.FC = () => {
       fetch(`http://${cleanIp}/api/setup/pet?name=${encodeURIComponent(pet.name)}&id=${encodeURIComponent(pet.id)}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
     }
 
-    showToast('success', 'Patient Assigned', `${pet.name} is now assigned to node ${device.id}.`);
+    showToast('success', 'Pet Assigned', `${pet.name} is now assigned to node ${device.id}.`);
     setAssignPetModalOpen(false);
     setPetSearchQuery('');
   };
@@ -224,7 +224,7 @@ export const DevicesPage: React.FC = () => {
       });
     }
 
-    showToast('info', 'Patient Unassigned', `Patient was unassigned from node ${device.id}.`);
+    showToast('info', 'Pet Unassigned', `Pet was unassigned from node ${device.id}.`);
     setAssignPetModalOpen(false);
   };
 
@@ -707,20 +707,20 @@ export const DevicesPage: React.FC = () => {
 
                       {/* Diagnostic Parameters */}
                       <div className="mt-4 space-y-3">
-                        {/* Assigned Patient Section */}
+                        {/* Assigned Pet Section */}
                         {assignedPet ? (
                           <div className="p-3 bg-rose-50/50 rounded-2xl border border-rose-200/80 space-y-2 shadow-2xs">
                             <div className="flex items-center justify-between">
                               <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-700 flex items-center gap-1.5">
                                 <Dog className="w-3.5 h-3.5 text-rose-600" />
-                                Assigned Patient
+                                Assigned Pet
                               </span>
                               <div className="flex items-center gap-1.5">
                                 <button
                                   type="button"
                                   onClick={() => setAssignPetModalOpen(true)}
                                   className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer shadow-2xs"
-                                  title="Change assigned patient"
+                                  title="Change assigned pet"
                                 >
                                   Change
                                 </button>
@@ -728,7 +728,7 @@ export const DevicesPage: React.FC = () => {
                                   type="button"
                                   onClick={() => handleUnassignPet(featuredDevice)}
                                   className="text-[10px] font-bold text-slate-400 hover:text-rose-600 hover:bg-rose-100/60 px-1.5 py-0.5 rounded-lg transition-colors cursor-pointer"
-                                  title="Unassign patient from this station"
+                                  title="Unassign pet from this station"
                                 >
                                   Unassign
                                 </button>
@@ -782,8 +782,8 @@ export const DevicesPage: React.FC = () => {
                                 <Dog className="w-5 h-5" />
                               </div>
                               <div className="min-w-0">
-                                <p className="text-xs font-bold text-slate-800 truncate">No Patient Assigned</p>
-                                <p className="text-[10px] text-slate-500 truncate">Assign a patient to track eating & hydration</p>
+                                <p className="text-xs font-bold text-slate-800 truncate">No Pet Assigned</p>
+                                <p className="text-[10px] text-slate-500 truncate">Assign a pet to track eating & hydration</p>
                               </div>
                             </div>
                             <button
@@ -1521,17 +1521,17 @@ export const DevicesPage: React.FC = () => {
       >
         <form onSubmit={handleConnectSubmit} className="space-y-4 text-xs">
           <div>
-            <label className="block font-bold text-slate-700 uppercase mb-1">Assign to Patient Animal</label>
+            <label className="block font-bold text-slate-700 uppercase mb-1">Assign to Pet</label>
             {pets.length > 0 ? (
               <select
                 value={formData.petId}
                 onChange={e => setFormData({ ...formData, petId: e.target.value })}
                 className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:border-rose-500 focus:outline-none bg-white text-slate-800"
               >
-                <option value="">Select a registered patient to assign (or Leave Standby)...</option>
+                <option value="">Select a registered pet to assign (or Leave Standby)...</option>
                 {pets.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.name} ({p.species} • {p.breed || 'Mixed'} — Owner: {p.ownerName || 'Clinic Patient'})
+                    {p.name} ({p.species} • {p.breed || 'Mixed'} — Owner: {p.ownerName || 'Clinic Pet'})
                   </option>
                 ))}
               </select>
@@ -1539,7 +1539,7 @@ export const DevicesPage: React.FC = () => {
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 space-y-1">
                 <p className="font-bold">No registered pets in database</p>
                 <p className="text-[11px] text-amber-700 leading-tight">
-                  This ESP32 node will be registered in Standby / Vacant mode until a patient is assigned.
+                  This ESP32 node will be registered in Standby / Vacant mode until a pet is assigned.
                 </p>
               </div>
             )}
@@ -1652,7 +1652,7 @@ export const DevicesPage: React.FC = () => {
                 </div>
               </div>
               <div className="sm:col-span-2">
-                <span className="text-slate-400 font-bold uppercase text-[10px]">Assigned Patient:</span>
+                <span className="text-slate-400 font-bold uppercase text-[10px]">Assigned Pet:</span>
                 {(() => {
                   const devPet = pets.find(p => p.id === selectedDevice.assignedPetId || p.name === selectedDevice.assignedPetName);
                   if (devPet) {
@@ -1722,8 +1722,8 @@ export const DevicesPage: React.FC = () => {
           setAssignPetModalOpen(false);
           setPetSearchQuery('');
         }}
-        title={`Assign Patient to Station (${(featuredDevice || selectedDevice)?.id || 'Node'})`}
-        subtitle="Choose a clinic patient to pair with this Smart Feeder & Hydrator Node"
+        title={`Assign Pet to Station (${(featuredDevice || selectedDevice)?.id || 'Node'})`}
+        subtitle="Choose a clinic pet to pair with this Smart Feeder & Hydrator Node"
       >
         <div className="space-y-4 text-xs">
           {/* Search bar */}
@@ -1731,7 +1731,7 @@ export const DevicesPage: React.FC = () => {
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search patients by name, breed, or owner..."
+              placeholder="Search pets by name, breed, or owner..."
               value={petSearchQuery}
               onChange={(e) => setPetSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
@@ -1746,7 +1746,7 @@ export const DevicesPage: React.FC = () => {
                   <Dog className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Current Patient:</span>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Current Pet:</span>
                   <span className="font-bold text-slate-800 truncate block">
                     {(featuredDevice || selectedDevice)?.assignedPetName}
                   </span>
@@ -1857,7 +1857,7 @@ export const DevicesPage: React.FC = () => {
             {pets.length === 0 && (
               <div className="text-center py-8 text-slate-400">
                 <Dog className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No pet patients found in clinic records.</p>
+                <p>No pets found in clinic records.</p>
               </div>
             )}
           </div>

@@ -242,7 +242,7 @@ export const HydrationPage: React.FC = () => {
         <StatCard
           title="Total Daily Intake"
           value={isDeviceConnected ? `${totalWaterConsumedMl.toLocaleString()} ml` : '0 ml'}
-          subtitle={selectedDevice?.assignedPetName ? `Intake for ${selectedDevice.assignedPetName}` : 'All Hospital Patients'}
+          subtitle={selectedDevice?.assignedPetName ? `Intake for ${selectedDevice.assignedPetName}` : 'All Clinic Pets'}
           icon={Droplets}
           iconBgColor={isDeviceConnected ? 'bg-sky-50' : 'bg-slate-100'}
           iconTextColor={isDeviceConnected ? 'text-sky-600' : 'text-slate-400'}
@@ -252,7 +252,7 @@ export const HydrationPage: React.FC = () => {
         <StatCard
           title="Daily Fluid Target"
           value={isDeviceConnected ? `${totalHydrationTargetMl.toLocaleString()} ml` : '0 ml'}
-          subtitle={isDeviceConnected ? 'All Active Patients' : 'No device connected'}
+          subtitle={isDeviceConnected ? 'All Active Pets' : 'No device connected'}
           icon={CheckCircle2}
           iconBgColor={isDeviceConnected ? 'bg-rose-50' : 'bg-slate-100'}
           iconTextColor={isDeviceConnected ? 'text-rose-600' : 'text-slate-400'}
@@ -327,7 +327,7 @@ export const HydrationPage: React.FC = () => {
 
               <div className="flex-1 space-y-3 text-xs">
                 <div>
-                  <span className="text-slate-400 font-bold uppercase text-[10px]">Assigned Patient</span>
+                  <span className="text-slate-400 font-bold uppercase text-[10px]">Assigned Pet</span>
                   <p className="text-base font-extrabold text-slate-900">
                     {selectedDevice.assignedPetName || pets.find(p => p.id === selectedDevice.assignedPetId)?.name || pets[0]?.name || 'Max'}
                   </p>
@@ -482,7 +482,7 @@ export const HydrationPage: React.FC = () => {
               Automated Water & Pump Schedules
             </h2>
             <p className="text-xs text-slate-500">
-              Scheduled automated pump activation rules per patient (10 per page)
+              Scheduled automated pump activation rules per pet (10 per page)
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -501,7 +501,7 @@ export const HydrationPage: React.FC = () => {
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-3">Patient</th>
+                  <th className="px-4 py-3">Pet</th>
                   <th className="px-4 py-3">Dispense Target / Pump Duration</th>
                   <th className="px-4 py-3">Scheduled Time & Days</th>
                   <th className="px-4 py-3">Status</th>
@@ -707,7 +707,7 @@ export const HydrationPage: React.FC = () => {
               <table className="w-full text-left text-xs text-slate-700">
                 <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider">
                   <tr>
-                    <th className="px-4 py-3">Patient</th>
+                    <th className="px-4 py-3">Pet</th>
                     <th className="px-4 py-3">Intake / Refill Volume</th>
                     <th className="px-4 py-3">Timestamp</th>
                     <th className="px-4 py-3">Reservoir Volume</th>
@@ -852,7 +852,7 @@ export const HydrationPage: React.FC = () => {
       >
         <form onSubmit={handleAddWaterSubmit} className="space-y-4 text-xs">
           <div>
-            <label className="block font-bold text-slate-700 uppercase mb-1">Select Patient *</label>
+            <label className="block font-bold text-slate-700 uppercase mb-1">Select Pet *</label>
             <select
               value={waterFormData.petId}
               onChange={(e) => {
