@@ -117,15 +117,15 @@ export const HydrationPage: React.FC = () => {
     return pets.reduce((acc, pet) => acc + (pet.hydrationTarget || 850), 0);
   }, [isDeviceConnected, pets]);
 
-  const reservoirCapacityL = selectedDevice?.reservoirCapacityLiters || 2.50;
-  const currentLiters = selectedDevice
-    ? (selectedDevice.waterLiters !== undefined ? selectedDevice.waterLiters : Number(((selectedDevice.waterLevelPct || 0) / 100 * reservoirCapacityL).toFixed(2)))
+  const reservoirCapacityMl = Math.round((selectedDevice?.reservoirCapacityLiters || 2.50) * 1000); // 2500 ml
+  const currentWaterMl = selectedDevice
+    ? Math.round(selectedDevice.waterLiters !== undefined ? selectedDevice.waterLiters * 1000 : ((selectedDevice.waterLevelPct || 0) / 100 * reservoirCapacityMl))
     : null;
 
   const lowWaterDevices = useMemo(() => {
     if (!isDeviceConnected || !selectedDevice) return [];
-    return (selectedDevice.waterLiters !== undefined ? selectedDevice.waterLiters < 0.60 : selectedDevice.waterLevelPct < 25) ? [selectedDevice] : [];
-  }, [isDeviceConnected, selectedDevice]);
+    return (currentWaterMl !== null ? currentWaterMl < 600 : selectedDevice.waterLevelPct < 25) ? [selectedDevice] : [];
+  }, [isDeviceConnected, selectedDevice, currentWaterMl]);
 
   // Dynamic Intake Rate Curve
   const dynamicHydrationChartData = useMemo(() => {
@@ -261,8 +261,8 @@ export const HydrationPage: React.FC = () => {
         />
         <StatCard
           title="Reservoir Water Volume"
-          value={isDeviceConnected && currentLiters !== null ? `${currentLiters.toFixed(2)} L` : 'N/A'}
-          subtitle={isDeviceConnected ? `Capacity: ${reservoirCapacityL.toFixed(2)} Liters` : 'No device connected'}
+          value={isDeviceConnected && currentWaterMl !== null ? `${currentWaterMl} ml` : 'N/A'}
+          subtitle={isDeviceConnected ? `Capacity: ${reservoirCapacityMl} ml` : 'No device connected'}
           icon={Cpu}
           iconBgColor={isDeviceConnected ? 'bg-indigo-50' : 'bg-slate-100'}
           iconTextColor={isDeviceConnected ? 'text-indigo-600' : 'text-slate-400'}
@@ -274,41 +274,32 @@ export const HydrationPage: React.FC = () => {
           value={isDeviceConnected ? lowWaterDevices.length : 0}
           subtitle={isDeviceConnected ? 'Refill Action Required' : 'No active station'}
           icon={AlertTriangle}
-          iconBgColor={isDeviceConnected ? 'bg-amber-50' : 'bg-slate-100'}
-          iconTextColor={isDeviceConnected ? 'text-amber-600' : 'text-slate-400'}
+          iconBgColor={isDeviceConnected && lowWaterDevices.length > 0 ? 'bg-amber-50' : 'bg-slate-100'}
+          iconTextColor={isDeviceConnected && lowWaterDevices.length > 0 ? 'text-amber-600' : 'text-slate-400'}
           badgeText={isDeviceConnected ? (lowWaterDevices.length > 0 ? 'Needs Refill' : 'All Clear') : 'Offline'}
           badgeType={isDeviceConnected ? (lowWaterDevices.length > 0 ? 'warning' : 'success') : 'info'}
         />
       </div>
 
-      {/* ================= WATER LEVEL GAUGE & REFILL ACTIONS ================= */}
+      {/* Main Hydration Dashboard Visuals */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Selected Dispenser Reservoir Gauge */}
+        {/* Visual Water Level Gauge & Node Diagnostics Card */}
         {!isDeviceConnected || !selectedDevice ? (
-          <div className="lg:col-span-5 clinic-card p-6 flex flex-col items-center justify-center text-center space-y-4 bg-slate-50/60 border-2 border-dashed border-slate-300 min-h-[320px]">
-            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shadow-xs">
-              <WifiOff className="w-8 h-8" />
+          <div className="lg:col-span-5 clinic-card p-6 flex flex-col items-center justify-center text-center space-y-3 min-h-[320px]">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+              <WifiOff className="w-7 h-7" />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-base font-extrabold text-slate-900">No Device Connected</h3>
-              <p className="text-xs text-slate-500 max-w-xs">
-                The smart hydration station is offline or not currently connected.
-              </p>
-            </div>
-            <Link
-              to="/app/devices"
-              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Connect Device Node
-            </Link>
+            <h3 className="font-extrabold text-slate-800 text-sm">Station Offline</h3>
+            <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+              No live HydroNourish IoT station is broadcasting on this channel. Pair your unit in Devices to view real-time reservoir metrics.
+            </p>
           </div>
         ) : (
           <div className="lg:col-span-5 clinic-card p-6 flex flex-col justify-between space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900">Reservoir Water Volume Gauge</h3>
-                <p className="text-xs text-slate-500">Live ultrasonic depth measurement in Liters (L)</p>
+                <p className="text-xs text-slate-500">Live ultrasonic depth measurement in milliliters (ml)</p>
               </div>
               <span className="px-3 py-1 text-xs font-mono font-bold bg-slate-100 text-slate-700 border border-slate-300 rounded-xl">
                 {selectedDevice.id}
@@ -319,17 +310,17 @@ export const HydrationPage: React.FC = () => {
             <div className="flex items-center gap-6 p-4 rounded-2xl bg-slate-50 border border-slate-100">
               <div className="relative w-24 h-44 rounded-2xl border-4 border-slate-300 bg-white overflow-hidden shadow-inner flex flex-col justify-end">
                 <div
-                  style={{ height: `${Math.min(100, Math.max(0, ((currentLiters ?? 0) / reservoirCapacityL) * 100))}%` }}
+                  style={{ height: `${Math.min(100, Math.max(0, ((currentWaterMl ?? 0) / reservoirCapacityMl) * 100))}%` }}
                   className="w-full bg-gradient-to-t from-sky-600 via-teal-500 to-sky-400 transition-all duration-700 relative"
                 >
                   <div className="absolute top-0 inset-x-0 h-2 bg-white/40 animate-pulse" />
                 </div>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="font-extrabold text-slate-900 text-lg drop-shadow-xs">
-                    {(currentLiters ?? 0).toFixed(2)} L
+                  <span className="font-extrabold text-slate-900 text-base drop-shadow-xs">
+                    {currentWaterMl ?? 0} ml
                   </span>
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
-                    / {reservoirCapacityL.toFixed(2)} L
+                    / {reservoirCapacityMl} ml
                   </span>
                 </div>
               </div>
@@ -344,14 +335,14 @@ export const HydrationPage: React.FC = () => {
                 <div>
                   <span className="text-slate-400 font-bold uppercase text-[10px]">Reservoir Volume</span>
                   <p className="text-sm font-extrabold text-sky-700">
-                    {(currentLiters ?? 0).toFixed(2)} Liters <span className="text-xs font-normal text-slate-500">({Math.round((currentLiters ?? 0) * 1000)} ml)</span>
+                    {currentWaterMl ?? 0} ml
                   </p>
                 </div>
                 <div>
                   <span className="text-slate-400 font-bold uppercase text-[10px]">Refill Status</span>
                   <div className="mt-1">
                     <StatusBadge
-                      status={(currentLiters ?? 0) < 0.60 ? 'Warning' : 'Online'}
+                      status={(currentWaterMl ?? 0) < 600 ? 'Warning' : 'Online'}
                       size="sm"
                     />
                   </div>
@@ -689,7 +680,7 @@ export const HydrationPage: React.FC = () => {
                       {dev.assignedPetName || pets.find(p => p.id === dev.assignedPetId)?.name || pets[0]?.name || 'Max'} ({dev.id})
                     </span>
                     <p className="text-xs text-amber-700 font-semibold mt-0.5">
-                      Reservoir Volume: {(dev.waterLiters !== undefined ? dev.waterLiters : ((dev.waterLevelPct || 0) / 100) * 2.50).toFixed(2)} Liters
+                      Reservoir Volume: {Math.round(dev.waterLiters !== undefined ? dev.waterLiters * 1000 : ((dev.waterLevelPct || 0) / 100) * 2500)} ml
                     </p>
                   </div>
                   <button
@@ -736,7 +727,7 @@ export const HydrationPage: React.FC = () => {
                         <td className="px-4 py-3 font-bold text-sky-700">{formatHydration(log.amountMl)}</td>
                         <td className="px-4 py-3 text-slate-500">{log.timestamp}</td>
                         <td className="px-4 py-3 font-semibold text-slate-800">
-                          {(log.reservoirLiters !== undefined ? log.reservoirLiters : ((log.reservoirLevelPct || 0) / 100) * 2.50).toFixed(2)} L
+                          {Math.round(log.reservoirLiters !== undefined ? log.reservoirLiters * 1000 : ((log.reservoirLevelPct || 0) / 100) * 2500)} ml
                         </td>
                       </tr>
                     ))
@@ -757,24 +748,23 @@ export const HydrationPage: React.FC = () => {
                   <button
                     onClick={() => setLogPage(Math.max(1, currentLogPage - 1))}
                     disabled={currentLogPage === 1}
-                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
-                    title="Previous 10"
+                    className="p-1 rounded-lg border border-slate-300 text-slate-600 hover:bg-white disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                    title="Previous Page"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
 
-                  {/* Interactive Carousel Bullets */}
-                  <div className="flex items-center gap-1.5 px-2">
-                    {Array.from({ length: totalLogPages }, (_, i) => i + 1).map((page) => (
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalLogPages }).map((_, idx) => (
                       <button
-                        key={page}
-                        onClick={() => setLogPage(page)}
-                        className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
-                          currentLogPage === page
-                            ? 'w-6 bg-sky-600 shadow-xs'
-                            : 'w-2 bg-slate-300 hover:bg-slate-400'
+                        key={idx}
+                        onClick={() => setLogPage(idx + 1)}
+                        className={`transition-all rounded-full cursor-pointer ${
+                          currentLogPage === idx + 1
+                            ? 'w-5 h-2 bg-sky-600'
+                            : 'w-2 h-2 bg-slate-300 hover:bg-slate-400'
                         }`}
-                        title={`Page ${page}`}
+                        title={`Page ${idx + 1}`}
                       />
                     ))}
                   </div>
@@ -782,8 +772,8 @@ export const HydrationPage: React.FC = () => {
                   <button
                     onClick={() => setLogPage(Math.min(totalLogPages, currentLogPage + 1))}
                     disabled={currentLogPage === totalLogPages}
-                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
-                    title="Next 10"
+                    className="p-1 rounded-lg border border-slate-300 text-slate-600 hover:bg-white disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                    title="Next Page"
                   >
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
@@ -794,7 +784,7 @@ export const HydrationPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ================= CUSTOM MANUAL WATER PUMP MODAL (LITERS SCALE) ================= */}
+      {/* ================= CUSTOM MANUAL WATER PUMP MODAL (ML SCALE) ================= */}
       <Modal
         isOpen={customWaterModalOpen}
         onClose={() => setCustomWaterModalOpen(false)}
@@ -809,7 +799,7 @@ export const HydrationPage: React.FC = () => {
           <div>
             <div className="flex justify-between items-center mb-1">
               <label className="font-bold text-slate-700 uppercase">Target Water Dispense Volume</label>
-              <span className="font-bold text-sky-600 text-sm">{((customWaterLevelPct / 100) * reservoirCapacityL).toFixed(2)} Liters ({Math.round((customWaterLevelPct / 100) * reservoirCapacityL * 1000)} ml)</span>
+              <span className="font-bold text-sky-600 text-sm">{Math.round((customWaterLevelPct / 100) * reservoirCapacityMl)} ml</span>
             </div>
             <input
               type="range"
@@ -821,17 +811,17 @@ export const HydrationPage: React.FC = () => {
               className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-500"
             />
             <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
-              <span>0.15 L (Sip)</span>
-              <span>0.60 L</span>
-              <span>1.25 L (Half)</span>
-              <span>1.88 L</span>
-              <span>{reservoirCapacityL.toFixed(2)} L (Full)</span>
+              <span>125 ml (Sip)</span>
+              <span>625 ml</span>
+              <span>1250 ml (Half)</span>
+              <span>1875 ml</span>
+              <span>{reservoirCapacityMl} ml (Full)</span>
             </div>
           </div>
 
           <div className="p-3 bg-sky-50 rounded-xl border border-sky-200/60 text-sky-800 text-[11px] flex items-center gap-2">
             <Droplets className="w-4 h-4 text-sky-600 shrink-0" />
-            <span>Water pump on node <strong>{selectedDevice?.id || 'HN-NODE-F778'}</strong> will activate to dispense <strong>{((customWaterLevelPct / 100) * reservoirCapacityL).toFixed(2)} Liters</strong> (~{Math.round(customWaterLevelPct * 30)} ms).</span>
+            <span>Water pump on node <strong>{selectedDevice?.id || 'HN-NODE-F778'}</strong> will activate to dispense <strong>{Math.round((customWaterLevelPct / 100) * reservoirCapacityMl)} ml</strong> (~{Math.round(customWaterLevelPct * 30)} ms).</span>
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
@@ -847,7 +837,7 @@ export const HydrationPage: React.FC = () => {
               onClick={handleExecuteCustomWater}
               className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-sm cursor-pointer active:scale-95"
             >
-              Pump {((customWaterLevelPct / 100) * reservoirCapacityL).toFixed(2)} L Now
+              Pump {Math.round((customWaterLevelPct / 100) * reservoirCapacityMl)} ml Now
             </button>
           </div>
         </div>

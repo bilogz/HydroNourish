@@ -11,10 +11,7 @@ export const formatWeight = (kg: number): string => {
 };
 
 export const formatHydration = (ml: number): string => {
-  if (ml >= 1000) {
-    return `${(ml / 1000).toFixed(2)} L`;
-  }
-  return `${ml} ml`;
+  return `${Math.round(ml)} ml`;
 };
 
 export const getHealthBadgeColor = (status: 'Healthy' | 'Attention Needed' | 'Critical' | string) => {

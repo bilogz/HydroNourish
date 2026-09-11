@@ -60,6 +60,7 @@ export const DevicesPage: React.FC = () => {
     toggleAutoRefillDirect,
     togglePumpMasterDirect,
     deactivatePumpDirect,
+    tareScaleDirect,
   } = useAppContext();
 
   const [connectModalOpen, setConnectModalOpen] = useState(false);
@@ -178,6 +179,7 @@ export const DevicesPage: React.FC = () => {
 
   const handleCalibrateConfirm = () => {
     if (selectedDevice) {
+      tareScaleDirect(selectedDevice.id);
       showToast('success', 'Calibration Signal Sent', `Zero-point tare calibration sequence executed on node ${selectedDevice.id}.`);
     }
   };
@@ -698,15 +700,30 @@ export const DevicesPage: React.FC = () => {
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             {/* Live Load Cell Weight */}
                             <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex flex-col justify-between">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                                <Scale className="w-3 h-3 text-emerald-600" />
-                                Food Bowl Scale
-                              </span>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                                  <Scale className="w-3 h-3 text-emerald-600" />
+                                  Food Bowl Scale
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    tareScaleDirect(featuredDevice.id);
+                                  }}
+                                  title="Zero / Tare the Food Bowl Weight Scale"
+                                  className="text-[9px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                                >
+                                  Tare
+                                </button>
+                              </div>
                               <div className="flex items-baseline justify-between mt-1">
                                 <span className="font-mono text-sm font-extrabold text-slate-800">
                                   {featuredDevice.foodBowlWeightGrams ? featuredDevice.foodBowlWeightGrams.toFixed(1) : '0.0'} g
                                 </span>
-                                <span className="text-[10px] text-slate-400">Load Cell</span>
+                                <span className="text-[10px] text-slate-400">
+                                  {featuredDevice.lastIntakeFoodGrams ? `Ate ${featuredDevice.lastIntakeFoodGrams}g` : 'Load Cell'}
+                                </span>
                               </div>
                             </div>
 
@@ -747,7 +764,7 @@ export const DevicesPage: React.FC = () => {
                             <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
                               <span className="flex items-center gap-1.5"><Droplets className="w-3.5 h-3.5 text-sky-600" /> Water Reservoir Volume</span>
                               <span className="font-mono text-sky-600">
-                                {(featuredDevice.waterLiters !== undefined ? featuredDevice.waterLiters : ((featuredDevice.waterLevelPct || 0) / 100) * 2.50).toFixed(2)} Liters
+                                {Math.round((featuredDevice.waterLiters !== undefined ? featuredDevice.waterLiters * 1000 : ((featuredDevice.waterLevelPct || 0) / 100) * 2500))} ml
                               </span>
                             </div>
                             <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
@@ -1320,7 +1337,7 @@ export const DevicesPage: React.FC = () => {
             </h4>
             <div className="flex justify-between items-center">
               <span className="text-slate-500 font-semibold">Target Volume:</span>
-              <span className="font-bold text-sky-600 text-sm">{((customWaterLevelPct / 100) * 2.50).toFixed(2)} Liters ({Math.round((customWaterLevelPct / 100) * 2500)} ml)</span>
+              <span className="font-bold text-sky-600 text-sm">{Math.round((customWaterLevelPct / 100) * 2500)} ml</span>
             </div>
             <input
               type="range"
@@ -1332,18 +1349,18 @@ export const DevicesPage: React.FC = () => {
               className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-500"
             />
             <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-              <span>0.15 L (Sip)</span>
-              <span>0.60 L</span>
-              <span>1.25 L (Half)</span>
-              <span>1.88 L</span>
-              <span>2.50 L (Full)</span>
+              <span>125 ml (Sip)</span>
+              <span>625 ml</span>
+              <span>1250 ml (Half)</span>
+              <span>1875 ml</span>
+              <span>2500 ml (Full)</span>
             </div>
             <button
               type="button"
               onClick={handleExecuteCustomWater}
               className="w-full py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-xs cursor-pointer active:scale-95"
             >
-              Pump {((customWaterLevelPct / 100) * 2.50).toFixed(2)} Liters Now
+              Pump {Math.round((customWaterLevelPct / 100) * 2500)} ml Now
             </button>
           </div>
 
@@ -1509,7 +1526,7 @@ export const DevicesPage: React.FC = () => {
               <div>
                 <span className="text-slate-400 font-bold uppercase text-[10px]">Water Reservoir Volume:</span>
                 <p className="font-bold text-sky-600">
-                  {(selectedDevice.waterLiters !== undefined ? selectedDevice.waterLiters : ((selectedDevice.waterLevelPct || 0) / 100) * 2.50).toFixed(2)} Liters
+                  {Math.round((selectedDevice.waterLiters !== undefined ? selectedDevice.waterLiters * 1000 : ((selectedDevice.waterLevelPct || 0) / 100) * 2500))} ml
                 </p>
               </div>
               <div>

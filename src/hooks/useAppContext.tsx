@@ -109,6 +109,8 @@ interface AppContextType {
   openGateDirect: (deviceId: string) => Promise<void>;
   closeGateDirect: (deviceId: string) => Promise<void>;
   setPetEatingDirect: (deviceId: string, isEating: boolean) => Promise<void>;
+  setPetDrinkingDirect: (deviceId: string, isDrinking: boolean) => Promise<void>;
+  tareScaleDirect: (deviceId: string) => Promise<void>;
   dispenseWaterDirect: (deviceId: string, amountMl?: number) => void;
   startPumpDirect: (deviceId: string) => Promise<void>;
   stopPumpDirect: (deviceId: string) => Promise<void>;
@@ -905,6 +907,39 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       fetch(`http://hydronourish.local/api/pet/eating?eating=${isEating ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
       fetch(`http://192.168.4.1/api/pet/eating?eating=${isEating ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
     } catch {}
+  };
+
+  const setPetDrinkingDirect = async (deviceId: string, isDrinking: boolean) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    setDevices((prev) =>
+      prev.map((d) => (d.id === deviceId ? { ...d, petDrinkingActive: isDrinking } : d))
+    );
+    try {
+      if (cleanIp) {
+        fetch(`http://${cleanIp}/api/pet/drinking?drinking=${isDrinking ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      }
+      fetch(`http://hydronourish.local/api/pet/drinking?drinking=${isDrinking ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      fetch(`http://192.168.4.1/api/pet/drinking?drinking=${isDrinking ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+    } catch {}
+  };
+
+  const tareScaleDirect = async (deviceId: string) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    setDevices((prev) =>
+      prev.map((d) => (d.id === deviceId ? { ...d, foodBowlWeightGrams: 0.0 } : d))
+    );
+    try {
+      if (cleanIp) {
+        fetch(`http://${cleanIp}/api/scale/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      }
+      fetch(`http://hydronourish.local/api/scale/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      fetch(`http://192.168.4.1/api/scale/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      addToast('success', 'Food bowl scale tared to 0.0g');
+    } catch {
+      addToast('error', 'Failed to communicate with weight scale');
+    }
   };
 
   const dispenseWaterDirect = async (deviceId: string, amountMl: number = 500) => {
@@ -1852,6 +1887,8 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         openGateDirect,
         closeGateDirect,
         setPetEatingDirect,
+        setPetDrinkingDirect,
+        tareScaleDirect,
         dispenseWaterDirect,
         startPumpDirect,
         stopPumpDirect,

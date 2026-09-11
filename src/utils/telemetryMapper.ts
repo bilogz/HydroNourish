@@ -41,6 +41,11 @@ export function validateTelemetryPayload(body: any): { valid: boolean; error?: s
   const waterLiters = !isNaN(waterLitersRaw) ? Math.round(waterLitersRaw * 100) / 100 : Math.round((waterLevel / 100) * reservoirCapacity * 100) / 100;
   const foodGateOpen = Boolean(body.foodGateOpen ?? body.food_gate_open ?? false);
   const petEatingActive = Boolean(body.petEatingActive ?? body.pet_eating ?? false);
+  const foodBowlWeightGrams = body.foodBowlWeightGrams !== undefined ? Number(body.foodBowlWeightGrams) : (body.food_bowl_weight_grams !== undefined ? Number(body.food_bowl_weight_grams) : undefined);
+  const scaleReady = body.scaleReady !== undefined ? Boolean(body.scaleReady) : (body.scale_ready !== undefined ? Boolean(body.scale_ready) : undefined);
+  const petDrinkingActive = body.petDrinkingActive !== undefined ? Boolean(body.petDrinkingActive) : (body.pet_drinking_active !== undefined ? Boolean(body.pet_drinking_active) : undefined);
+  const lastIntakeWaterMl = body.lastIntakeWaterMl !== undefined ? Number(body.lastIntakeWaterMl) : (body.last_intake_water_ml !== undefined ? Number(body.last_intake_water_ml) : undefined);
+  const lastIntakeFoodGrams = body.lastIntakeFoodGrams !== undefined ? Number(body.lastIntakeFoodGrams) : (body.last_intake_food_grams !== undefined ? Number(body.last_intake_food_grams) : undefined);
 
   const data: DeviceTelemetryPayload = {
     deviceId,
@@ -57,6 +62,11 @@ export function validateTelemetryPayload(body: any): { valid: boolean; error?: s
     cameraIp,
     foodGateOpen,
     petEatingActive,
+    foodBowlWeightGrams,
+    scaleReady,
+    petDrinkingActive,
+    lastIntakeWaterMl,
+    lastIntakeFoodGrams,
     uptimeSeconds: Math.max(0, uptimeSeconds),
   };
 
@@ -82,6 +92,11 @@ export function mapPayloadToDeviceRow(payload: DeviceTelemetryPayload, receivedA
     firmware_version: payload.firmwareVersion || 'v2.5.0-ESP32',
     camera_ip: payload.cameraIp || null,
     uptime_seconds: payload.uptimeSeconds ?? 0,
+    food_bowl_weight_grams: payload.foodBowlWeightGrams,
+    scale_ready: payload.scaleReady,
+    pet_drinking_active: payload.petDrinkingActive,
+    last_intake_water_ml: payload.lastIntakeWaterMl,
+    last_intake_food_grams: payload.lastIntakeFoodGrams,
   };
 }
 
@@ -231,6 +246,10 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
     isPumping: Boolean(item.is_pumping),
     foodGateOpen: Boolean(item.food_gate_open),
     petEatingActive: Boolean(item.pet_eating_active),
+    scaleReady: item.scale_ready !== undefined ? Boolean(item.scale_ready) : undefined,
+    petDrinkingActive: item.pet_drinking_active !== undefined ? Boolean(item.pet_drinking_active) : undefined,
+    lastIntakeWaterMl: item.last_intake_water_ml !== undefined && item.last_intake_water_ml !== null ? Number(item.last_intake_water_ml) : undefined,
+    lastIntakeFoodGrams: item.last_intake_food_grams !== undefined && item.last_intake_food_grams !== null ? Number(item.last_intake_food_grams) : undefined,
     lastSeenAt: item.last_seen_at || item.last_transmission || null,
     uptimeSeconds: Number(item.uptime_seconds) || 0,
   };

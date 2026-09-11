@@ -40,6 +40,7 @@ import {
   Square,
   Play,
   Wifi,
+  Scale,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -64,6 +65,7 @@ export const OverviewPage: React.FC = () => {
     dispenseWaterDirect,
     stopPumpDirect,
     toggleAutoRefillDirect,
+    tareScaleDirect,
     showToast,
   } = useAppContext();
   const {
@@ -178,8 +180,8 @@ export const OverviewPage: React.FC = () => {
           />
           <StatCard
             title="Water Reservoir"
-            value={hasDeviceConnected ? `${(hardware.waterLiters !== undefined ? hardware.waterLiters : ((hardware.waterLevelPct || 0) / 100) * 2.50).toFixed(2)} L` : 'N/A'}
-            subtitle={hasDeviceConnected ? 'Reservoir volume (2.50 L max)' : 'No device active'}
+            value={hasDeviceConnected ? `${Math.round(hardware.waterLiters !== undefined ? hardware.waterLiters * 1000 : ((hardware.waterLevelPct || 0) / 100) * 2500)} ml` : 'N/A'}
+            subtitle={hasDeviceConnected ? 'Reservoir volume (2500 ml max)' : 'No device active'}
             icon={Droplets}
             iconBgColor="bg-sky-50"
             iconTextColor="text-sky-600"
@@ -265,6 +267,15 @@ export const OverviewPage: React.FC = () => {
               >
                 <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                 Auto-Refill: {!hardware.firmwareVersion?.includes('AUTO:OFF') ? 'ENABLED (<=10%)' : 'DISABLED'}
+              </button>
+
+              <button
+                onClick={() => tareScaleDirect(hardware.id)}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 font-bold text-xs border border-emerald-500/30 flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+                title="Zero / Tare the Food Bowl Weight Scale"
+              >
+                <Scale className="w-3.5 h-3.5 text-emerald-400" />
+                Bowl: {hardware.foodBowlWeightGrams ? hardware.foodBowlWeightGrams.toFixed(1) : '0.0'}g (Tare)
               </button>
             </div>
           </div>
@@ -378,7 +389,7 @@ export const OverviewPage: React.FC = () => {
               </div>
               <div className="p-4 bg-slate-50 border-t border-slate-100 grid grid-cols-3 gap-2 text-xs text-center">
                 <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Food Level</span><span className="font-bold text-slate-800">{hardware.foodLevelPct}%</span></div>
-                <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Water Volume</span><span className="font-bold text-slate-800">{(hardware.waterLiters !== undefined ? hardware.waterLiters : ((hardware.waterLevelPct || 0) / 100) * 2.50).toFixed(2)} L</span></div>
+                <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Water Volume</span><span className="font-bold text-slate-800">{Math.round(hardware.waterLiters !== undefined ? hardware.waterLiters * 1000 : ((hardware.waterLevelPct || 0) / 100) * 2500)} ml</span></div>
                 <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Assignment</span><span className="font-bold text-rose-700">{hardware.assignedPetName || 'Vacant'}</span></div>
               </div>
             </div>

@@ -42,7 +42,8 @@ import {
   BarChart3,
   Layers,
   Play,
-  Pause
+  Pause,
+  Clock
 } from 'lucide-react';
 import { Device, AIControlMode, CameraSourceType, VisionActionRecommendation } from '../types';
 import { analyzePetVisionScan, PetVisionScanResult, extractFrameBase64 } from '../services/aiService';
@@ -84,10 +85,12 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     openGateDirect,
     closeGateDirect,
     setPetEatingDirect,
+    setPetDrinkingDirect,
     addAlert
   } = useAppContext();
 
   const lastEatingTimestampRef = React.useRef<number>(0);
+  const lastDrinkingTimestampRef = React.useRef<number>(0);
 
   // Auto-discover camera IP from passed device prop or Supabase device telemetry
   const discoveredIp = React.useMemo(() => {
@@ -584,6 +587,20 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           await setPetEatingDirect(targetDeviceId, false);
           lastEatingTimestampRef.current = 0;
           showToast('success', '✨ Meal Completed', `${petName} finished eating. Food gate closed automatically.`);
+        }
+      }
+
+      // 6. Intelligent Pet Drinking (Hydration Intake) Detection
+      const isCurrentlyDrinking = Boolean(result.isPetHydrating || result.intakeState === 'Hydrating');
+      if (isCurrentlyDrinking) {
+        lastDrinkingTimestampRef.current = Date.now();
+        await setPetDrinkingDirect(targetDeviceId, true);
+      } else if (lastDrinkingTimestampRef.current > 0) {
+        const elapsedSinceDrinking = Date.now() - lastDrinkingTimestampRef.current;
+        if (elapsedSinceDrinking >= 5000) {
+          await setPetDrinkingDirect(targetDeviceId, false);
+          lastDrinkingTimestampRef.current = 0;
+          showToast('info', '💧 Hydration Completed', `${petName} finished drinking water. Intake calculated.`);
         }
       }
 
