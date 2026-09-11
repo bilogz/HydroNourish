@@ -57,7 +57,6 @@ export class ErrorBoundary extends Component<Props, State> {
                 if ('caches' in window) {
                   caches.keys().then(keys => keys.forEach(key => caches.delete(key)));
                 }
-                localStorage.removeItem('hn_pets');
                 window.location.reload();
               }}
               style={{

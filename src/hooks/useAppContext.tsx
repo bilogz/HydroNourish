@@ -218,11 +218,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('hn_pets');
       if (saved) {
         const parsed = JSON.parse(saved) as Pet[];
-        return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       }
-      return [];
+      return initialPets;
     } catch {
-      return [];
+      return initialPets;
     }
   });
 
@@ -347,7 +349,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetchContactInquiriesFromSupabase(),
         ]);
 
-        if (remotePets && remotePets.length > 0) setPets(remotePets);
+        if (remotePets && remotePets.length > 0) {
+          setPets(remotePets);
+        } else if (remotePets && remotePets.length === 0 && initialPets.length > 0) {
+          setPets(initialPets);
+          for (const pet of initialPets) {
+            insertPetToSupabase(pet).catch(() => {});
+          }
+        }
         if (remoteSchedules && remoteSchedules.length > 0) setSchedules(remoteSchedules);
         if (remoteFeedingLogs && remoteFeedingLogs.length > 0) setFeedingLogs(remoteFeedingLogs);
         if (remoteHydrationLogs && remoteHydrationLogs.length > 0) setHydrationLogs(remoteHydrationLogs);
@@ -428,7 +437,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     const unsubscribe = subscribeToSupabaseRealtime(async (tableName) => {
       if (tableName === 'pets') {
         const data = await fetchPetsFromSupabase();
-        if (data) setPets(data);
+        if (data && data.length > 0) setPets(data);
       } else if (tableName === 'feeding_schedules') {
         const data = await fetchSchedulesFromSupabase();
         if (data) setSchedules(data);

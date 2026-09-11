@@ -87,14 +87,12 @@ export async function insertPetToSupabase(pet: Pet): Promise<boolean> {
       breed: pet.breed,
       age: pet.age,
       weight: pet.weight,
-      sex: pet.sex || 'Male',
       owner_name: pet.ownerName,
       owner_phone: pet.ownerPhone,
-      owner_id: pet.ownerId || null,
       clinic_ref: pet.clinicRef,
-      assigned_device_id: pet.assignedDeviceId,
-      health_status: pet.healthStatus,
-      avatar_url: pet.avatarUrl,
+      assigned_device_id: pet.assignedDeviceId || null,
+      health_status: pet.healthStatus || 'Healthy',
+      avatar_url: pet.avatarUrl || null,
       portion_grams: pet.feedingPlan?.portionGrams || 120,
       times_per_day: pet.feedingPlan?.timesPerDay || 2,
       food_type: pet.feedingPlan?.foodType || 'Veterinary Dry Kibble',
@@ -102,20 +100,12 @@ export async function insertPetToSupabase(pet: Pet): Promise<boolean> {
       latest_temp: pet.latestVitals?.temperature || 38.5,
       latest_heart_rate: pet.latestVitals?.heartRate || 90,
       latest_activity: pet.latestVitals?.activityLevel || 'Normal',
-      emergency_contact: pet.emergencyContact || null,
-      notes: pet.notes || '',
     };
-
-    if (pet.ownerEmail) {
-      payload.owner_email = pet.ownerEmail;
-    }
 
     const { error } = await supabase.from('pets').upsert(payload);
     if (error) {
-      // If owner_email column is not yet migrated in Supabase, retry without it
-      delete payload.owner_email;
-      const retry = await supabase.from('pets').upsert(payload);
-      return !retry.error;
+      console.error('[HydroNourish] Supabase pet insert error:', error);
+      return false;
     }
     return true;
   } catch (err) {
@@ -131,18 +121,14 @@ export async function updatePetInSupabase(id: string, updated: Partial<Pet>): Pr
     if (updated.name !== undefined) payload.name = updated.name;
     if (updated.species !== undefined) payload.species = updated.species;
     if (updated.breed !== undefined) payload.breed = updated.breed;
-    if (updated.ownerEmail !== undefined) payload.owner_email = updated.ownerEmail;
     if (updated.age !== undefined) payload.age = updated.age;
     if (updated.weight !== undefined) payload.weight = updated.weight;
-    if (updated.sex !== undefined) payload.sex = updated.sex;
     if (updated.ownerName !== undefined) payload.owner_name = updated.ownerName;
     if (updated.ownerPhone !== undefined) payload.owner_phone = updated.ownerPhone;
     if (updated.healthStatus !== undefined) payload.health_status = updated.healthStatus;
     if (updated.assignedDeviceId !== undefined) payload.assigned_device_id = updated.assignedDeviceId;
     if (updated.avatarUrl !== undefined) payload.avatar_url = updated.avatarUrl;
     if (updated.hydrationTarget !== undefined) payload.hydration_target = updated.hydrationTarget;
-    if (updated.emergencyContact !== undefined) payload.emergency_contact = updated.emergencyContact;
-    if (updated.notes !== undefined) payload.notes = updated.notes;
 
     if (updated.feedingPlan) {
       if (updated.feedingPlan.portionGrams !== undefined) payload.portion_grams = updated.feedingPlan.portionGrams;
@@ -157,7 +143,11 @@ export async function updatePetInSupabase(id: string, updated: Partial<Pet>): Pr
     }
 
     const { error } = await (supabase.from('pets') as any).update(payload).eq('id', id);
-    return !error;
+    if (error) {
+      console.error('[HydroNourish] Supabase pet update error:', error);
+      return false;
+    }
+    return true;
   } catch (err) {
     if (import.meta.env.DEV) console.warn('[HydroNourish] Supabase pet update error:', err);
     return false;
