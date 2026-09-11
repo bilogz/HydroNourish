@@ -8,7 +8,7 @@ import { LiveCameraWidget } from '../components/LiveCameraWidget';
 import { DirectUSBConsoleWidget } from '../components/DirectUSBConsoleWidget';
 import { usbSerialService, ScannedWifiNetwork } from '../services/usbSerialService';
 import { useAppContext } from '../hooks/useAppContext';
-import { Device } from '../types';
+import { Device, Pet } from '../types';
 import {
   Cpu,
   Wifi,
@@ -41,7 +41,8 @@ import {
   Globe,
   ArrowRight,
   ShieldCheck,
-  Smartphone
+  Smartphone,
+  Dog,
 } from 'lucide-react';
 
 export const DevicesPage: React.FC = () => {
@@ -72,6 +73,8 @@ export const DevicesPage: React.FC = () => {
   const [showUsbConsole, setShowUsbConsole] = useState(true);
 
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [assignPetModalOpen, setAssignPetModalOpen] = useState(false);
+  const [petSearchQuery, setPetSearchQuery] = useState('');
 
   // Wi-Fi Pairing & Scanning State
   const [wifiSsid, setWifiSsid] = useState(() => {
@@ -175,6 +178,51 @@ export const DevicesPage: React.FC = () => {
   const handleOpenDisconnect = (device: Device) => {
     setSelectedDeviceId(device.id);
     setDisconnectModalOpen(true);
+  };
+
+  const handleAssignPet = async (pet: Pet, device: Device) => {
+    await updateDevice(device.id, {
+      assignedPetId: pet.id,
+      assignedPetName: pet.name,
+    });
+
+    updatePet(pet.id, {
+      assignedDeviceId: device.id,
+    });
+
+    const prevPet = pets.find(p => p.assignedDeviceId === device.id && p.id !== pet.id);
+    if (prevPet) {
+      updatePet(prevPet.id, {
+        assignedDeviceId: '',
+      });
+    }
+
+    const cleanIp = device.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    if (cleanIp) {
+      fetch(`http://${cleanIp}/api/setup/pet?name=${encodeURIComponent(pet.name)}&id=${encodeURIComponent(pet.id)}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+    }
+
+    showToast('success', 'Patient Assigned', `${pet.name} is now assigned to node ${device.id}.`);
+    setAssignPetModalOpen(false);
+    setPetSearchQuery('');
+  };
+
+  const handleUnassignPet = async (device: Device) => {
+    const currentPet = pets.find(p => p.id === device.assignedPetId || p.assignedDeviceId === device.id || p.name === device.assignedPetName);
+
+    await updateDevice(device.id, {
+      assignedPetId: '',
+      assignedPetName: '',
+    });
+
+    if (currentPet) {
+      updatePet(currentPet.id, {
+        assignedDeviceId: '',
+      });
+    }
+
+    showToast('info', 'Patient Unassigned', `Patient was unassigned from node ${device.id}.`);
+    setAssignPetModalOpen(false);
   };
 
   const handleCalibrateConfirm = () => {
@@ -656,10 +704,95 @@ export const DevicesPage: React.FC = () => {
 
                       {/* Diagnostic Parameters */}
                       <div className="mt-4 space-y-3">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-500 font-medium">Assigned Patient:</span>
-                          <span className="font-bold text-slate-900">{featuredDevice.assignedPetName || 'Unassigned'}</span>
-                        </div>
+                        {/* Assigned Patient Section */}
+                        {assignedPet ? (
+                          <div className="p-3 bg-rose-50/50 rounded-2xl border border-rose-200/80 space-y-2 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-700 flex items-center gap-1.5">
+                                <Dog className="w-3.5 h-3.5 text-rose-600" />
+                                Assigned Patient
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setAssignPetModalOpen(true)}
+                                  className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                                  title="Change assigned patient"
+                                >
+                                  Change
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUnassignPet(featuredDevice)}
+                                  className="text-[10px] font-bold text-slate-400 hover:text-rose-600 hover:bg-rose-100/60 px-1.5 py-0.5 rounded-lg transition-colors cursor-pointer"
+                                  title="Unassign patient from this station"
+                                >
+                                  Unassign
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 pt-0.5">
+                              <div className="relative shrink-0">
+                                {assignedPet.avatarUrl ? (
+                                  <img
+                                    src={assignedPet.avatarUrl}
+                                    alt={assignedPet.name}
+                                    className="w-12 h-12 rounded-xl object-cover ring-2 ring-rose-200/80 shadow-xs border border-white"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-rose-100 to-amber-100 flex items-center justify-center text-rose-600 font-bold border border-rose-200 shadow-xs">
+                                    <Dog className="w-6 h-6" />
+                                  </div>
+                                )}
+                                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white" title="Monitored in Station" />
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <h4 className="text-sm font-extrabold text-slate-900 truncate">
+                                    {assignedPet.name}
+                                  </h4>
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white text-rose-700 border border-rose-200/80 shadow-2xs shrink-0">
+                                    {assignedPet.species}
+                                  </span>
+                                  {assignedPet.healthStatus && (
+                                    <StatusBadge status={assignedPet.healthStatus} size="xs" />
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                                  {assignedPet.breed || 'Mixed Breed'} • {assignedPet.age}y • {assignedPet.weight}kg
+                                </p>
+                                <p className="text-[10px] text-slate-400 truncate">
+                                  Owner: <span className="font-semibold text-slate-700">{assignedPet.ownerName}</span>
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-amber-50/60 rounded-2xl border border-dashed border-amber-300 flex items-center justify-between gap-3 shadow-2xs">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0 border border-amber-200">
+                                <Dog className="w-5 h-5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-800 truncate">No Patient Assigned</p>
+                                <p className="text-[10px] text-slate-500 truncate">Assign a patient to track eating & hydration</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setAssignPetModalOpen(true)}
+                              className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer active:scale-95"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Assign Pet
+                            </button>
+                          </div>
+                        )}
 
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-slate-500 font-medium">Connected Wi-Fi:</span>
@@ -1515,9 +1648,29 @@ export const DevicesPage: React.FC = () => {
                   <StatusBadge status={selectedDevice.status} size="sm" />
                 </div>
               </div>
-              <div>
+              <div className="sm:col-span-2">
                 <span className="text-slate-400 font-bold uppercase text-[10px]">Assigned Patient:</span>
-                <p className="font-semibold text-slate-800">{selectedDevice.assignedPetName || 'Unassigned'}</p>
+                {(() => {
+                  const devPet = pets.find(p => p.id === selectedDevice.assignedPetId || p.name === selectedDevice.assignedPetName);
+                  if (devPet) {
+                    return (
+                      <div className="flex items-center gap-2.5 mt-1">
+                        {devPet.avatarUrl ? (
+                          <img src={devPet.avatarUrl} alt={devPet.name} className="w-7 h-7 rounded-lg object-cover ring-1 ring-slate-200" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                            <Dog className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-bold text-slate-900 leading-tight">{devPet.name} ({devPet.species})</p>
+                          <p className="text-[10px] text-slate-500">{devPet.breed} • Owner: {devPet.ownerName}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return <p className="font-semibold text-slate-500 mt-1">Unassigned</p>;
+                })()}
               </div>
               <div>
                 <span className="text-slate-400 font-bold uppercase text-[10px]">Food Hopper:</span>
@@ -1543,7 +1696,7 @@ export const DevicesPage: React.FC = () => {
               </div>
               <div className="sm:col-span-3">
                 <span className="text-slate-400 font-bold uppercase text-[10px]">Firmware Specs:</span>
-                <p className="font-mono text-[11px] text-slate-700 truncate">{selectedDevice.firmwareVersion}</p>
+                <p className="font-mono text-[11px] text-slate-600 truncate">{selectedDevice.firmwareVersion}</p>
               </div>
             </div>
 
@@ -1557,6 +1710,168 @@ export const DevicesPage: React.FC = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* ================= ASSIGN PET MODAL ================= */}
+      <Modal
+        isOpen={assignPetModalOpen}
+        onClose={() => {
+          setAssignPetModalOpen(false);
+          setPetSearchQuery('');
+        }}
+        title={`Assign Patient to Station (${(featuredDevice || selectedDevice)?.id || 'Node'})`}
+        subtitle="Choose a clinic patient to pair with this Smart Feeder & Hydrator Node"
+      >
+        <div className="space-y-4 text-xs">
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search patients by name, breed, or owner..."
+              value={petSearchQuery}
+              onChange={(e) => setPetSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+            />
+          </div>
+
+          {/* Current Assignment Notification */}
+          {(featuredDevice || selectedDevice)?.assignedPetName && (
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 font-bold">
+                  <Dog className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Current Patient:</span>
+                  <span className="font-bold text-slate-800 truncate block">
+                    {(featuredDevice || selectedDevice)?.assignedPetName}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetDev = featuredDevice || selectedDevice;
+                  if (targetDev) handleUnassignPet(targetDev);
+                }}
+                className="px-2.5 py-1 rounded-lg border border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100 font-bold text-[11px] transition-colors cursor-pointer shrink-0"
+              >
+                Unassign Current
+              </button>
+            </div>
+          )}
+
+          {/* Patient Selection List */}
+          <div className="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+            {pets
+              .filter(p => {
+                if (!petSearchQuery.trim()) return true;
+                const q = petSearchQuery.toLowerCase();
+                return (
+                  p.name.toLowerCase().includes(q) ||
+                  p.breed.toLowerCase().includes(q) ||
+                  p.ownerName.toLowerCase().includes(q) ||
+                  p.species.toLowerCase().includes(q)
+                );
+              })
+              .map((pet) => {
+                const targetDev = featuredDevice || selectedDevice;
+                const isCurrent = targetDev && (pet.id === targetDev.assignedPetId || pet.name === targetDev.assignedPetName);
+                const isAssignedOther = pet.assignedDeviceId && targetDev && pet.assignedDeviceId !== targetDev.id;
+
+                return (
+                  <div
+                    key={pet.id}
+                    onClick={() => {
+                      if (targetDev) handleAssignPet(pet, targetDev);
+                    }}
+                    className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer ${
+                      isCurrent
+                        ? 'bg-rose-50/90 border-rose-300 ring-2 ring-rose-500/20 shadow-xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        {pet.avatarUrl ? (
+                          <img
+                            src={pet.avatarUrl}
+                            alt={pet.name}
+                            className="w-10 h-10 rounded-xl object-cover border border-slate-200"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-100 to-amber-100 text-rose-600 flex items-center justify-center font-bold">
+                            <Dog className="w-5 h-5" />
+                          </div>
+                        )}
+                        {isCurrent && (
+                          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-600 text-white flex items-center justify-center text-[9px] font-bold shadow-xs">
+                            ✓
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-extrabold text-slate-900 truncate text-xs">{pet.name}</p>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 shrink-0">
+                            {pet.species}
+                          </span>
+                          {pet.healthStatus && (
+                            <StatusBadge status={pet.healthStatus} size="xs" />
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500 truncate">
+                          {pet.breed} • {pet.age}y • {pet.weight}kg
+                        </p>
+                        <p className="text-[10px] text-slate-400 truncate">
+                          Owner: <span className="font-medium text-slate-600">{pet.ownerName}</span>
+                          {isAssignedOther && (
+                            <span className="ml-1 text-amber-600 font-semibold">• (Node: {pet.assignedDeviceId})</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition-colors cursor-pointer ${
+                        isCurrent
+                          ? 'bg-rose-600 text-white shadow-xs'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
+                      }`}
+                    >
+                      {isCurrent ? 'Selected' : 'Assign'}
+                    </button>
+                  </div>
+                );
+              })}
+
+            {pets.length === 0 && (
+              <div className="text-center py-8 text-slate-400">
+                <Dog className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p>No pet patients found in clinic records.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => {
+                setAssignPetModalOpen(false);
+                setPetSearchQuery('');
+              }}
+              className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* DISCONNECT CONFIRM DIALOG */}

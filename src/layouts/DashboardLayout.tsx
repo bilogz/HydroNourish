@@ -267,14 +267,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             )}
             <div className="space-y-1">
               <button
-                onClick={() => setAutomatedOpen(!automatedOpen)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-slate-700 hover:bg-slate-100 ${
-                  automatedOpen ? 'bg-slate-100/70 border border-slate-200/60' : ''
-                }`}
+                onClick={() => {
+                  setAutomatedOpen(!automatedOpen);
+                  navigate('/app/devices');
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  location.pathname.startsWith('/app/devices')
+                    ? 'bg-rose-50/90 text-rose-900 border border-rose-200/80 shadow-xs font-bold'
+                    : 'text-slate-700 hover:bg-slate-100'
+                } ${automatedOpen ? 'bg-slate-100/70 border border-slate-200/60' : ''}`}
               >
-                <Zap className="w-4 h-4 text-rose-600 shrink-0" />
+                <Cpu className="w-4 h-4 text-rose-600 shrink-0" />
                 {!sidebarCollapsed && (
-                  <span className="flex-1 text-left">Automated Warnings</span>
+                  <span className="flex-1 text-left">Devices</span>
                 )}
                 {!sidebarCollapsed && (
                   <ChevronDown
