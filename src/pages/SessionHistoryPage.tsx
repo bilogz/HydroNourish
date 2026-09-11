@@ -75,7 +75,7 @@ import {
     cancelled: (sessions || []).filter((s) => s.status === 'cancelled').length,
   }), [sessions]);
 
-  const formatDuration = (start: string, end: string | null, status: string, queuePosition?: number) => {
+  const formatDuration = (start: string, end: string | null, status?: string, queuePosition?: number) => {
     if (status === 'queued') {
       return `⏳ Queue #${queuePosition || 1}`;
     }
@@ -381,7 +381,7 @@ import {
               <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Session ID</span><span className="font-mono font-bold text-rose-800">{viewSession.id}</span></div>
               <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Assigned Device</span><span className="font-bold text-rose-700">{viewSession.deviceId}</span></div>
               <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Admission Date</span><span className="font-bold text-slate-800">{new Date(viewSession.admissionDate).toLocaleDateString()}</span></div>
-              <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Duration</span><span className="font-black text-slate-900">{formatDuration(viewSession.startTime, viewSession.releaseTime)}</span></div>
+              <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Duration</span><span className="font-black text-slate-900">{formatDuration(viewSession.startTime, viewSession.releaseTime, viewSession.status)}</span></div>
             </div>
 
             {/* Pet Snapshot */}

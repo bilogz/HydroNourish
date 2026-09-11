@@ -43,7 +43,9 @@ import {
   Layers,
   Play,
   Pause,
-  Clock
+  Clock,
+  Utensils,
+  Droplets
 } from 'lucide-react';
 import { Device, AIControlMode, CameraSourceType, VisionActionRecommendation } from '../types';
 import { analyzePetVisionScan, PetVisionScanResult, extractFrameBase64 } from '../services/aiService';
@@ -1339,7 +1341,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                 </button>
 
                 <button
-                  onClick={handleRunAiScan}
+                  onClick={() => handleRunAiScan()}
                   className="bg-indigo-600/90 hover:bg-indigo-500 text-white font-bold text-[10px] px-3 py-1 rounded-lg shadow-lg flex items-center gap-1 transition-all active:scale-95 cursor-pointer backdrop-blur-md"
                 >
                   <Sparkles className="w-3 h-3 text-amber-300" />

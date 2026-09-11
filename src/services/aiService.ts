@@ -207,6 +207,7 @@ export interface PetVisionScanResult {
   intakeState: 'Feeding' | 'Hydrating' | 'Stationary / Resting' | 'Approaching Bowl' | 'None Detected';
   isPetEating: boolean;
   eatingConfidence: number;
+  isPetHydrating?: boolean;
   shouldHoldFoodGateOpen: boolean;
   healthScore: number; // 1 - 100
   clinicalObservations: string[];

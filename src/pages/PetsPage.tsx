@@ -98,7 +98,7 @@ export const PetsPage: React.FC = () => {
       ownerPhone: pet.ownerPhone,
       ownerEmail: pet.ownerEmail || '',
       clinicRef: pet.clinicRef,
-      assignedDeviceId: pet.assignedDeviceId,
+      assignedDeviceId: pet.assignedDeviceId || '',
       healthStatus: pet.healthStatus,
       avatarUrl: pet.avatarUrl,
       portionGrams: pet.feedingPlan?.portionGrams || 120,

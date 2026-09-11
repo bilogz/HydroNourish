@@ -53,10 +53,11 @@ import {
   Inbox,
   Reply,
   MessageCircle,
+  Eye,
 } from 'lucide-react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { compressImageFile } from '../utils/imageCompressor';
-import { ChatMessageItem } from '../types';
+import { ChatMessageItem, Pet, PetSession } from '../types';
 
 type OwnerTab = 'monitoring' | 'pets' | 'intake' | 'sessions' | 'messages';
 

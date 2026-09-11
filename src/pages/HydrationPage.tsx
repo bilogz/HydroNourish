@@ -170,7 +170,7 @@ export const HydrationPage: React.FC = () => {
   const handleExecuteCustomWater = async () => {
     if (selectedDevice) {
       // Calculate duration/volume mapped from Liters
-      const volumeMl = Math.round((customWaterLevelPct / 100) * (reservoirCapacityL * 1000));
+      const volumeMl = Math.round((customWaterLevelPct / 100) * reservoirCapacityMl);
       await dispenseWaterDirect(selectedDevice.id, volumeMl);
       setCustomWaterModalOpen(false);
     }

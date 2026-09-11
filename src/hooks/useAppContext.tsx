@@ -50,6 +50,7 @@ import {
   insertHydrationLogToSupabase,
   fetchVitalsFromSupabase,
   fetchAIAlertsFromSupabase,
+  insertAIAlertToSupabase,
   updateAIAlertStatusInSupabase,
   fetchDevicesFromSupabase,
   insertDeviceToSupabase,
@@ -945,9 +946,9 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       }
       fetch(`http://hydronourish.local/api/scale/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
       fetch(`http://192.168.4.1/api/scale/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      addToast('success', 'Food bowl scale tared to 0.0g');
+      showToast('success', 'Scale Tared', 'Food bowl scale tared to 0.0g');
     } catch {
-      addToast('error', 'Failed to communicate with weight scale');
+      showToast('error', 'Scale Error', 'Failed to communicate with weight scale');
     }
   };
 

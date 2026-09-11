@@ -22,7 +22,7 @@ export interface Pet {
   ownerEmail?: string;
   ownerId?: string; // reference to PetOwner
   clinicRef: string;
-  assignedDeviceId: string;
+  assignedDeviceId?: string;
   healthStatus: HealthStatus;
   avatarUrl: string;
   feedingPlan: {
@@ -34,7 +34,7 @@ export interface Pet {
   latestVitals?: {
     temperature: number; // °C
     heartRate: number; // bpm
-    activityLevel: 'Low' | 'Normal' | 'High';
+    activityLevel: 'Low' | 'Normal' | 'High' | 'Active' | 'Resting';
     lastMeasured: string;
   };
   emergencyContact?: string;
@@ -304,7 +304,7 @@ export interface ActivityLog {
   petName: string | null;
   sessionId: string | null;
   timestamp: string;
-  result: 'success' | 'failed' | 'warning';
+  result: 'success' | 'failed' | 'warning' | 'info';
   details?: string;
 }
 

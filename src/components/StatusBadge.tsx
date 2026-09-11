@@ -3,7 +3,7 @@ import React from 'react';
 interface StatusBadgeProps {
   status: string;
   type?: 'health' | 'device' | 'alert' | 'user' | 'schedule' | 'hardware' | 'session' | 'access';
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' }) => {
@@ -62,7 +62,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
     dotColor = 'bg-violet-500';
   }
 
-  const pxClass = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs font-medium';
+  const pxClass = size === 'xs' ? 'px-1.5 py-0.2 text-[10px]' : size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs font-medium';
 
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full border ${pxClass} ${badgeStyle}`}>

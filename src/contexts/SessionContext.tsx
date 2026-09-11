@@ -226,7 +226,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ownerName: string | null,
     petName: string | null,
     sessionId: string | null,
-    result: 'success' | 'failed' | 'warning' = 'success',
+    result: 'success' | 'failed' | 'warning' | 'info' = 'success',
     details?: string
   ) => {
     const newLog: ActivityLog = {
