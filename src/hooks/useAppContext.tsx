@@ -1263,12 +1263,26 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       petName: petName,
     };
 
+    // Optimistic UI state update
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId
+          ? {
+              ...d,
+              firmwareVersion: (d.firmwareVersion || '').includes('AUTO:')
+                ? (d.firmwareVersion || '').replace(/AUTO:(OFF|ON)/, shouldEnable ? 'AUTO:ON' : 'AUTO:OFF')
+                : `${d.firmwareVersion || ''}|AUTO:${shouldEnable ? 'ON' : 'OFF'}`
+            }
+          : d
+      )
+    );
+
     setSchedules((prev) => [newSch, ...prev]);
     showToast(
       shouldEnable ? 'success' : 'info',
       shouldEnable ? '🔄 Auto-Refill Enabled' : '⏸️ Auto-Refill Disabled',
       shouldEnable
-        ? `Node ${deviceId} will automatically refill reservoir when water level drops <= 10%.`
+        ? `Node ${deviceId} will automatically maintain fresh water with smart automated refill cycles.`
         : `Automatic refill paused for node ${deviceId}.`
     );
 
