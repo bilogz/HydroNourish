@@ -271,7 +271,7 @@ export const FeedingPage: React.FC = () => {
                                 ? 'bg-rose-600 hover:bg-rose-700 text-white cursor-pointer active:scale-95 shadow-xs'
                                 : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                             }`}
-                            title="Trigger 90° Stepper Gate Cycle on ESP32 now"
+                            title="Trigger 90° Servo Gate Cycle on ESP32 now"
                           >
                             <Play className="w-3 h-3 fill-white" />
                             Feed Now

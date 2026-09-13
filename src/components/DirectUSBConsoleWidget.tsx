@@ -365,15 +365,15 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
               </button>
             </div>
 
-            {/* Stepper Motor & Motion Hardware Controls */}
+            {/* Feeder Servo Motor & Gate Hardware Controls */}
             <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
                   <Cpu className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-xs text-white">A4988 Stepper Motion & Tuning</h4>
-                  <p className="text-[11px] text-slate-400">Non-stalling smooth S-curve acceleration (2000 µs optimal timing)</p>
+                  <h4 className="font-bold text-xs text-white">Feeder Servo Gate (90° Sweep)</h4>
+                  <p className="text-[11px] text-slate-400">Smooth velocity-controlled 0° ↔ 90° transit with zero-buzz idle auto-detach</p>
                 </div>
               </div>
 
@@ -384,32 +384,16 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
                   className="px-3 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
                 >
                   <RotateCw className="w-3.5 h-3.5 text-indigo-400" />
-                  360° Smooth Test
+                  90° Servo Test
                 </button>
                 <button
-                  onClick={() => runAction(() => usbSerialService.sendRaw('INVERTDIR'))}
+                  onClick={() => runAction(() => usbSerialService.dispenseFood(75, 90))}
                   disabled={!isConnected || isActing}
                   className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
-                  title="Reverse Motor Direction"
+                  title="Open 90° and dispense meal"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 text-rose-400" />
-                  Invert Direction
-                </button>
-                <button
-                  onClick={() => runAction(() => usbSerialService.controlMotor('lock'))}
-                  disabled={!isConnected || isActing}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
-                >
-                  <Lock className="w-3.5 h-3.5 text-amber-400" />
-                  Lock Coils
-                </button>
-                <button
-                  onClick={() => runAction(() => usbSerialService.controlMotor('free'))}
-                  disabled={!isConnected || isActing}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
-                >
-                  <Unlock className="w-3.5 h-3.5 text-slate-400" />
-                  Free Coils (Cool)
+                  <Utensils className="w-3.5 h-3.5 text-emerald-400" />
+                  Dispense 75g
                 </button>
                 <button
                   onClick={() => runAction(() => usbSerialService.refillHopper())}
