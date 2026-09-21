@@ -138,6 +138,9 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
   const quickCommands = [
     { label: '🍖 Feed (90°)', cmd: 'FEED' },
     { label: '💧 Water (2.5s)', cmd: 'WATER' },
+    { label: '🚯 Waste Disposal', cmd: 'DISPOSE' },
+    { label: '🧼 Full Sanitize', cmd: 'FULLCLEAN' },
+    { label: '🐾 Pet Profile', cmd: 'PROFILE' },
     { label: '🌊 Pump ON', cmd: 'PUMP ON' },
     { label: '🛑 Pump OFF', cmd: 'PUMP OFF' },
     { label: '🔄 360° Test', cmd: 'TESTMOTOR' },
@@ -279,18 +282,33 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
           <div className="space-y-4">
             {/* Quick Actuator Actions */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {/* Food Dispense */}
+              {/* Open Food Gate */}
               <button
-                onClick={() => runAction(() => usbSerialService.dispenseFood(50, 800))}
+                onClick={() => runAction(() => usbSerialService.openGate())}
+                disabled={!isConnected || isActing}
+                className="p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-emerald-500/50 flex flex-col items-center text-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group active:scale-95"
+              >
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Unlock className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-bold text-xs text-white">Open Gate</p>
+                  <p className="text-[10px] text-slate-400">90° Hold Open</p>
+                </div>
+              </button>
+
+              {/* Close Food Gate */}
+              <button
+                onClick={() => runAction(() => usbSerialService.closeGate())}
                 disabled={!isConnected || isActing}
                 className="p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/50 flex flex-col items-center text-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group active:scale-95"
               >
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Utensils className="w-5 h-5" />
+                  <Lock className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="font-bold text-xs text-white">Dispense Food</p>
-                  <p className="text-[10px] text-slate-400">Smooth 90° Cycle</p>
+                  <p className="font-bold text-xs text-white">Close Gate</p>
+                  <p className="text-[10px] text-slate-400">0° Return Closed</p>
                 </div>
               </button>
 

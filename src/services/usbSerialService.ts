@@ -314,6 +314,16 @@ class USBSerialService {
     return this.sendCommand({ action: 'feed', amount: portionGrams, steps });
   }
 
+  public async openGate(): Promise<boolean> {
+    await this.sendRaw('OPEN');
+    return this.sendCommand({ action: 'gate_open' });
+  }
+
+  public async closeGate(): Promise<boolean> {
+    await this.sendRaw('CLOSE');
+    return this.sendCommand({ action: 'gate_close' });
+  }
+
   public async dispenseWater(durationMs: number = 2500): Promise<boolean> {
     return this.sendCommand({ action: 'water', duration: durationMs });
   }
@@ -359,6 +369,16 @@ class USBSerialService {
 
   public async run19WDrainPump(durationMs: number = 7000): Promise<boolean> {
     return this.sendCommand({ action: 'drain_19w', duration: durationMs });
+  }
+
+  public async disposeWaste(durationMs: number = 5000): Promise<boolean> {
+    await this.sendRaw('DISPOSE');
+    return this.sendCommand({ action: 'dispose_waste', duration: durationMs });
+  }
+
+  public async fullSanitation(): Promise<boolean> {
+    await this.sendRaw('FULLCLEAN');
+    return this.sendCommand({ action: 'full_sanitation' });
   }
 
   public async runBowlSanitationCycle(): Promise<boolean> {

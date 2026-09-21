@@ -944,6 +944,9 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       prev.map((d) => (d.id === deviceId ? { ...d, foodGateOpen: true } : d))
     );
     try {
+      if (usbSerialService.getIsConnected()) {
+        await usbSerialService.openGate();
+      }
       if (cleanIp) {
         fetch(`http://${cleanIp}/api/gate/open`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
         fetch(`http://${cleanIp}/api/dispense/open`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
@@ -960,6 +963,9 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       prev.map((d) => (d.id === deviceId ? { ...d, foodGateOpen: false, petEatingActive: false } : d))
     );
     try {
+      if (usbSerialService.getIsConnected()) {
+        await usbSerialService.closeGate();
+      }
       if (cleanIp) {
         fetch(`http://${cleanIp}/api/gate/close`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
         fetch(`http://${cleanIp}/api/dispense/close`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
@@ -1042,6 +1048,9 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       }
       fetch(`http://hydronourish.local/api/water/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
       fetch(`http://192.168.4.1/api/water/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      if (usbSerialService.getIsConnected()) {
+        usbSerialService.calibrateWaterScale(knownMl, factor).catch(() => {});
+      }
       showToast('success', 'Water Calibrated', `Water scale reference applied: ${knownMl ? `${knownMl}ml` : `factor ${factor}`}`);
     } catch {
       showToast('error', 'Scale Error', 'Failed to communicate with water scale calibration');
@@ -1079,6 +1088,9 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       }
       fetch(`http://hydronourish.local/api/scale/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
       fetch(`http://192.168.4.1/api/scale/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      if (usbSerialService.getIsConnected()) {
+        usbSerialService.calibrateScale(knownGrams, factor).catch(() => {});
+      }
       showToast('success', 'Scale Calibrated', `Calibration reference applied: ${knownGrams ? `${knownGrams}g` : `factor ${factor}`}`);
     } catch {
       showToast('error', 'Scale Error', 'Failed to communicate with weight scale calibration');

@@ -6,6 +6,7 @@
  * hardware control, feeding & hydration tracking, and direct patient management.
  */
 
+import { PetSession } from '../types';
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { DashboardLayout } from '../layouts/DashboardLayout';
@@ -69,11 +70,41 @@ export const OverviewPage: React.FC = () => {
     showToast,
   } = useAppContext();
   const {
-    activeSession,
-    hardware,
+    activeSession: ctxSession,
+    hardware: sessionHardware,
     owners,
     getCompletedSessionCount,
   } = useSession();
+
+  const hardware = devices.find(d => d.id === sessionHardware.id || d.status === 'Online') || devices[0] || sessionHardware;
+
+  const assignedPet = ctxSession
+    ? pets.find(p => p.id === ctxSession.petId || p.name.toLowerCase() === ctxSession.petName.toLowerCase())
+    : pets.find(p => (hardware.assignedPetId && p.id === hardware.assignedPetId) || (hardware.assignedPetName && p.name.toLowerCase() === hardware.assignedPetName.toLowerCase()) || p.assignedDeviceId === hardware.id);
+
+  const activeSession = ctxSession || (assignedPet ? ({
+    id: `SES-${assignedPet.id}`,
+    petId: assignedPet.id,
+    petName: assignedPet.name,
+    petSpecies: assignedPet.species,
+    petBreed: assignedPet.breed || 'Domestic',
+    petAvatarUrl: assignedPet.avatarUrl || 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=300',
+    ownerId: assignedPet.ownerId || 'OWN-003',
+    ownerName: assignedPet.ownerName || 'Marc Germine Ganan',
+    deviceId: hardware.id || 'HN-NODE-F778',
+    status: 'active' as const,
+    admissionDate: (assignedPet as any)?.admissionDate || new Date().toISOString(),
+    expectedReleaseDate: (assignedPet as any)?.expectedReleaseDate || new Date(Date.now() + 7 * 86400000).toISOString(),
+    startTime: (assignedPet as any)?.admissionDate || new Date().toISOString(),
+    notes: 'Active station monitoring session',
+    petSnapshot: {
+      feedingPlan: {
+        portionGrams: assignedPet.species?.toLowerCase() === 'cat' ? 35 : 100,
+        targetKcal: 250,
+      },
+      hydrationTarget: assignedPet.species?.toLowerCase() === 'cat' ? 200 : 500,
+    },
+  } as unknown as PetSession) : null);
   const { adminProfile } = useAuth();
 
   // Modals
