@@ -1,4 +1,4 @@
-import { defineConfig, Plugin } from 'vite';
+import { defineConfig, loadEnv, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
@@ -113,9 +113,88 @@ function deviceTelemetryDevPlugin(): Plugin {
   };
 }
 
+function geminiDevPlugin(): Plugin {
+  return {
+    name: 'gemini-dev-api',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (req.url === '/api/gemini' || req.url?.startsWith('/api/gemini?')) {
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+          res.setHeader('Content-Type', 'application/json');
+
+          if (req.method === 'OPTIONS') {
+            res.statusCode = 200;
+            res.end(JSON.stringify({ ok: true }));
+            return;
+          }
+
+          if (req.method === 'POST') {
+            const env = loadEnv('development', process.cwd(), '');
+            const apiKey = (env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || '').trim();
+            if (!apiKey) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: 'Server configuration error: Gemini API key is not configured.' }));
+              return;
+            }
+
+            let bodyStr = '';
+            req.on('data', (chunk) => {
+              bodyStr += chunk;
+            });
+            req.on('end', async () => {
+              try {
+                const { prompt, base64Image, mimeType = 'image/jpeg', model = 'gemini-3.6-flash' } = JSON.parse(bodyStr || '{}');
+                const parts: any[] = [];
+                if (prompt) parts.push({ text: prompt });
+                if (base64Image) {
+                  const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
+                  parts.push({
+                    inline_data: {
+                      mime_type: mimeType,
+                      data: cleanBase64,
+                    },
+                  });
+                }
+
+                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                const geminiRes = await fetch(geminiUrl, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ contents: [{ parts }] }),
+                });
+
+                if (!geminiRes.ok) {
+                  const errText = await geminiRes.text();
+                  res.statusCode = geminiRes.status;
+                  res.end(JSON.stringify({ error: `Gemini API error: ${errText}` }));
+                  return;
+                }
+
+                const geminiData = await geminiRes.json();
+                const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                res.statusCode = 200;
+                res.end(JSON.stringify({ success: true, text, model, provider: 'Gemini 3.6 Flash' }));
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: err.message || 'Server error' }));
+              }
+            });
+            return;
+          }
+          next();
+        } else {
+          next();
+        }
+      });
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), deviceTelemetryDevPlugin()],
+  plugins: [react(), tailwindcss(), deviceTelemetryDevPlugin(), geminiDevPlugin()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

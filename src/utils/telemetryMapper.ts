@@ -155,6 +155,8 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
   let parsedCamIp = item.camera_ip || item.sta_ip || '';
   let parsedSsid = item.wifi_ssid || item.ssid || item.wifiSsid || '';
 
+  let parsedScaleReady: boolean | undefined = item.scale_ready !== undefined && item.scale_ready !== null ? Boolean(item.scale_ready) : undefined;
+
   if (rawFw && rawFw.includes('|')) {
     const parts = rawFw.split('|');
     fw = parts[0];
@@ -166,6 +168,11 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
       if (p.startsWith('WT:')) {
         const val = Number(p.replace('WT:', ''));
         if (!isNaN(val)) parsedWeight = val;
+      }
+      if (p.startsWith('SCALE:')) {
+        const tag = p.replace('SCALE:', '').trim().toUpperCase();
+        if (tag === 'READY') parsedScaleReady = true;
+        else if (tag === 'WAITING' || tag === 'NO') parsedScaleReady = false;
       }
       if (p.startsWith('IP:')) {
         parsedIp = p.replace('IP:', '').trim();
@@ -216,6 +223,25 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
     parsedCamIp = parsedIp;
   }
 
+  const isPumpDeactivated = Boolean(
+    rawFw.includes('PUMP:DISABLED') ||
+    rawFw.includes('PUMP:LOCKED')
+  );
+
+  const savedAuto = typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_refill_${item.id}`) : null;
+  const autoRefillEnabled = savedAuto !== null
+    ? savedAuto === '1'
+    : Boolean(rawFw.includes('AUTO:ON') && !rawFw.includes('AUTO:OFF'));
+
+  let finalFw = rawFw;
+  if (autoRefillEnabled) {
+    finalFw = finalFw.replace('AUTO:OFF', 'AUTO:ON');
+    if (!finalFw.includes('AUTO:ON')) finalFw += '|AUTO:ON';
+  } else {
+    finalFw = finalFw.replace('AUTO:ON', 'AUTO:OFF');
+    if (!finalFw.includes('AUTO:OFF')) finalFw += '|AUTO:OFF';
+  }
+
   return {
     id: item.id,
     deviceName: item.device_name || 'HydroNourish Smart Cage Unit',
@@ -239,14 +265,16 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
     batteryPct: item.battery_pct !== null && item.battery_pct !== undefined ? Number(item.battery_pct) : 100,
     isPluggedIn: item.is_plugged_in !== null && item.is_plugged_in !== undefined ? Boolean(item.is_plugged_in) : true,
     lastTransmission: displayTransmission,
-    firmwareVersion: fw,
+    firmwareVersion: finalFw,
     macAddress: item.mac_address || '1C:C3:AB:F9:F7:78',
     ipAddress: parsedIp || undefined,
     cameraIp: parsedCamIp || undefined,
     isPumping: Boolean(item.is_pumping),
+    autoRefillEnabled,
+    isPumpDeactivated,
     foodGateOpen: Boolean(item.food_gate_open),
     petEatingActive: Boolean(item.pet_eating_active),
-    scaleReady: item.scale_ready !== undefined ? Boolean(item.scale_ready) : undefined,
+    scaleReady: parsedScaleReady ?? (item.scale_ready !== undefined ? Boolean(item.scale_ready) : undefined),
     petDrinkingActive: item.pet_drinking_active !== undefined ? Boolean(item.pet_drinking_active) : undefined,
     lastIntakeWaterMl: item.last_intake_water_ml !== undefined && item.last_intake_water_ml !== null ? Number(item.last_intake_water_ml) : undefined,
     lastIntakeFoodGrams: item.last_intake_food_grams !== undefined && item.last_intake_food_grams !== null ? Number(item.last_intake_food_grams) : undefined,

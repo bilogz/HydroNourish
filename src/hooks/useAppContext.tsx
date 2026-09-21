@@ -73,6 +73,7 @@ import {
 } from '../services/clinicUserService';
 
 import { generateTelemetryDelta, processTelemetryPayload } from '../services/telemetryService';
+import { usbSerialService } from '../services/usbSerialService';
 
 interface AppContextType {
   pets: Pet[];
@@ -112,6 +113,10 @@ interface AppContextType {
   setPetEatingDirect: (deviceId: string, isEating: boolean) => Promise<void>;
   setPetDrinkingDirect: (deviceId: string, isDrinking: boolean) => Promise<void>;
   tareScaleDirect: (deviceId: string) => Promise<void>;
+  tareWaterScaleDirect: (deviceId: string) => Promise<void>;
+  calibrateWaterScaleDirect: (deviceId: string, knownMl?: number, factor?: number) => Promise<void>;
+  calibrateScaleDirect: (deviceId: string, knownGrams?: number, factor?: number) => Promise<void>;
+  fetchScaleWeightDirect: (deviceId: string) => Promise<number | null>;
   dispenseWaterDirect: (deviceId: string, amountMl?: number) => void;
   startPumpDirect: (deviceId: string) => Promise<void>;
   stopPumpDirect: (deviceId: string) => Promise<void>;
@@ -194,24 +199,63 @@ export const mergeChatThreads = (
   return combined;
 };
 
+// Anti-bounce lock for manual hardware overrides
+const pendingUserOverrides = new Map<string, {
+  pumpDeactivated?: boolean;
+  autoRefillEnabled?: boolean;
+  firmwareVersion?: string;
+  time: number;
+}>();
+
 // Non-Destructive Device State Merger
 export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Device[] => {
   if (!incoming || incoming.length === 0) return existing;
   const map = new Map<string, Device>();
   (existing || []).forEach((d) => map.set(d.id, d));
+  const now = Date.now();
+
   incoming.forEach((d) => {
     const prev = map.get(d.id);
     if (prev) {
-      map.set(d.id, { ...prev, ...d });
+      const merged: Device = { ...prev, ...d };
+
+      // 1. Check local storage preference for auto-refill
+      const savedAuto = typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_refill_${d.id}`) : null;
+      // 2. Check pending user overrides (within 15 seconds)
+      const override = pendingUserOverrides.get(d.id);
+      const hasRecentAutoOverride = override && override.autoRefillEnabled !== undefined && (now - override.time < 15000);
+      const hasRecentPumpOverride = override && override.pumpDeactivated !== undefined && (now - override.time < 15000);
+
+      if (hasRecentAutoOverride) {
+        merged.autoRefillEnabled = override.autoRefillEnabled;
+      } else if (savedAuto !== null) {
+        merged.autoRefillEnabled = savedAuto === '1';
+      }
+
+      if (hasRecentPumpOverride) {
+        merged.isPumpDeactivated = override.pumpDeactivated;
+      }
+
+      // Ensure firmwareVersion tag aligns with autoRefillEnabled
+      if (merged.autoRefillEnabled !== undefined) {
+        let fw = merged.firmwareVersion || prev.firmwareVersion || 'v2.5.0-ESP32';
+        if (merged.autoRefillEnabled) {
+          fw = fw.replace('AUTO:OFF', 'AUTO:ON');
+          if (!fw.includes('AUTO:ON')) fw += '|AUTO:ON';
+        } else {
+          fw = fw.replace('AUTO:ON', 'AUTO:OFF');
+          if (!fw.includes('AUTO:OFF')) fw += '|AUTO:OFF';
+        }
+        merged.firmwareVersion = fw;
+      }
+
+      map.set(d.id, merged);
     } else {
       map.set(d.id, d);
     }
   });
   return Array.from(map.values());
 };
-
-// Anti-bounce lock for manual hardware overrides
-const pendingUserOverrides = new Map<string, any>();
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [pets, setPets] = useState<Pet[]>(() => {
@@ -384,7 +428,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }, 1500);
 
-    return () => clearInterval(devicePollInterval);
+    // Direct USB WebSerial Live Telemetry Wire
+    const unsubUsb = usbSerialService.onTelemetry((telemetry) => {
+      if (!telemetry) return;
+      const targetId = telemetry.deviceId || 'HN-NODE-F778';
+      setDevices((prev) => {
+        const hasMatch = prev.some((d) => d.id === targetId);
+        if (hasMatch) {
+          return prev.map((d) => {
+            if (d.id === targetId) {
+              return {
+                ...d,
+                status: 'Online',
+                lastTransmission: 'Live — Direct USB',
+                foodBowlWeightGrams: typeof telemetry.foodBowlWeightGrams === 'number' ? telemetry.foodBowlWeightGrams : d.foodBowlWeightGrams,
+                scaleReady: telemetry.scaleReady !== undefined ? telemetry.scaleReady : d.scaleReady,
+                lastIntakeFoodGrams: typeof telemetry.lastIntakeFoodGrams === 'number' ? telemetry.lastIntakeFoodGrams : d.lastIntakeFoodGrams,
+                foodLevelPct: typeof telemetry.foodLevel === 'number' ? telemetry.foodLevel : d.foodLevelPct,
+                waterLevelPct: typeof telemetry.waterLevel === 'number' ? telemetry.waterLevel : d.waterLevelPct,
+                waterQualityPpm: typeof telemetry.tds === 'number' ? telemetry.tds : d.waterQualityPpm,
+                isPumping: telemetry.isPumping !== undefined ? telemetry.isPumping : d.isPumping,
+                autoRefillEnabled: telemetry.autoRefill !== undefined ? telemetry.autoRefill : d.autoRefillEnabled,
+              };
+            }
+            return d;
+          });
+        }
+        return prev;
+      });
+    });
+
+    return () => {
+      clearInterval(devicePollInterval);
+      unsubUsb();
+    };
   }, []);
 
 // Web Audio synthesized chime for live incoming notifications
@@ -934,11 +1011,48 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     } catch {}
   };
 
+  const tareWaterScaleDirect = async (deviceId: string) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    setDevices((prev) =>
+      prev.map((d) => (d.id === deviceId ? { ...d, waterLiters: 0.0, waterLevelPct: 0 } : d))
+    );
+    try {
+      if (cleanIp) {
+        fetch(`http://${cleanIp}/api/water/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      }
+      fetch(`http://hydronourish.local/api/water/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      fetch(`http://192.168.4.1/api/water/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      if (usbSerialService.getIsConnected()) {
+        usbSerialService.tareWaterScale().catch(() => {});
+      }
+      showToast('success', 'Water Scale Tared', 'Water reservoir load cell tared to 0 ml (Zero Reference)');
+    } catch {
+      showToast('error', 'Scale Error', 'Failed to communicate with water scale');
+    }
+  };
+
+  const calibrateWaterScaleDirect = async (deviceId: string, knownMl?: number, factor?: number) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    const query = knownMl ? `known_ml=${knownMl}` : `factor=${factor || 420.0}`;
+    try {
+      if (cleanIp) {
+        fetch(`http://${cleanIp}/api/water/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      }
+      fetch(`http://hydronourish.local/api/water/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      fetch(`http://192.168.4.1/api/water/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      showToast('success', 'Water Calibrated', `Water scale reference applied: ${knownMl ? `${knownMl}ml` : `factor ${factor}`}`);
+    } catch {
+      showToast('error', 'Scale Error', 'Failed to communicate with water scale calibration');
+    }
+  };
+
   const tareScaleDirect = async (deviceId: string) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
     setDevices((prev) =>
-      prev.map((d) => (d.id === deviceId ? { ...d, foodBowlWeightGrams: 0.0 } : d))
+      prev.map((d) => (d.id === deviceId ? { ...d, foodBowlWeightGrams: 0.0, scaleReady: true } : d))
     );
     try {
       if (cleanIp) {
@@ -946,10 +1060,55 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       }
       fetch(`http://hydronourish.local/api/scale/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
       fetch(`http://192.168.4.1/api/scale/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      if (usbSerialService.getIsConnected()) {
+        usbSerialService.tareScale().catch(() => {});
+      }
       showToast('success', 'Scale Tared', 'Food bowl scale tared to 0.0g');
     } catch {
       showToast('error', 'Scale Error', 'Failed to communicate with weight scale');
     }
+  };
+
+  const calibrateScaleDirect = async (deviceId: string, knownGrams?: number, factor?: number) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    const query = knownGrams ? `known_grams=${knownGrams}` : `factor=${factor || 420.0}`;
+    try {
+      if (cleanIp) {
+        fetch(`http://${cleanIp}/api/scale/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      }
+      fetch(`http://hydronourish.local/api/scale/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      fetch(`http://192.168.4.1/api/scale/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      showToast('success', 'Scale Calibrated', `Calibration reference applied: ${knownGrams ? `${knownGrams}g` : `factor ${factor}`}`);
+    } catch {
+      showToast('error', 'Scale Error', 'Failed to communicate with weight scale calibration');
+    }
+  };
+
+  const fetchScaleWeightDirect = async (deviceId: string): Promise<number | null> => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    const endpoints = [
+      cleanIp ? `http://${cleanIp}/api/scale/weight` : '',
+      'http://hydronourish.local/api/scale/weight',
+      'http://192.168.4.1/api/scale/weight'
+    ].filter(Boolean);
+
+    for (const url of endpoints) {
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data.weight_grams === 'number') {
+            setDevices((prev) =>
+              prev.map((d) => (d.id === deviceId ? { ...d, foodBowlWeightGrams: data.weight_grams } : d))
+            );
+            return data.weight_grams;
+          }
+        }
+      } catch {}
+    }
+    return null;
   };
 
   const dispenseWaterDirect = async (deviceId: string, amountMl: number = 500) => {
@@ -975,6 +1134,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     try {
       const endpoints = [
         `http://${cleanIp}/api/dispense/water?amount=${amountMl}`,
+        `http://192.168.100.157/api/dispense/water?amount=${amountMl}`,
         `http://192.168.100.159/api/dispense/water?amount=${amountMl}`,
         `http://hydronourish.local/api/dispense/water?amount=${amountMl}`
       ];
@@ -1012,6 +1172,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     try {
       const endpoints = [
         `http://${cleanIp}/api/pump/on`,
+        `http://192.168.100.157/api/pump/on`,
         `http://192.168.100.159/api/pump/on`,
         `http://hydronourish.local/api/pump/on`
       ];
@@ -1065,6 +1226,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       const endpoints = [
         `http://${cleanIp}/api/pump/stop`,
         `http://${cleanIp}/api/pump/off`,
+        `http://192.168.100.157/api/pump/stop`,
         `http://192.168.100.159/api/pump/stop`,
         `http://hydronourish.local/api/pump/stop`
       ];
@@ -1231,51 +1393,99 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
 
   const toggleAutoRefillDirect = async (deviceId: string, enable?: boolean) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const shouldEnable = enable !== undefined ? enable : !dev?.firmwareVersion?.includes('AUTO:ON');
+    
+    // Check saved state, explicit property, or firmware tag
+    const savedAuto = typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_refill_${deviceId}`) : null;
+    const isCurrentlyOn = savedAuto !== null
+      ? savedAuto === '1'
+      : Boolean(dev?.autoRefillEnabled ?? (dev?.firmwareVersion?.includes('AUTO:ON') && !dev?.firmwareVersion?.includes('AUTO:OFF')));
+
+    const shouldEnable = enable !== undefined ? enable : !isCurrentlyOn;
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
     const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
 
-    // 1. Direct LAN call
+    // Persist immediately in localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`hn_auto_refill_${deviceId}`, shouldEnable ? '1' : '0');
+      localStorage.removeItem(`hn_pump_deactivated_${deviceId}`);
+    }
+
+    let newFw = dev?.firmwareVersion || 'v2.5.0-ESP32';
+    // Ensure pump stays active and NOT locked/deactivated when toggling auto-refill
+    newFw = newFw.replace('PUMP:DISABLED', 'PUMP:ACTIVE').replace('PUMP:LOCKED', 'PUMP:ACTIVE');
+    if (!newFw.includes('PUMP:ACTIVE') && !newFw.includes('PUMP:RUNNING')) {
+      newFw += '|PUMP:ACTIVE';
+    }
+
+    if (newFw.includes('AUTO:')) {
+      newFw = newFw.replace(/AUTO:(OFF|ON)/, shouldEnable ? 'AUTO:ON' : 'AUTO:OFF');
+    } else {
+      newFw = `${newFw}|AUTO:${shouldEnable ? 'ON' : 'OFF'}`;
+    }
+    if (shouldEnable) {
+      newFw = newFw.replace('AUTO:OFF', 'AUTO:ON');
+    } else {
+      newFw = newFw.replace('AUTO:ON', 'AUTO:OFF');
+    }
+
+    // Lock anti-bounce override
+    pendingUserOverrides.set(deviceId, {
+      ...pendingUserOverrides.get(deviceId),
+      autoRefillEnabled: shouldEnable,
+      pumpDeactivated: false,
+      time: Date.now(),
+    });
+
+    // 1. Direct LAN call with immediate pump stop if disabling
     try {
       const endpoints = [
         `http://${cleanIp}/api/auto-refill?enabled=${shouldEnable ? '1' : '0'}`,
+        `http://192.168.100.157/api/auto-refill?enabled=${shouldEnable ? '1' : '0'}`,
         `http://192.168.100.159/api/auto-refill?enabled=${shouldEnable ? '1' : '0'}`,
-        `http://hydronourish.local/api/auto-refill?enabled=${shouldEnable ? '1' : '0'}`
       ];
       endpoints.forEach((url) => {
-        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
         fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-        const img = new Image();
-        img.src = `${url}&_t=${Date.now()}`;
       });
+
+      // If turning off auto-refill, kill physical pump power immediately
+      if (!shouldEnable) {
+        [
+          `http://${cleanIp}/api/pump/stop`,
+          `http://192.168.100.157/api/pump/stop`,
+          `http://192.168.100.159/api/pump/stop`,
+        ].forEach((url) => {
+          fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+          fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+        });
+      }
     } catch {}
 
-    // 2. Supabase Cloud Remote Command
+    // 2. Optimistic UI state update (pump stays UNLOCKED and ready for manual use)
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId
+          ? {
+              ...d,
+              autoRefillEnabled: shouldEnable,
+              isPumpDeactivated: false,
+              firmwareVersion: newFw,
+            }
+          : d
+      )
+    );
+
+    // 3. Supabase Cloud Remote Command
     const newSch: FeedingSchedule = {
       id: `SCH-${shouldEnable ? 'AUTOON' : 'AUTOOFF'}-${Date.now()}`,
       deviceId: deviceId,
-      foodType: shouldEnable ? 'Auto Refill Enable' : 'Auto Refill Disable',
+      foodType: shouldEnable ? 'Auto Refill Enable' : 'Auto Refill Pause',
       portionGrams: 0,
       scheduledTime: 'Instant Manual',
       dispenseStatus: 'Pending',
       petId: petId,
       petName: petName,
     };
-
-    // Optimistic UI state update
-    setDevices((prev) =>
-      prev.map((d) =>
-        d.id === deviceId
-          ? {
-              ...d,
-              firmwareVersion: (d.firmwareVersion || '').includes('AUTO:')
-                ? (d.firmwareVersion || '').replace(/AUTO:(OFF|ON)/, shouldEnable ? 'AUTO:ON' : 'AUTO:OFF')
-                : `${d.firmwareVersion || ''}|AUTO:${shouldEnable ? 'ON' : 'OFF'}`
-            }
-          : d
-      )
-    );
 
     setSchedules((prev) => [newSch, ...prev]);
     showToast(
@@ -1286,6 +1496,8 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         : `Automatic refill paused for node ${deviceId}.`
     );
 
+    // 4. Persist to Supabase device row so subsequent polls don't revert
+    updateDeviceInSupabase(deviceId, { firmwareVersion: newFw }).catch(() => {});
     await insertScheduleToSupabase(newSch);
   };
 
@@ -1312,6 +1524,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       const path = makeDeactivated ? '/api/pump/deactivate' : '/api/pump/activate';
       const endpoints = [
         `http://${cleanIp}${path}`,
+        `http://192.168.100.157${path}`,
         `http://192.168.100.159${path}`,
         `http://hydronourish.local${path}`
       ];
@@ -1913,6 +2126,10 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         setPetEatingDirect,
         setPetDrinkingDirect,
         tareScaleDirect,
+        tareWaterScaleDirect,
+        calibrateWaterScaleDirect,
+        calibrateScaleDirect,
+        fetchScaleWeightDirect,
         dispenseWaterDirect,
         startPumpDirect,
         stopPumpDirect,

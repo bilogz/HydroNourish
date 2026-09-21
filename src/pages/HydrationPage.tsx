@@ -56,6 +56,9 @@ export const HydrationPage: React.FC = () => {
     startPumpDirect,
     stopPumpDirect,
     toggleAutoRefillDirect,
+    tareWaterScaleDirect,
+    runBowlSanitationCycle,
+    dispenseCleaningWaterDirect,
     showToast,
   } = useAppContext();
 
@@ -82,6 +85,12 @@ export const HydrationPage: React.FC = () => {
   }, [devices]);
 
   const isDeviceConnected = Boolean(selectedDevice && selectedDevice.status === 'Online');
+  const isAutoRefillOn = Boolean(
+    selectedDevice?.autoRefillEnabled ?? (
+      selectedDevice?.firmwareVersion?.includes('AUTO:ON') &&
+      !selectedDevice?.firmwareVersion?.includes('AUTO:OFF')
+    )
+  );
 
   // Clean deduplicated logs
   const displayLogs = useMemo(() => {
@@ -369,12 +378,12 @@ export const HydrationPage: React.FC = () => {
                   <span className="text-slate-400 font-bold uppercase text-[10px]">Auto-Refill Mode</span>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      !selectedDevice.firmwareVersion?.includes('AUTO:OFF')
+                      isAutoRefillOn
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         : 'bg-slate-100 text-slate-600 border border-slate-200'
                     }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${!selectedDevice.firmwareVersion?.includes('AUTO:OFF') ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                      {!selectedDevice.firmwareVersion?.includes('AUTO:OFF') ? 'Auto-Refill (<=10%)' : 'Auto Paused'}
+                      <span className={`w-1.5 h-1.5 rounded-full ${isAutoRefillOn ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                      {isAutoRefillOn ? 'Auto-Refill (<=10%)' : 'Auto Paused'}
                     </span>
                   </div>
                 </div>
@@ -416,37 +425,69 @@ export const HydrationPage: React.FC = () => {
 
                 {/* 4. Auto-Refill Toggle */}
                 <button
-                  onClick={() => toggleAutoRefillDirect(selectedDevice.id, selectedDevice.firmwareVersion?.includes('AUTO:OFF'))}
+                  onClick={() => toggleAutoRefillDirect(selectedDevice.id, !isAutoRefillOn)}
                   className={`py-2.5 px-3 rounded-xl font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
-                    !selectedDevice.firmwareVersion?.includes('AUTO:OFF')
+                    isAutoRefillOn
                       ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
                       : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
                   }`}
                   title="Toggle Autonomous Water Refilling below 10%"
                 >
                   <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                  Auto: {!selectedDevice.firmwareVersion?.includes('AUTO:OFF') ? 'ON' : 'OFF'}
+                  Auto: {isAutoRefillOn ? 'ON' : 'OFF'}
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="grid grid-cols-3 gap-2 pt-1">
                 <button
                   onClick={() => setCustomWaterModalOpen(true)}
-                  className="py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  className="py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
                   title="Custom Water Level Target Override"
                 >
                   <Sliders className="w-3.5 h-3.5 text-sky-400" />
-                  Custom Level Target
+                  Target
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedDevice) {
+                      tareWaterScaleDirect(selectedDevice.id);
+                    }
+                  }}
+                  className="py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-xs border border-sky-200 transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
+                  title="Zero / Tare Water Reservoir Load Cell (0 ml)"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-sky-600" />
+                  Tare (0ml)
                 </button>
                 <button
                   onClick={handleOpenRefillModal}
-                  className="py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border border-slate-300 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  className="py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border border-slate-300 transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
                   title="Mark reservoir refilled to 100%"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 text-sky-600" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                   Refill 100%
                 </button>
               </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!selectedDevice) return;
+                  showToast('info', 'Cleaning Water Bowl', 'Dispensing rinse water and draining dirty bowl...');
+                  if (runBowlSanitationCycle) {
+                    await runBowlSanitationCycle(selectedDevice.id);
+                  } else if (dispenseCleaningWaterDirect) {
+                    await dispenseCleaningWaterDirect(selectedDevice.id, 250);
+                  }
+                  await tareWaterScaleDirect(selectedDevice.id);
+                  showToast('success', 'Water Bowl Cleaned', 'Rinse & drainage cycle completed.');
+                }}
+                className="w-full mt-2 py-2 rounded-xl bg-gradient-to-r from-sky-50 to-indigo-50 hover:from-sky-100 hover:to-indigo-100 text-sky-800 font-bold text-xs border border-sky-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
+                title="Run automated flush and drainage cycle to clean the water bowl"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+                <span>Clean & Sanitize Water Bowl</span>
+              </button>
             </div>
           </div>
         )}

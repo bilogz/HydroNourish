@@ -23,7 +23,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   RotateCw,
-  Gauge
+  Gauge,
+  Scale
 } from 'lucide-react';
 import { usbSerialService, USBTelemetry, ScannedWifiNetwork } from '../services/usbSerialService';
 
@@ -145,6 +146,10 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
     { label: '⚡ Speed: 2000µs', cmd: 'SPEED:2000' },
     { label: '⚡ Speed: 3000µs', cmd: 'SPEED:3000' },
     { label: '📊 Status', cmd: 'STATUS' },
+    { label: '⚖️ Tare Food (0g)', cmd: 'TARE' },
+    { label: '💧 Tare Water (0ml)', cmd: 'WATERTARE' },
+    { label: '💧 Water Status', cmd: 'WATER' },
+    { label: '⚖️ Weight', cmd: 'WEIGHT' },
     { label: '🛠️ Diag', cmd: 'DIAG' },
     { label: '🔒 Lock Motor', cmd: 'MOTOR ON' },
     { label: '🔓 Free Motor', cmd: 'MOTOR OFF' },
@@ -346,6 +351,38 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
                 <div>
                   <p className="font-bold text-xs text-white">Toggle Auto-Refill</p>
                   <p className="text-[10px] text-slate-400">{telemetry?.autoRefill ? 'Enabled' : 'Disabled'}</p>
+                </div>
+              </button>
+
+              {/* Zero / Tare Food Scale */}
+              <button
+                onClick={() => runAction(() => usbSerialService.tareScale())}
+                disabled={!isConnected || isActing}
+                className="p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-emerald-500/50 flex flex-col items-center text-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group active:scale-95"
+                title="Tare food bowl scale to 0.0g"
+              >
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Scale className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-bold text-xs text-white">Tare Food</p>
+                  <p className="text-[10px] text-slate-400">Zero Out (0.0g)</p>
+                </div>
+              </button>
+
+              {/* Zero / Tare Water Scale */}
+              <button
+                onClick={() => runAction(() => usbSerialService.tareWaterScale())}
+                disabled={!isConnected || isActing}
+                className="p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-sky-500/50 flex flex-col items-center text-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group active:scale-95"
+                title="Tare water reservoir scale to 0 ml"
+              >
+                <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Droplets className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-bold text-xs text-white">Tare Water</p>
+                  <p className="text-[10px] text-slate-400">Zero Out (0ml)</p>
                 </div>
               </button>
 
@@ -593,7 +630,7 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
 
         {/* Tab 3: Live Telemetry Gauges */}
         {activeTab === 'telemetry' && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {/* Water Level */}
             <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800">
               <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
@@ -633,6 +670,20 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
               </div>
               <p className="text-[10px] text-slate-500 mt-1">
                 Step Delay: {telemetry?.stepDelay ? `${telemetry.stepDelay} µs` : 'Standard'}
+              </p>
+            </div>
+
+            {/* Food Bowl Scale */}
+            <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800">
+              <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+                <span className="font-semibold">Food Bowl Scale</span>
+                <Scale className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="text-2xl font-black text-emerald-400">
+                {telemetry?.foodBowlWeightGrams !== undefined ? `${telemetry.foodBowlWeightGrams.toFixed(1)} g` : '--'}
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">
+                HX711 24-bit {telemetry?.scaleReady ? 'Ready' : 'Standby'}
               </p>
             </div>
 

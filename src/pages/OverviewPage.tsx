@@ -109,6 +109,12 @@ export const OverviewPage: React.FC = () => {
   ];
 
   const hasDeviceConnected = Boolean(hardware && hardware.status === 'Online');
+  const isAutoRefillOn = Boolean(
+    hardware?.autoRefillEnabled ?? (
+      hardware?.firmwareVersion?.includes('AUTO:ON') &&
+      !hardware?.firmwareVersion?.includes('AUTO:OFF')
+    )
+  );
 
   return (
     <DashboardLayout pageTitle="Clinical Operations Overview" breadcrumbs={[{ label: 'Dashboard' }]}>
@@ -167,7 +173,39 @@ export const OverviewPage: React.FC = () => {
         />
 
         {/* ================= DEVICE LEVELS QUICK VIEW ================= */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard
+            title="Food Bowl Scale"
+            value={hasDeviceConnected ? `${(hardware.foodBowlWeightGrams ?? 0).toFixed(1)} g` : 'N/A'}
+            subtitle={
+              !hasDeviceConnected
+                ? 'No device active'
+                : hardware.scaleReady === false
+                ? 'HX711 Not Detected'
+                : 'Live Load Cell (HX711)'
+            }
+            icon={Scale}
+            iconBgColor="bg-emerald-50"
+            iconTextColor="text-emerald-600"
+            badgeText={
+              !hasDeviceConnected
+                ? 'Offline'
+                : hardware.scaleReady === false
+                ? 'Not Detected'
+                : hardware.foodBowlWeightGrams && hardware.foodBowlWeightGrams > 3
+                ? `${hardware.foodBowlWeightGrams.toFixed(0)}g Loaded`
+                : '0.0g Ready'
+            }
+            badgeType={
+              !hasDeviceConnected
+                ? 'info'
+                : hardware.scaleReady === false
+                ? 'alert'
+                : hardware.foodBowlWeightGrams && hardware.foodBowlWeightGrams > 3
+                ? 'warning'
+                : 'success'
+            }
+          />
           <StatCard
             title="Feeder Hopper"
             value={hasDeviceConnected ? hardware.foodLevelPct + '%' : 'N/A'}
@@ -257,16 +295,16 @@ export const OverviewPage: React.FC = () => {
               </button>
 
               <button
-                onClick={() => toggleAutoRefillDirect(hardware.id, hardware.firmwareVersion?.includes('AUTO:OFF'))}
+                onClick={() => toggleAutoRefillDirect(hardware.id, !isAutoRefillOn)}
                 className={`px-3.5 py-2 rounded-xl font-bold text-xs border flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
-                  !hardware.firmwareVersion?.includes('AUTO:OFF')
+                  isAutoRefillOn
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 hover:bg-emerald-500/30'
                     : 'bg-slate-700/50 text-slate-300 border-slate-600 hover:bg-slate-700'
                 }`}
                 title="Toggle automated water refilling when water drops <= 10%"
               >
                 <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                Auto-Refill: {!hardware.firmwareVersion?.includes('AUTO:OFF') ? 'ENABLED (<=10%)' : 'DISABLED'}
+                Auto-Refill: {isAutoRefillOn ? 'ENABLED (<=10%)' : 'DISABLED'}
               </button>
 
               <button
@@ -275,7 +313,7 @@ export const OverviewPage: React.FC = () => {
                 title="Zero / Tare the Food Bowl Weight Scale"
               >
                 <Scale className="w-3.5 h-3.5 text-emerald-400" />
-                Bowl: {hardware.foodBowlWeightGrams ? hardware.foodBowlWeightGrams.toFixed(1) : '0.0'}g (Tare)
+                Bowl: {typeof hardware.foodBowlWeightGrams === 'number' ? hardware.foodBowlWeightGrams.toFixed(1) : '0.0'}g (Tare)
               </button>
             </div>
           </div>

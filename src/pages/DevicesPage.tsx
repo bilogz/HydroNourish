@@ -62,6 +62,11 @@ export const DevicesPage: React.FC = () => {
     togglePumpMasterDirect,
     deactivatePumpDirect,
     tareScaleDirect,
+    tareWaterScaleDirect,
+    openGateDirect,
+    closeGateDirect,
+    runBowlSanitationCycle,
+    dispenseCleaningWaterDirect,
   } = useAppContext();
 
   const [connectModalOpen, setConnectModalOpen] = useState(false);
@@ -97,6 +102,62 @@ export const DevicesPage: React.FC = () => {
   // Custom Manual Dispense State
   const [customPortionGrams, setCustomPortionGrams] = useState(75);
   const [customWaterLevelPct, setCustomWaterLevelPct] = useState(75);
+  const [taringDevId, setTaringDevId] = useState<string | null>(null);
+  const [taringWaterDevId, setTaringWaterDevId] = useState<string | null>(null);
+  const [isCleaningFood, setIsCleaningFood] = useState(false);
+  const [isCleaningWater, setIsCleaningWater] = useState(false);
+
+  const handleCleanFood = async (deviceId: string) => {
+    setIsCleaningFood(true);
+    showToast('info', 'Cleaning Food Feeder', 'Opening dispenser gate to clear leftover kibble & debris...');
+    try {
+      if (openGateDirect) await openGateDirect(deviceId);
+      await new Promise(r => setTimeout(r, 4000));
+      if (closeGateDirect) await closeGateDirect(deviceId);
+      await tareScaleDirect(deviceId);
+      showToast('success', 'Food Feeder Cleaned', 'Gate closed & Food Scale tared to 0.0g.');
+    } catch {
+      showToast('error', 'Cleaning Error', 'Failed to complete food feeder cleaning sequence.');
+    } finally {
+      setIsCleaningFood(false);
+    }
+  };
+
+  const handleCleanWater = async (deviceId: string) => {
+    setIsCleaningWater(true);
+    showToast('info', 'Cleaning Water Bowl', 'Initiating water flush & drainage cycle...');
+    try {
+      if (runBowlSanitationCycle) {
+        await runBowlSanitationCycle(deviceId);
+      } else if (dispenseCleaningWaterDirect) {
+        await dispenseCleaningWaterDirect(deviceId, 250);
+      }
+      await tareWaterScaleDirect(deviceId);
+      showToast('success', 'Water Bowl Cleaned', 'Water bowl rinsed & scale tared to 0 ml.');
+    } catch {
+      showToast('error', 'Cleaning Error', 'Failed to complete water cleaning sequence.');
+    } finally {
+      setIsCleaningWater(false);
+    }
+  };
+
+  const handleWaterTareClick = async (deviceId: string) => {
+    setTaringWaterDevId(deviceId);
+    try {
+      await tareWaterScaleDirect(deviceId);
+    } finally {
+      setTimeout(() => setTaringWaterDevId(null), 800);
+    }
+  };
+
+  const handleTareClick = async (deviceId: string) => {
+    setTaringDevId(deviceId);
+    try {
+      await tareScaleDirect(deviceId);
+    } finally {
+      setTimeout(() => setTaringDevId(null), 800);
+    }
+  };
 
   // Derive selectedDevice from LIVE devices array
   const selectedDevice = selectedDeviceId
@@ -647,6 +708,12 @@ export const DevicesPage: React.FC = () => {
                 featuredDevice.firmwareVersion?.includes('PUMP:LOCKED')
               )
             );
+            const isAutoRefillOn = Boolean(
+              featuredDevice.autoRefillEnabled ?? (
+                featuredDevice.firmwareVersion?.includes('AUTO:ON') &&
+                !featuredDevice.firmwareVersion?.includes('AUTO:OFF')
+              )
+            );
 
             return (
               <div className="clinic-card overflow-hidden bg-white border border-slate-200 shadow-xl rounded-2xl">
@@ -845,21 +912,57 @@ export const DevicesPage: React.FC = () => {
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    tareScaleDirect(featuredDevice.id);
+                                    handleTareClick(featuredDevice.id);
                                   }}
+                                  disabled={taringDevId === featuredDevice.id}
                                   title="Zero / Tare the Food Bowl Weight Scale"
-                                  className="text-[9px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                                  className="text-[9px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-1"
                                 >
-                                  Tare
+                                  <RefreshCw className={`w-2.5 h-2.5 ${taringDevId === featuredDevice.id ? 'animate-spin' : ''}`} />
+                                  {taringDevId === featuredDevice.id ? 'Taring...' : 'Tare'}
                                 </button>
                               </div>
                               <div className="flex items-baseline justify-between mt-1">
                                 <span className="font-mono text-sm font-extrabold text-slate-800">
-                                  {featuredDevice.foodBowlWeightGrams ? featuredDevice.foodBowlWeightGrams.toFixed(1) : '0.0'} g
+                                  {typeof featuredDevice.foodBowlWeightGrams === 'number' ? featuredDevice.foodBowlWeightGrams.toFixed(1) : '0.0'} g
                                 </span>
-                                <span className="text-[10px] text-slate-400">
-                                  {featuredDevice.lastIntakeFoodGrams ? `Ate ${featuredDevice.lastIntakeFoodGrams}g` : 'Load Cell'}
-                                </span>
+                                {(() => {
+                                  const isScaleDetected = isOnline && (featuredDevice.scaleReady !== false);
+                                  const weightVal = featuredDevice.foodBowlWeightGrams ?? 0;
+                                  if (!isOnline) {
+                                    return <span className="text-[10px] font-medium text-slate-400">Offline</span>;
+                                  }
+                                  if (!isScaleDetected) {
+                                    return (
+                                      <span className="text-[9px] font-bold text-amber-700 bg-amber-100/80 px-1.5 py-0.5 rounded-md flex items-center gap-1" title="HX711 module not responding on DOUT:16, SCK:17">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                        Not Detected
+                                      </span>
+                                    );
+                                  }
+                                  if (weightVal >= 5.0) {
+                                    return (
+                                      <span className="text-[9px] font-bold text-amber-700 bg-amber-100/90 px-1.5 py-0.5 rounded-md flex items-center gap-1" title="Uneaten food detected: 15-minute auto-flush sequence armed">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                        {weightVal.toFixed(0)}g • 15m Watch
+                                      </span>
+                                    );
+                                  }
+                                  if (weightVal >= 1.0) {
+                                    return (
+                                      <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                        {weightVal.toFixed(0)}g In Bowl
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                      Detected • Ready
+                                    </span>
+                                  );
+                                })()}
                               </div>
                             </div>
 
@@ -877,9 +980,14 @@ export const DevicesPage: React.FC = () => {
                                   const tds = featuredDevice.waterQualityPpm ?? 0;
                                   if (tds === 0) return <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">Dry</span>;
                                   if (tds <= 300) return <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Pure</span>;
-                                  if (tds <= 600) return <span className="text-[9px] font-bold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded">Good Tap</span>;
-                                  if (tds <= 900) return <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">Fair</span>;
-                                  return <span className="text-[9px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">Filter Req</span>;
+                                  if (tds <= 300) return <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Pure</span>;
+                                  if (tds < 500) return <span className="text-[9px] font-bold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded">Good Tap</span>;
+                                  return (
+                                    <span className="text-[9px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded flex items-center gap-1 animate-pulse" title="TDS >= 500 PPM: Automated dirty water drain & refill active">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+                                      Dirty • Auto-Flush
+                                    </span>
+                                  );
                                 })()}
                               </div>
                             </div>
@@ -897,11 +1005,26 @@ export const DevicesPage: React.FC = () => {
                           </div>
 
                           <div>
-                            <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
+                            <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1">
                               <span className="flex items-center gap-1.5"><Droplets className="w-3.5 h-3.5 text-sky-600" /> Water Reservoir Volume</span>
-                              <span className="font-mono text-sky-600">
-                                {Math.round((featuredDevice.waterLiters !== undefined ? featuredDevice.waterLiters * 1000 : ((featuredDevice.waterLevelPct || 0) / 100) * 2500))} ml
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-sky-600 font-extrabold">
+                                  {Math.round((featuredDevice.waterLiters !== undefined ? featuredDevice.waterLiters * 1000 : ((featuredDevice.waterLevelPct || 0) / 100) * 2500))} ml
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleWaterTareClick(featuredDevice.id);
+                                  }}
+                                  disabled={taringWaterDevId === featuredDevice.id}
+                                  title="Zero / Tare the Water Reservoir Scale (0 ml)"
+                                  className="text-[9px] font-bold text-sky-700 bg-sky-100 hover:bg-sky-200 px-2 py-0.5 rounded cursor-pointer transition-colors flex items-center gap-1 shadow-2xs active:scale-95"
+                                >
+                                  <RefreshCw className={`w-2.5 h-2.5 ${taringWaterDevId === featuredDevice.id ? 'animate-spin' : ''}`} />
+                                  {taringWaterDevId === featuredDevice.id ? 'Taring...' : 'Tare Water'}
+                                </button>
+                              </div>
                             </div>
                             <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
                               <div
@@ -1015,11 +1138,11 @@ export const DevicesPage: React.FC = () => {
 
                         {/* REAL TOGGLE SWITCH 2: Auto-Refill Smart System (ON / OFF) */}
                         <div
-                          onClick={() => isOnline && toggleAutoRefillDirect(featuredDevice.id, featuredDevice.firmwareVersion?.includes('AUTO:OFF'))}
+                          onClick={() => isOnline && toggleAutoRefillDirect(featuredDevice.id, !isAutoRefillOn)}
                           className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all select-none ${
                             !isOnline
                               ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
-                              : !featuredDevice.firmwareVersion?.includes('AUTO:OFF')
+                              : isAutoRefillOn
                               ? 'bg-rose-50/60 border-rose-300 hover:bg-rose-100/60 cursor-pointer'
                               : 'bg-slate-100/80 border-slate-200 hover:bg-slate-200/80 cursor-pointer'
                           }`}
@@ -1027,7 +1150,7 @@ export const DevicesPage: React.FC = () => {
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                              !featuredDevice.firmwareVersion?.includes('AUTO:OFF')
+                              isAutoRefillOn
                                 ? 'bg-rose-200/80 text-rose-800'
                                 : 'bg-slate-200 text-slate-600'
                             }`}>
@@ -1035,8 +1158,8 @@ export const DevicesPage: React.FC = () => {
                             </div>
                             <div className="min-w-0">
                               <p className="font-bold text-xs text-slate-800 leading-tight">Auto-Refill</p>
-                              <p className={`text-[10px] font-extrabold ${!featuredDevice.firmwareVersion?.includes('AUTO:OFF') ? 'text-rose-700' : 'text-slate-500'}`}>
-                                {!featuredDevice.firmwareVersion?.includes('AUTO:OFF') ? 'SMART ON' : 'PAUSED'}
+                              <p className={`text-[10px] font-extrabold ${isAutoRefillOn ? 'text-rose-700' : 'text-slate-500'}`}>
+                                {isAutoRefillOn ? 'SMART ON' : 'PAUSED'}
                               </p>
                             </div>
                           </div>
@@ -1044,21 +1167,66 @@ export const DevicesPage: React.FC = () => {
                           {/* Real Sliding Toggle Track & Thumb */}
                           <div
                             className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-colors duration-300 shrink-0 ${
-                              !featuredDevice.firmwareVersion?.includes('AUTO:OFF') ? 'bg-rose-500' : 'bg-slate-300'
+                              isAutoRefillOn ? 'bg-rose-500' : 'bg-slate-300'
                             }`}
                           >
                             <div
                               className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-300 flex items-center justify-center ${
-                                !featuredDevice.firmwareVersion?.includes('AUTO:OFF') ? 'translate-x-5' : 'translate-x-0'
+                                isAutoRefillOn ? 'translate-x-5' : 'translate-x-0'
                               }`}
                             >
-                              {!featuredDevice.firmwareVersion?.includes('AUTO:OFF') ? (
+                              {isAutoRefillOn ? (
                                 <Check className="w-2.5 h-2.5 text-rose-600 font-bold" />
                               ) : (
                                 <PowerOff className="w-2.5 h-2.5 text-slate-400" />
                               )}
                             </div>
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Automated Cleaning & Sanitation Controls */}
+                      <div className="pt-2 border-t border-slate-100/90">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-indigo-500" />
+                            Bowl & Feeder Sanitation
+                          </span>
+                          <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200/80 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                            Auto-Flush: Dirty Water & 15m Waste
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleCleanFood(featuredDevice.id)}
+                            disabled={!isOnline || isCleaningFood}
+                            className={`py-2 px-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 border text-xs cursor-pointer shadow-2xs active:scale-95 ${
+                              isCleaningFood
+                                ? 'bg-amber-50 border-amber-300 text-amber-800'
+                                : 'bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200/80 text-emerald-800 hover:from-emerald-100 hover:to-teal-100'
+                            }`}
+                            title="Open gate to purge old food, clear debris, and zero the food scale"
+                          >
+                            <Sparkles className={`w-3.5 h-3.5 ${isCleaningFood ? 'animate-spin text-amber-600' : 'text-emerald-600'}`} />
+                            <span>{isCleaningFood ? 'Cleaning...' : 'Clean Food'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCleanWater(featuredDevice.id)}
+                            disabled={!isOnline || isCleaningWater}
+                            className={`py-2 px-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 border text-xs cursor-pointer shadow-2xs active:scale-95 ${
+                              isCleaningWater
+                                ? 'bg-sky-50 border-sky-300 text-sky-800'
+                                : 'bg-gradient-to-r from-sky-50 to-blue-50 border-sky-200/80 text-sky-800 hover:from-sky-100 hover:to-blue-100'
+                            }`}
+                            title="Rinse bowl with clean water pump and drain dirty water"
+                          >
+                            <Droplets className={`w-3.5 h-3.5 ${isCleaningWater ? 'animate-bounce text-sky-600' : 'text-sky-600'}`} />
+                            <span>{isCleaningWater ? 'Flushing...' : 'Clean Water'}</span>
+                          </button>
                         </div>
                       </div>
 
@@ -1579,31 +1747,96 @@ export const DevicesPage: React.FC = () => {
       <Modal
         isOpen={calibrateModalOpen}
         onClose={() => setCalibrateModalOpen(false)}
-        title="Hardware Calibration Tool"
-        subtitle={`Zero-Point Tare & Ultrasonic Depth Calibration for ${selectedDevice?.id}`}
+        title="Hardware Calibration & Scale Diagnostic Tool"
+        subtitle={`Zero-Point Tare & Sensor Diagnostics for ${selectedDevice?.id}`}
       >
         <div className="space-y-4 text-xs">
-          <p className="text-slate-600">
-            Ensure the food scale bowl is completely empty and clean before initiating the tare sequence.
+          <p className="text-slate-600 text-[11px]">
+            Select which load cell to zero-calibrate. Ensure the corresponding bowl or reservoir is empty before initiating tare.
           </p>
-          <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800">
-            <strong>Multipoint Piecewise Calibration:</strong> The water depth and food scale are calibrated in firmware across 7 distinct immersion & load levels.
+
+          {/* DUAL SCALE TELEMETRY GRID */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* 1. Food Scale HX711 Card */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white flex flex-col justify-between shadow-xs border border-emerald-500/20">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                  <Scale className="w-3.5 h-3.5" /> Food Bowl Scale
+                </span>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  GPIO 27 / 14
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1.5 my-1">
+                <span className="text-2xl font-mono font-black text-emerald-400">
+                  {typeof selectedDevice?.foodBowlWeightGrams === 'number' ? selectedDevice.foodBowlWeightGrams.toFixed(1) : '0.0'}
+                </span>
+                <span className="text-xs font-bold text-slate-400">grams</span>
+              </div>
+              <p className="text-[10px] text-slate-400 mb-3">HX711 #1 (Pins: DOUT:27, SCK:14)</p>
+              <button
+                type="button"
+                disabled={Boolean(selectedDevice && taringDevId === selectedDevice.id)}
+                onClick={() => {
+                  if (selectedDevice) {
+                    handleTareClick(selectedDevice.id);
+                  }
+                }}
+                className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-xs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${selectedDevice && taringDevId === selectedDevice.id ? 'animate-spin' : ''}`} />
+                <span>{selectedDevice && taringDevId === selectedDevice.id ? 'Taring Food...' : 'Tare Food (0.0g)'}</span>
+              </button>
+            </div>
+
+            {/* 2. Water Scale HX711 Card */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white flex flex-col justify-between shadow-xs border border-sky-500/20">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
+                  <Droplets className="w-3.5 h-3.5" /> Water Reservoir
+                </span>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                  GPIO 32 / 33
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1.5 my-1">
+                <span className="text-2xl font-mono font-black text-sky-400">
+                  {Math.round((selectedDevice?.waterLiters !== undefined ? selectedDevice.waterLiters * 1000 : ((selectedDevice?.waterLevelPct || 0) / 100) * 2500))}
+                </span>
+                <span className="text-xs font-bold text-slate-400">ml (1g = 1ml)</span>
+              </div>
+              <p className="text-[10px] text-slate-400 mb-3">HX711 #2 (Pins: DOUT:32, SCK:33)</p>
+              <button
+                type="button"
+                disabled={Boolean(selectedDevice && taringWaterDevId === selectedDevice.id)}
+                onClick={() => {
+                  if (selectedDevice) {
+                    handleWaterTareClick(selectedDevice.id);
+                  }
+                }}
+                className="w-full py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-xs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${selectedDevice && taringWaterDevId === selectedDevice.id ? 'animate-spin' : ''}`} />
+                <span>{selectedDevice && taringWaterDevId === selectedDevice.id ? 'Taring Water...' : 'Tare Water (0 ml)'}</span>
+              </button>
+            </div>
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-600 space-y-1">
+            <p className="text-[11px] font-bold text-slate-700">💡 Zero-Tare Instructions:</p>
+            <p className="text-[11px] text-slate-500">
+              • <strong>Food Bowl:</strong> Empty the food tray before pressing <em>Tare Food</em>.<br/>
+              • <strong>Water Scale:</strong> Leave the empty water reservoir/bowl on the loadcell before pressing <em>Tare Water</em>.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
             <button
+              type="button"
               onClick={() => setCalibrateModalOpen(false)}
-              className="px-4 py-2 rounded-xl border border-slate-300 font-semibold"
+              className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold cursor-pointer"
             >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                handleCalibrateConfirm();
-                setCalibrateModalOpen(false);
-              }}
-              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-            >
-              Execute Zero-Point Tare
+              Done
             </button>
           </div>
         </div>
@@ -1679,11 +1912,65 @@ export const DevicesPage: React.FC = () => {
                 <span className="text-slate-400 font-bold uppercase text-[10px]">Food Hopper:</span>
                 <p className="font-bold text-emerald-600">{selectedDevice.foodLevelPct}% Level</p>
               </div>
-              <div>
-                <span className="text-slate-400 font-bold uppercase text-[10px]">Water Reservoir Volume:</span>
-                <p className="font-bold text-sky-600">
-                  {Math.round((selectedDevice.waterLiters !== undefined ? selectedDevice.waterLiters * 1000 : ((selectedDevice.waterLevelPct || 0) / 100) * 2500))} ml
-                </p>
+              <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200/70">
+                <div className="flex items-center justify-between">
+                  <span className="text-emerald-800 font-bold uppercase text-[10px] flex items-center gap-1">
+                    <Scale className="w-3.5 h-3.5 text-emerald-600" />
+                    Food Bowl Scale:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedDevice) handleTareClick(selectedDevice.id);
+                    }}
+                    disabled={Boolean(selectedDevice && taringDevId === selectedDevice.id)}
+                    className="text-[9px] font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 px-1.5 py-0.5 rounded cursor-pointer transition-colors flex items-center gap-1"
+                    title="Zero / Tare the Food Bowl Scale"
+                  >
+                    <RefreshCw className={`w-2.5 h-2.5 ${selectedDevice && taringDevId === selectedDevice.id ? 'animate-spin' : ''}`} />
+                    {selectedDevice && taringDevId === selectedDevice.id ? 'Taring...' : 'Tare (0.0g)'}
+                  </button>
+                </div>
+                <div className="flex items-baseline justify-between mt-1">
+                  <p className="font-mono font-black text-sm text-emerald-950">
+                    {typeof selectedDevice.foodBowlWeightGrams === 'number' ? selectedDevice.foodBowlWeightGrams.toFixed(1) : '0.0'} g
+                  </p>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${
+                    selectedDevice.scaleReady !== false
+                      ? 'bg-emerald-100/80 text-emerald-800 border-emerald-200'
+                      : 'bg-amber-100/80 text-amber-800 border-amber-200'
+                  }`}>
+                    {selectedDevice.scaleReady !== false ? '🟢 Sensor Detected' : '⚠️ Not Detected'}
+                  </span>
+                </div>
+              </div>
+              <div className="bg-sky-50/70 p-2.5 rounded-xl border border-sky-200/70">
+                <div className="flex items-center justify-between">
+                  <span className="text-sky-800 font-bold uppercase text-[10px] flex items-center gap-1">
+                    <Droplets className="w-3.5 h-3.5 text-sky-600" />
+                    Water Scale (0ml):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedDevice) handleWaterTareClick(selectedDevice.id);
+                    }}
+                    disabled={Boolean(selectedDevice && taringWaterDevId === selectedDevice.id)}
+                    className="text-[9px] font-bold text-sky-800 bg-sky-100 hover:bg-sky-200 px-1.5 py-0.5 rounded cursor-pointer transition-colors flex items-center gap-1"
+                    title="Zero / Tare Water Reservoir Loadcell"
+                  >
+                    <RefreshCw className={`w-2.5 h-2.5 ${selectedDevice && taringWaterDevId === selectedDevice.id ? 'animate-spin' : ''}`} />
+                    {selectedDevice && taringWaterDevId === selectedDevice.id ? 'Taring...' : 'Tare (0ml)'}
+                  </button>
+                </div>
+                <div className="flex items-baseline justify-between mt-1">
+                  <p className="font-mono font-black text-sm text-sky-950">
+                    {Math.round((selectedDevice.waterLiters !== undefined ? selectedDevice.waterLiters * 1000 : ((selectedDevice.waterLevelPct || 0) / 100) * 2500))} ml
+                  </p>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border bg-sky-100/80 text-sky-800 border-sky-200">
+                    HX711 (GPIO 32/33)
+                  </span>
+                </div>
               </div>
               <div>
                 <span className="text-slate-400 font-bold uppercase text-[10px]">Water Quality (TDS):</span>

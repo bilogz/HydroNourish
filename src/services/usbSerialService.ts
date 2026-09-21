@@ -30,6 +30,13 @@ export interface USBTelemetry {
   uptime?: number;
   localTime?: string;
   schedulesCount?: number;
+  foodBowlWeightGrams?: number;
+  scaleReady?: boolean;
+  waterLiters?: number;
+  waterMl?: number;
+  waterScaleReady?: boolean;
+  lastIntakeFoodGrams?: number;
+  lastIntakeWaterMl?: number;
 }
 
 export interface USBResponse {
@@ -360,6 +367,43 @@ class USBSerialService {
 
   public async getTelemetry(): Promise<boolean> {
     return this.sendCommand({ action: 'status' });
+  }
+
+  public async tareWaterScale(): Promise<boolean> {
+    await this.sendRaw('WATERTARE');
+    return this.sendCommand({ action: 'watertare' });
+  }
+
+  public async calibrateWaterScale(knownMl?: number, factor?: number): Promise<boolean> {
+    if (knownMl) {
+      await this.sendRaw(`WATERCAL:${knownMl}`);
+      return this.sendCommand({ action: 'watercalibrate', knownMl });
+    } else {
+      const f = factor || 420.0;
+      await this.sendRaw(`WATERCAL:${f}`);
+      return this.sendCommand({ action: 'watercalibrate', factor: f });
+    }
+  }
+
+  public async tareScale(): Promise<boolean> {
+    await this.sendRaw('TARE');
+    return this.sendCommand({ action: 'tare' });
+  }
+
+  public async calibrateScale(knownGrams?: number, factor?: number): Promise<boolean> {
+    if (knownGrams) {
+      await this.sendRaw(`CALWEIGHT:${knownGrams}`);
+      return this.sendCommand({ action: 'calibrate', knownGrams });
+    } else {
+      const f = factor || 420.0;
+      await this.sendRaw(`CAL:${f}`);
+      return this.sendCommand({ action: 'calibrate', factor: f });
+    }
+  }
+
+  public async setSimulatedWeight(grams: number): Promise<boolean> {
+    await this.sendRaw(`SETWEIGHT:${grams}`);
+    return this.sendCommand({ action: 'set_weight', weight: grams });
   }
 }
 

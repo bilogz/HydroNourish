@@ -30,10 +30,41 @@ export interface AIObservationResult {
 }
 
 /**
- * Primary AI Call: Google Gemini 1.5 Flash REST API
+ * Calls the secure server-side Gemini API proxy endpoint (/api/gemini).
+ * This keeps the API key completely private on the server and never exposes it to the browser.
+ */
+async function callGeminiProxy(prompt: string, base64Image?: string, mimeType?: string): Promise<string> {
+  const response = await fetch('/api/gemini', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt,
+      base64Image,
+      mimeType,
+      model: 'gemini-3.6-flash',
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini Proxy Error ${response.status}: ${errorText}`);
+  }
+
+  const data = await response.json();
+  if (data?.error) {
+    throw new Error(data.error);
+  }
+
+  const text = data?.text;
+  if (!text) throw new Error('Empty response received from Gemini Proxy');
+  return text;
+}
+
+/**
+ * Direct AI Call fallback: Google Gemini REST API (gemini-3.6-flash)
  */
 async function callGeminiAPI(prompt: string, apiKey: string): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -146,23 +177,40 @@ export async function analyzePetTelemetry(input: PetTelemetryInput): Promise<AIO
     Note: Phrase as supportive observation ("possible abnormal reading") rather than confirmed diagnosis.
   `;
 
-  // 1. Try Primary: Google Gemini API
-  if (geminiKey) {
-    try {
-      const responseText = await callGeminiAPI(prompt, geminiKey);
-      let severity: 'Info' | 'Warning' | 'Critical' = 'Info';
-      if (responseText.toLowerCase().includes('critical') || input.temperatureC > 39.5) severity = 'Critical';
-      else if (responseText.toLowerCase().includes('warning') || input.temperatureC > 39.0 || input.waterConsumedMl < input.waterTargetMl * 0.5) severity = 'Warning';
+  // 1. Try Primary: Secure Gemini Server Proxy (API key stays private on server)
+  try {
+    const responseText = await callGeminiProxy(prompt);
+    let severity: 'Info' | 'Warning' | 'Critical' = 'Info';
+    if (responseText.toLowerCase().includes('critical') || input.temperatureC > 39.5) severity = 'Critical';
+    else if (responseText.toLowerCase().includes('warning') || input.temperatureC > 39.0 || input.waterConsumedMl < input.waterTargetMl * 0.5) severity = 'Warning';
 
-      return {
-        provider: 'Gemini 1.5 Flash',
-        observationText: responseText,
-        recommendedAction: 'Verify observation with Heritage Animal Clinic veterinarian.',
-        severity,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-    } catch (geminiError) {
-      console.warn('Gemini API call failed, attempting OpenAI backup key...', geminiError);
+    return {
+      provider: 'Gemini 1.5 Flash',
+      observationText: responseText,
+      recommendedAction: 'Verify observation with Heritage Animal Clinic veterinarian.',
+      severity,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+  } catch (proxyError) {
+    if (geminiKey) {
+      try {
+        const responseText = await callGeminiAPI(prompt, geminiKey);
+        let severity: 'Info' | 'Warning' | 'Critical' = 'Info';
+        if (responseText.toLowerCase().includes('critical') || input.temperatureC > 39.5) severity = 'Critical';
+        else if (responseText.toLowerCase().includes('warning') || input.temperatureC > 39.0 || input.waterConsumedMl < input.waterTargetMl * 0.5) severity = 'Warning';
+
+        return {
+          provider: 'Gemini 1.5 Flash',
+          observationText: responseText,
+          recommendedAction: 'Verify observation with Heritage Animal Clinic veterinarian.',
+          severity,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+      } catch (geminiError) {
+        console.warn('Direct Gemini API call failed, attempting OpenAI backup key...', geminiError);
+      }
+    } else {
+      console.warn('Gemini proxy error, attempting OpenAI backup key...', proxyError);
     }
   }
 
@@ -284,93 +332,96 @@ export async function analyzePetVisionScan(
     base64Image = await extractFrameBase64(imageInput);
   }
 
-  // 1. Try Gemini Vision if key and base64 image are available
-  if (geminiKey && base64Image && base64Image.startsWith('data:image')) {
+  // 1. Try Gemini Vision via secure server proxy or direct fallback
+  if (base64Image && base64Image.startsWith('data:image')) {
+    const mimeType = base64Image.split(';')[0].split(':')[1] || 'image/jpeg';
+    const prompt = `Analyze this clinical pet ward camera frame from Heritage Animal Clinic for automated IoT feeder & waterer control.
+    Return ONLY a JSON object (no markdown, no backticks) with this structure:
+    {
+      "detectedSpecies": "Dog" or "Cat" or "Small Animal",
+      "detectedBreed": "breed name or mixed",
+      "confidenceScore": number (80.0 to 99.5),
+      "postureAndBehavior": "description of posture and movement",
+      "intakeState": "Feeding" | "Hydrating" | "Stationary / Resting" | "Approaching Bowl" | "None Detected",
+      "healthScore": number (60 to 99),
+      "clinicalObservations": ["observation 1", "observation 2"],
+      "recommendedAction": "clinical advice note",
+      "severity": "Normal" | "Advisory" | "Urgent Attention",
+      "boundingBox": { "top": number 5-40, "left": number 5-40, "width": number 30-70, "height": number 30-70 },
+      "suggestedActions": {
+        "dispenseFood": boolean,
+        "portionGrams": number,
+        "refillWater": boolean,
+        "waterAmountMl": number,
+        "toggleFlash": boolean,
+        "triggerAlert": boolean,
+        "alertReason": string
+      }
+    }`;
+
     try {
-      const mimeType = base64Image.split(';')[0].split(':')[1] || 'image/jpeg';
-      const base64Data = base64Image.split(',')[1];
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
-      
-      const prompt = `Analyze this clinical pet ward camera frame from Heritage Animal Clinic for automated IoT feeder & waterer control.
-      Return ONLY a JSON object (no markdown, no backticks) with this structure:
-      {
-        "detectedSpecies": "Dog" or "Cat" or "Small Animal",
-        "detectedBreed": "breed name or mixed",
-        "confidenceScore": number (80.0 to 99.5),
-        "postureAndBehavior": "description of posture and movement",
-        "intakeState": "Feeding" | "Hydrating" | "Stationary / Resting" | "Approaching Bowl" | "None Detected",
-        "healthScore": number (60 to 99),
-        "clinicalObservations": ["observation 1", "observation 2"],
-        "recommendedAction": "clinical advice note",
-        "severity": "Normal" | "Advisory" | "Urgent Attention",
-        "boundingBox": { "top": number 5-40, "left": number 5-40, "width": number 30-70, "height": number 30-70 },
-        "suggestedActions": {
-          "dispenseFood": boolean,
-          "portionGrams": number,
-          "refillWater": boolean,
-          "waterAmountMl": number,
-          "toggleFlash": boolean,
-          "triggerAlert": boolean,
-          "alertReason": string
-        }
-      }`;
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64Data
-                }
-              }
-            ]
-          }]
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawText) {
-          const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            const rawState = parsed.intakeState || 'Approaching Bowl';
-            const isEating = rawState === 'Feeding' || Boolean(parsed.isPetEating);
-            const holdGate = isEating || rawState === 'Approaching Bowl';
-
-            return {
-              provider: 'Gemini 1.5 Vision',
-              detectedSpecies: parsed.detectedSpecies || petContext?.species || 'Canine',
-              detectedBreed: parsed.detectedBreed || 'Domestic Breed',
-              confidenceScore: Number(parsed.confidenceScore) || 96.8,
-              postureAndBehavior: parsed.postureAndBehavior || 'Alert and oriented toward feeding station',
-              intakeState: rawState,
-              isPetEating: isEating,
-              eatingConfidence: isEating ? 97.5 : 92.0,
-              shouldHoldFoodGateOpen: holdGate,
-              healthScore: Number(parsed.healthScore) || 94,
-              clinicalObservations: parsed.clinicalObservations || ['Optical identification verified', 'Normal posture'],
-              recommendedAction: parsed.recommendedAction || 'Continue automated health monitoring.',
-              severity: parsed.severity || 'Normal',
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-              boundingBox: parsed.boundingBox || { top: 20, left: 22, width: 56, height: 60 },
-              suggestedActions: parsed.suggestedActions || {
-                dispenseFood: rawState === 'Approaching Bowl',
-                portionGrams: 75,
-                refillWater: rawState === 'Hydrating',
-                waterAmountMl: 250,
-                toggleFlash: false,
-                triggerAlert: parsed.severity === 'Urgent Attention',
-                alertReason: parsed.recommendedAction
-              }
-            };
+      let rawText = '';
+      try {
+        rawText = await callGeminiProxy(prompt, base64Image, mimeType);
+      } catch (proxyErr) {
+        if (geminiKey) {
+          const base64Data = base64Image.split(',')[1];
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`;
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: prompt },
+                  { inline_data: { mime_type: mimeType, data: base64Data } }
+                ]
+              }]
+            })
+          });
+          if (response.ok) {
+            const data = await response.json();
+            rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
           }
+        } else {
+          throw proxyErr;
+        }
+      }
+
+      if (rawText) {
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          const rawState = parsed.intakeState || 'Approaching Bowl';
+          const isEating = rawState === 'Feeding' || Boolean(parsed.isPetEating);
+          const holdGate = isEating || rawState === 'Approaching Bowl';
+
+          return {
+            provider: 'Gemini 1.5 Vision',
+            detectedSpecies: parsed.detectedSpecies || petContext?.species || 'Canine',
+            detectedBreed: parsed.detectedBreed || 'Domestic Breed',
+            confidenceScore: Number(parsed.confidenceScore) || 96.8,
+            postureAndBehavior: parsed.postureAndBehavior || 'Alert and oriented toward feeding station',
+            intakeState: rawState,
+            isPetEating: isEating,
+            eatingConfidence: isEating ? 97.5 : 92.0,
+            shouldHoldFoodGateOpen: holdGate,
+            healthScore: Number(parsed.healthScore) || 94,
+            clinicalObservations: parsed.clinicalObservations || ['Optical identification verified', 'Normal posture'],
+            recommendedAction: parsed.recommendedAction || 'Continue automated health monitoring.',
+            severity: parsed.severity || 'Normal',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            boundingBox: parsed.boundingBox || { top: 20, left: 22, width: 56, height: 60 },
+            suggestedActions: parsed.suggestedActions || {
+              dispenseFood: rawState === 'Approaching Bowl',
+              portionGrams: 75,
+              refillWater: rawState === 'Hydrating',
+              waterAmountMl: 250,
+              toggleFlash: false,
+              triggerAlert: parsed.severity === 'Urgent Attention',
+              alertReason: parsed.recommendedAction
+            }
+          };
         }
       }
     } catch (e) {

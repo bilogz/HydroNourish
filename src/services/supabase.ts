@@ -516,6 +516,8 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
       let parsedWeight = Number(item.food_bowl_weight_grams) || 0.0;
       let parsedIp = item.ip_address || '192.168.100.159';
       let parsedCamIp = item.camera_ip || '';
+      let parsedScaleReady: boolean | undefined = item.scale_ready !== undefined && item.scale_ready !== null ? Boolean(item.scale_ready) : undefined;
+      let parsedLastIntakeFoodGrams: number | undefined = item.last_intake_food_grams !== undefined && item.last_intake_food_grams !== null ? Number(item.last_intake_food_grams) : undefined;
 
       if (rawFw && rawFw.includes('|')) {
         const parts = rawFw.split('|');
@@ -527,6 +529,11 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
           if (p.startsWith('WT:')) {
             const val = Number(p.replace('WT:', ''));
             if (!isNaN(val)) parsedWeight = val;
+          }
+          if (p.startsWith('SCALE:')) {
+            const tag = p.replace('SCALE:', '').trim().toUpperCase();
+            if (tag === 'READY') parsedScaleReady = true;
+            else if (tag === 'WAITING' || tag === 'NO') parsedScaleReady = false;
           }
           if (p.startsWith('IP:')) {
             parsedIp = p.replace('IP:', '').trim();
@@ -546,11 +553,23 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
 
       const isPumpDeactivated = Boolean(
         rawFw.includes('PUMP:DISABLED') ||
-        rawFw.includes('PUMP:LOCKED') ||
-        rawFw.includes('PUMP:OFF')
+        rawFw.includes('PUMP:LOCKED')
       );
       const isPumping = Boolean(rawFw.includes('PUMP:RUNNING') || item.is_pumping);
-      const autoRefillEnabled = !rawFw.includes('AUTO:OFF');
+      
+      const savedAuto = typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_refill_${item.id}`) : null;
+      const autoRefillEnabled = savedAuto !== null
+        ? savedAuto === '1'
+        : Boolean(rawFw.includes('AUTO:ON') && !rawFw.includes('AUTO:OFF'));
+
+      let finalFw = rawFw;
+      if (autoRefillEnabled) {
+        finalFw = finalFw.replace('AUTO:OFF', 'AUTO:ON');
+        if (!finalFw.includes('AUTO:ON')) finalFw += '|AUTO:ON';
+      } else {
+        finalFw = finalFw.replace('AUTO:ON', 'AUTO:OFF');
+        if (!finalFw.includes('AUTO:OFF')) finalFw += '|AUTO:OFF';
+      }
 
       return {
         id: item.id,
@@ -563,11 +582,13 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
         foodLevelPct: Number(item.food_level_pct) !== undefined ? Number(item.food_level_pct) : 90,
         waterLevelPct: Number(item.water_level_pct) !== undefined ? Number(item.water_level_pct) : 85,
         foodBowlWeightGrams: parsedWeight,
+        scaleReady: parsedScaleReady,
+        lastIntakeFoodGrams: parsedLastIntakeFoodGrams,
         waterQualityPpm: parsedTds,
         batteryPct: Number(item.battery_pct) || 100,
         isPluggedIn: true,
         lastTransmission: displayTransmission,
-        firmwareVersion: rawFw,
+        firmwareVersion: finalFw,
         macAddress: item.mac_address || '1C:C3:AB:F9:F7:78',
         ipAddress: parsedIp,
         cameraIp: parsedCamIp,

@@ -580,6 +580,10 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       if (isCurrentlyEating) {
         lastEatingTimestampRef.current = Date.now();
         await setPetEatingDirect(targetDeviceId, true);
+        if (!isGateOpen) {
+          await openGateDirect(targetDeviceId);
+          showToast('info', '🐾 Pet Eating Detected', `Food dispenser opened for ${petName}. Holding open while feeding.`);
+        }
       } else if (isGateOpen) {
         // Gate is currently open, but pet is not actively eating right now
         const elapsedSinceEating = Date.now() - (lastEatingTimestampRef.current || 0);

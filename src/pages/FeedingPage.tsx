@@ -20,7 +20,12 @@ import {
   ChevronRight,
   Trash2,
   Power,
-  Calendar
+  Calendar,
+  Scale,
+  RefreshCw,
+  Settings2,
+  Target,
+  HelpCircle
 } from 'lucide-react';
 
 const PAGE_SIZE = 10;
@@ -36,6 +41,12 @@ export const FeedingPage: React.FC = () => {
     toggleSchedule,
     dispenseNow,
     dispenseDirect,
+    tareScaleDirect,
+    calibrateScaleDirect,
+    fetchScaleWeightDirect,
+    openGateDirect,
+    closeGateDirect,
+    setPetEatingDirect,
     showToast
   } = useAppContext();
 
@@ -137,6 +148,40 @@ export const FeedingPage: React.FC = () => {
     setAddModalOpen(false);
   };
 
+  const [isTaring, setIsTaring] = useState(false);
+
+  const handleTareScale = async () => {
+    if (!selectedDevice) return;
+    setIsTaring(true);
+    try {
+      await tareScaleDirect(selectedDevice.id);
+    } finally {
+      setTimeout(() => setIsTaring(false), 700);
+    }
+  };
+
+  const [scaleCalibrateModalOpen, setScaleCalibrateModalOpen] = useState(false);
+  const [calMode, setCalMode] = useState<'known' | 'factor'>('known');
+  const [calKnownGrams, setCalKnownGrams] = useState<number>(100);
+  const [calFactor, setCalFactor] = useState<number>(420.0);
+  const [isCalibrating, setIsCalibrating] = useState(false);
+
+  const handleCalibrateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDevice) return;
+    setIsCalibrating(true);
+    try {
+      if (calMode === 'known') {
+        await calibrateScaleDirect(selectedDevice.id, calKnownGrams);
+      } else {
+        await calibrateScaleDirect(selectedDevice.id, undefined, calFactor);
+      }
+      setScaleCalibrateModalOpen(false);
+    } finally {
+      setIsCalibrating(false);
+    }
+  };
+
   return (
     <DashboardLayout pageTitle="Automated Smart Feeding System" breadcrumbs={[{ label: 'Feeding' }]}>
       {/* Automated System Status Banner */}
@@ -154,7 +199,51 @@ export const FeedingPage: React.FC = () => {
       </div>
 
       {/* ================= SUMMARY STAT CARDS ================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <StatCard
+          title="Food Bowl Scale"
+          value={isDeviceConnected && selectedDevice ? `${(selectedDevice.foodBowlWeightGrams ?? 0).toFixed(1)} g` : 'N/A'}
+          subtitle={
+            !isDeviceConnected
+              ? 'No device connected'
+              : selectedDevice?.scaleReady === false
+              ? 'HX711 Not Detected'
+              : selectedDevice?.foodBowlWeightGrams && selectedDevice.foodBowlWeightGrams > 3
+              ? 'Portion loaded in bowl'
+              : 'Bowl empty & ready (0.0g)'
+          }
+          icon={Scale}
+          iconBgColor={isDeviceConnected ? "bg-emerald-50" : "bg-slate-100"}
+          iconTextColor={isDeviceConnected ? "text-emerald-600" : "text-slate-400"}
+          badgeText={
+            !isDeviceConnected
+              ? 'Offline'
+              : selectedDevice?.scaleReady === false
+              ? 'Not Detected'
+              : selectedDevice?.foodBowlWeightGrams && selectedDevice.foodBowlWeightGrams > 3
+              ? `${(selectedDevice.foodBowlWeightGrams ?? 0).toFixed(0)}g In Bowl`
+              : 'Ready (0.0g)'
+          }
+          badgeType={
+            !isDeviceConnected
+              ? 'info'
+              : selectedDevice?.scaleReady === false
+              ? 'alert'
+              : selectedDevice?.foodBowlWeightGrams && selectedDevice.foodBowlWeightGrams > 3
+              ? 'warning'
+              : 'success'
+          }
+        />
+        <StatCard
+          title="Feeder Hopper Level"
+          value={isDeviceConnected && selectedDevice ? `${selectedDevice.foodLevelPct}%` : 'N/A'}
+          subtitle={isDeviceConnected ? "Dispenser Container Capacity" : "No device connected"}
+          icon={Cpu}
+          iconBgColor={isDeviceConnected ? "bg-amber-50" : "bg-slate-100"}
+          iconTextColor={isDeviceConnected ? "text-amber-600" : "text-slate-400"}
+          badgeText={isDeviceConnected ? (selectedDevice && selectedDevice.foodLevelPct > 30 ? "Sufficient" : "Low") : "Offline"}
+          badgeType={isDeviceConnected ? (selectedDevice && selectedDevice.foodLevelPct > 30 ? "success" : "alert") : "info"}
+        />
         <StatCard
           title="Total Meals Served Today"
           value={isDeviceConnected ? (feedingLogs || []).length : 0}
@@ -170,21 +259,273 @@ export const FeedingPage: React.FC = () => {
           value={isDeviceConnected ? (schedules || []).filter(s => s.dispenseStatus === 'Pending').length : 0}
           subtitle={isDeviceConnected ? "Remaining Today" : "No device connected"}
           icon={Clock}
-          iconBgColor={isDeviceConnected ? "bg-amber-50" : "bg-slate-100"}
-          iconTextColor={isDeviceConnected ? "text-amber-600" : "text-slate-400"}
+          iconBgColor={isDeviceConnected ? "bg-sky-50" : "bg-slate-100"}
+          iconTextColor={isDeviceConnected ? "text-sky-600" : "text-slate-400"}
           badgeText={isDeviceConnected ? "Automated" : "Offline"}
           badgeType={isDeviceConnected ? "warning" : "info"}
         />
-        <StatCard
-          title="Feeder Hopper Container Level"
-          value={isDeviceConnected && selectedDevice ? `${selectedDevice.foodLevelPct}%` : 'N/A'}
-          subtitle={isDeviceConnected ? "Container Capacity" : "No device connected"}
-          icon={Cpu}
-          iconBgColor={isDeviceConnected ? "bg-emerald-50" : "bg-slate-100"}
-          iconTextColor={isDeviceConnected ? "text-emerald-600" : "text-slate-400"}
-          badgeText={isDeviceConnected ? (selectedDevice && selectedDevice.foodLevelPct > 30 ? "Sufficient" : "Low") : "Offline"}
-          badgeType={isDeviceConnected ? (selectedDevice && selectedDevice.foodLevelPct > 30 ? "success" : "alert") : "info"}
-        />
+      </div>
+
+      {/* ================= LIVE FOOD BOWL PRECISION SCALE MONITOR ================= */}
+      <div className="clinic-card p-5 bg-gradient-to-br from-white via-slate-50/70 to-emerald-50/20 border-emerald-200/80 shadow-sm relative overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100 relative z-10">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shadow-xs">
+              <Scale className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-extrabold text-slate-900">Live Food Bowl Precision Scale</h3>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  <span className={`w-1.5 h-1.5 rounded-full ${isDeviceConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                  {isDeviceConnected ? 'HX711 24-bit Active' : 'Offline'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Real-time strain gauge load cell telemetry • Milligram precision automated portion monitoring
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleTareScale}
+              disabled={!isDeviceConnected || isTaring}
+              className={`px-3.5 py-2 rounded-xl font-bold text-xs border flex items-center gap-1.5 shadow-xs transition-all ${
+                isDeviceConnected && !isTaring
+                  ? 'bg-white hover:bg-emerald-50 text-emerald-700 border-emerald-300 hover:border-emerald-400 cursor-pointer active:scale-95'
+                  : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+              }`}
+              title="Zero out the bowl weight (tare to 0.0g)"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isTaring ? 'animate-spin' : ''}`} />
+              <span>{isTaring ? 'Taring Scale...' : 'Zero / Tare (0.0g)'}</span>
+            </button>
+            <button
+              onClick={() => setScaleCalibrateModalOpen(true)}
+              disabled={!isDeviceConnected}
+              className={`px-3.5 py-2 rounded-xl font-bold text-xs border flex items-center gap-1.5 shadow-xs transition-all ${
+                isDeviceConnected
+                  ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 hover:border-slate-400 cursor-pointer active:scale-95'
+                  : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+              }`}
+              title="Calibrate HX711 scale precision with reference weight"
+            >
+              <Settings2 className="w-3.5 h-3.5 text-slate-600" />
+              <span>Calibrate</span>
+            </button>
+            <button
+              onClick={() => setCustomManualModalOpen(true)}
+              disabled={!isDeviceConnected}
+              className={`px-3.5 py-2 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 ${
+                isDeviceConnected
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Dispense Portion</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 3 Interactive Sensor Insight Columns */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 relative z-10">
+          {/* Column 1: Live Digital Scale Display */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold mb-1">
+              <span className="uppercase tracking-wider text-[10px] font-bold text-slate-400">Current Bowl Weight</span>
+              <span className="font-mono text-[11px] text-slate-400">Target: 75g std</span>
+            </div>
+
+            <div className="flex items-baseline gap-2 my-1">
+              <span className="font-mono text-3xl font-black text-slate-900 tracking-tight">
+                {isDeviceConnected && selectedDevice
+                  ? (selectedDevice.foodBowlWeightGrams ?? 0).toFixed(1)
+                  : '0.0'}
+              </span>
+              <span className="text-sm font-bold text-emerald-600">grams (g)</span>
+            </div>
+
+            {/* Bowl capacity visual bar */}
+            <div className="space-y-1.5 mt-2">
+              <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                <span>Bowl Capacity Gauge</span>
+                <span>
+                  {Math.min(100, Math.round(((selectedDevice?.foodBowlWeightGrams ?? 0) / 150) * 100))}%
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden p-0.5 border border-slate-200/60">
+                <div
+                  className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-emerald-400 via-teal-500 to-amber-500"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, (((selectedDevice?.foodBowlWeightGrams ?? 0) / 150) * 100)))}%`
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">Bowl Status:</span>
+              {(() => {
+                const w = selectedDevice?.foodBowlWeightGrams ?? 0;
+                if (!isDeviceConnected) return <span className="font-bold text-slate-400">Station Offline</span>;
+                if (w < 2.0) return <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">Empty / Clean Bowl</span>;
+                if (w < 120) return <span className="font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">Normal Portion Loaded</span>;
+                return <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">Heavily Loaded</span>;
+              })()}
+            </div>
+          </div>
+
+          {/* Column 2: Eating State & Intake History */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold mb-1">
+              <span className="uppercase tracking-wider text-[10px] font-bold text-slate-400">Eating Activity & Gate</span>
+              <span className="text-[10px] font-bold text-slate-400">Vision Watchdog</span>
+            </div>
+
+            <div className="space-y-2.5 my-1">
+              <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-xs font-bold text-slate-700">Pet Eating Status</span>
+                {selectedDevice?.petEatingActive ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-500 text-white shadow-xs animate-pulse">
+                    🐾 Eating Actively
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-200 text-slate-600">
+                    💤 Idle / Not Feeding
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-xs font-bold text-slate-700">Dispense Gate</span>
+                {selectedDevice?.foodGateOpen ? (
+                  <span className="text-xs font-extrabold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                    90° OPEN
+                  </span>
+                ) : (
+                  <span className="text-xs font-extrabold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                    0° CLOSED 🔒
+                  </span>
+                )}
+              </div>
+
+              {/* Interactive Watchdog Testing & Override Controls */}
+              <div className="flex items-center gap-1.5 pt-1">
+                <button
+                  type="button"
+                  disabled={!isDeviceConnected}
+                  onClick={async () => {
+                    if (!selectedDevice) return;
+                    const nextEating = !selectedDevice.petEatingActive;
+                    await setPetEatingDirect(selectedDevice.id, nextEating);
+                    if (nextEating && !selectedDevice.foodGateOpen) {
+                      await openGateDirect(selectedDevice.id);
+                    }
+                    showToast(
+                      'info',
+                      nextEating ? '🐾 Pet Eating Triggered' : 'Pet Finished Eating',
+                      nextEating ? 'Dispenser opened and will hold open while eating.' : 'Grace timer active; dispenser will close automatically.'
+                    );
+                  }}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold border transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                    selectedDevice?.petEatingActive
+                      ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                      : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                  }`}
+                  title="Toggle pet eating state to test closed-loop dispenser behavior"
+                >
+                  {selectedDevice?.petEatingActive ? '🛑 Signal Done Eating' : '🐾 Simulate Pet Eating'}
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={!isDeviceConnected}
+                    onClick={async () => {
+                      if (!selectedDevice) return;
+                      showToast('info', 'Cleaning Food Feeder', 'Sweeping gate to clear debris and zeroing scale...');
+                      await openGateDirect(selectedDevice.id);
+                      await new Promise(r => setTimeout(r, 3500));
+                      await closeGateDirect(selectedDevice.id);
+                      await tareScaleDirect(selectedDevice.id);
+                      showToast('success', 'Food Feeder Cleaned', 'Feeder cleaned & scale tared to 0.0g.');
+                    }}
+                    className="py-1.5 px-2 rounded-lg text-[10px] font-bold border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 transition-all cursor-pointer disabled:opacity-40 flex items-center gap-1 shadow-2xs active:scale-95"
+                    title="Clean food dispenser: sweeps gate open/close & zeroes scale"
+                  >
+                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                    Clean Feeder
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!isDeviceConnected}
+                    onClick={async () => {
+                      if (!selectedDevice) return;
+                      if (selectedDevice.foodGateOpen) {
+                        await closeGateDirect(selectedDevice.id);
+                        showToast('info', 'Gate Closed', 'Dispenser gate manually closed.');
+                      } else {
+                        await openGateDirect(selectedDevice.id);
+                        showToast('info', 'Gate Opened', 'Dispenser gate opened and holding for pet.');
+                      }
+                    }}
+                    className="py-1.5 px-2.5 rounded-lg text-[10px] font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all cursor-pointer disabled:opacity-40"
+                    title="Manually toggle food dispenser gate"
+                  >
+                    {selectedDevice?.foodGateOpen ? 'Close Gate' : 'Open Gate'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">Last Consumed Portion:</span>
+              <span className="font-extrabold text-slate-800">
+                {selectedDevice?.lastIntakeFoodGrams ? `${selectedDevice.lastIntakeFoodGrams} g consumed` : '75 g (nominal)'}
+              </span>
+            </div>
+          </div>
+
+          {/* Column 3: Hardware Diagnostics & Zero Calibration */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold mb-1">
+              <span className="uppercase tracking-wider text-[10px] font-bold text-slate-400">Scale Calibration & Bus</span>
+              <span className="font-mono text-[10px] text-slate-400">GPIO 16/17</span>
+            </div>
+
+            <div className="space-y-1.5 my-1 text-xs">
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-500">Active Node:</span>
+                <span className="font-mono font-bold text-indigo-600">{selectedDevice?.id || 'HN-NODE-F778'}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-500">Sensor Interface:</span>
+                <span className="font-semibold text-slate-700">HX711 Strain Gauge</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-500">Calibration Factor:</span>
+                <span className="font-mono text-slate-700">420.0 counts/g</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-500">Tare Offset:</span>
+                <span className="font-mono text-emerald-600 font-bold">Auto-Zeroed (NVS)</span>
+              </div>
+            </div>
+
+            <div className="mt-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleTareScale}
+                disabled={!isDeviceConnected || isTaring}
+                className="w-full py-1.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <Scale className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Execute Zero-Point Tare Now</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ================= FEEDING SCHEDULES TABLE ================= */}
@@ -481,6 +822,31 @@ export const FeedingPage: React.FC = () => {
             </select>
           </div>
 
+          {/* Live Food Bowl Weight Scale Readout */}
+          <div className="p-3 bg-emerald-50/80 rounded-xl border border-emerald-200/80 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
+                <Scale className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-bold text-slate-700 block">Current Food in Bowl:</span>
+                <span className="font-mono text-base font-extrabold text-emerald-800">
+                  {selectedDevice?.foodBowlWeightGrams ? selectedDevice.foodBowlWeightGrams.toFixed(1) : '0.0'} g
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleTareScale}
+              disabled={isTaring}
+              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs active:scale-95"
+              title="Zero out bowl weight before dispensing"
+            >
+              <RefreshCw className={`w-3 h-3 ${isTaring ? 'animate-spin' : ''}`} />
+              <span>{isTaring ? 'Taring...' : 'Tare Bowl (0.0g)'}</span>
+            </button>
+          </div>
+
           <div>
             <div className="flex justify-between items-center mb-1">
               <label className="font-bold text-slate-700 uppercase">Portion Size</label>
@@ -499,6 +865,10 @@ export const FeedingPage: React.FC = () => {
               <span>15g (Snack)</span>
               <span>75g (Standard)</span>
               <span>200g (Full Meal)</span>
+            </div>
+            <div className="flex justify-between items-center text-[11px] text-slate-500 mt-2 p-2 bg-slate-50 rounded-lg border border-slate-100">
+              <span>Portion: <strong className="text-amber-700 font-mono">+{customPortion}g</strong></span>
+              <span>Expected Post-Meal Total: <strong className="text-emerald-700 font-mono">{(((selectedDevice?.foodBowlWeightGrams ?? 0) + customPortion)).toFixed(1)}g</strong></span>
             </div>
           </div>
 
@@ -640,6 +1010,168 @@ export const FeedingPage: React.FC = () => {
               className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-sm cursor-pointer active:scale-95"
             >
               Save Schedule
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ================= SCALE CALIBRATION MODAL ================= */}
+      <Modal
+        isOpen={scaleCalibrateModalOpen}
+        onClose={() => setScaleCalibrateModalOpen(false)}
+        title="Food Bowl Scale Precision Calibration"
+      >
+        <form onSubmit={handleCalibrateSubmit} className="space-y-4">
+          {/* Live Weight Monitor Header */}
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white flex items-center justify-between shadow-xs">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Live Load Cell Reading</span>
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                  selectedDevice?.scaleReady !== false
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                }`}>
+                  {selectedDevice?.scaleReady !== false ? '🟢 Sensor Detected' : '⚠️ Not Detected'}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-3xl font-mono font-black text-emerald-400">
+                  {typeof selectedDevice?.foodBowlWeightGrams === 'number' ? selectedDevice.foodBowlWeightGrams.toFixed(1) : '0.0'}
+                </span>
+                <span className="text-xs font-bold text-slate-400">grams</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleTareScale}
+              disabled={isTaring}
+              className="px-3 py-1.5 rounded-xl bg-slate-700/80 hover:bg-slate-700 border border-slate-600 text-xs font-bold text-slate-200 flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isTaring ? 'animate-spin' : ''}`} />
+              <span>{isTaring ? 'Taring...' : 'Quick Zero / Tare'}</span>
+            </button>
+          </div>
+
+          {/* Mode Selector Tabs */}
+          <div className="flex p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setCalMode('known')}
+              className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
+                calMode === 'known' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              🎯 Known Reference Weight
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalMode('factor')}
+              className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
+                calMode === 'factor' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              ⚙️ Custom Counts/Gram
+            </button>
+          </div>
+
+          {calMode === 'known' ? (
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-xs text-emerald-900 leading-relaxed">
+                <p className="font-bold mb-1">📋 3-Step Guided Calibration:</p>
+                <ol className="list-decimal pl-4 space-y-1 text-[11px] text-emerald-800">
+                  <li>Ensure the food bowl is completely empty and click <strong>"Quick Zero / Tare"</strong> above.</li>
+                  <li>Place an object of known weight (e.g. 50g, 100g, or measured item) into the bowl.</li>
+                  <li>Enter the exact weight below and click <strong>"Calibrate Scale"</strong>. The ESP32 calculates and persists the precise calibration factor to flash NVS.</li>
+                </ol>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Reference Object Weight (Grams)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="2000"
+                    step="0.1"
+                    required
+                    value={calKnownGrams}
+                    onChange={(e) => setCalKnownGrams(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-emerald-500 focus:outline-none font-mono font-bold text-slate-900"
+                  />
+                  <span className="font-bold text-sm text-slate-500">grams</span>
+                </div>
+              </div>
+
+              {/* Quick weight presets */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Presets:</span>
+                {[50, 100, 150, 200].map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => setCalKnownGrams(w)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold font-mono transition-all cursor-pointer"
+                  >
+                    {w}g
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
+                Directly configure counts per gram calibration factor. Standard 1kg load cells typically use ~420.0 counts/g.
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Calibration Factor (Counts / Gram)
+                </label>
+                <input
+                  type="number"
+                  min="10"
+                  max="10000"
+                  step="0.1"
+                  required
+                  value={calFactor}
+                  onChange={(e) => setCalFactor(Number(e.target.value))}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-emerald-500 focus:outline-none font-mono font-bold text-slate-900"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Presets:</span>
+                {[400, 420, 435, 840].map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setCalFactor(f)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold font-mono transition-all cursor-pointer"
+                  >
+                    {f}.0
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setScaleCalibrateModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-300 font-semibold text-xs text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isCalibrating}
+              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm cursor-pointer active:scale-95 disabled:opacity-50"
+            >
+              {isCalibrating ? 'Calibrating...' : 'Apply & Save Calibration'}
             </button>
           </div>
         </form>
