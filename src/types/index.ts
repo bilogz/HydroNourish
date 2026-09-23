@@ -137,6 +137,10 @@ export interface Device {
   sanitationStatus?: 'idle' | 'pet_eating' | 'rinsing_water' | 'draining_19w' | 'completed' | 'aborted_pet_returned';
   foodGateOpen?: boolean;
   petEatingActive?: boolean;
+  petWantsToEat?: boolean;
+  servoMeteringPhase?: 'dispensing' | 'saving_pause' | 'idle';
+  sessionEatingSeconds?: number;
+  session45sReached?: boolean;
   scaleReady?: boolean;
   petDrinkingActive?: boolean;
   lastIntakeWaterMl?: number;
@@ -161,6 +165,10 @@ export interface DeviceTelemetryPayload {
   cameraIp?: string;
   foodGateOpen?: boolean;
   petEatingActive?: boolean;
+  petWantsToEat?: boolean;
+  servoMeteringPhase?: 'dispensing' | 'saving_pause' | 'idle';
+  sessionEatingSeconds?: number;
+  session45sReached?: boolean;
   foodBowlWeightGrams?: number;
   scaleReady?: boolean;
   petDrinkingActive?: boolean;

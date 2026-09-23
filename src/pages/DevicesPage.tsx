@@ -161,14 +161,17 @@ export const DevicesPage: React.FC = () => {
 
   const handleSprayWater = async (deviceId: string) => {
     setIsSprayingWater(true);
-    showToast('info', 'Spraying Clean Water', 'Activating rinse sprayer pump (GPIO 18) to wash food bowl...');
+    showToast('info', 'Spraying Clean Water', 'Closing food gate & activating rinse sprayer pump (GPIO 18 - 10s) to wash food bowl...');
     try {
-      if (dispenseSprayWaterDirect) {
-        await dispenseSprayWaterDirect(deviceId, 250);
-      } else if (dispenseCleaningWaterDirect) {
-        await dispenseCleaningWaterDirect(deviceId, 250);
+      if (closeGateDirect) {
+        await closeGateDirect(deviceId);
       }
-      showToast('success', 'Spray Completed', 'Rinse sprayer wash cycle finished.');
+      if (dispenseSprayWaterDirect) {
+        await dispenseSprayWaterDirect(deviceId, 10000);
+      } else if (dispenseCleaningWaterDirect) {
+        await dispenseCleaningWaterDirect(deviceId, 10000);
+      }
+      showToast('success', 'Spray Completed', 'Rinse sprayer wash cycle (10s) finished.');
     } catch {
       showToast('error', 'Spray Error', 'Failed to activate spray pump.');
     } finally {
@@ -224,25 +227,30 @@ export const DevicesPage: React.FC = () => {
     if (isCleaningWaste) return;
     setIsCleaningWaste(true);
     setCleanWastePhase('spraying');
-    setCleanWasteCountdown(15);
+    setCleanWasteCountdown(20);
 
     const timerInterval = setInterval(() => {
       setCleanWasteCountdown((prev) => (prev > 1 ? prev - 1 : 1));
     }, 1000);
 
-    showToast('info', '🧼 Clean Waste (1/3)', 'Step 1: Spraying clean rinse water (GPIO 18 - 5s) to wash food bowl...');
+    showToast('info', '🧼 Clean Waste (1/3)', 'Step 1: Food gate closed & spraying clean rinse water (GPIO 18 - 10s) to wash food bowl...');
 
     try {
-      // Phase 1: Spray Clean Rinse Water (GPIO 18) - exactly 5.0 seconds
+      // Step 0: Ensure Food Gate is CLOSED before any water spray
+      if (closeGateDirect) {
+        await closeGateDirect(deviceId);
+      }
+
+      // Phase 1: Spray Clean Rinse Water (GPIO 18) - exactly 10.0 seconds
       if (dispenseSprayWaterDirect) {
-        await dispenseSprayWaterDirect(deviceId, 5000);
+        await dispenseSprayWaterDirect(deviceId, 10000);
       } else {
         const dev = devices.find((d) => d.id === deviceId);
         const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.157';
-        fetch(`http://${cleanIp}/api/spray?duration=5000`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(`http://${cleanIp}/api/spray?duration=10000`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
       }
 
-      await new Promise((res) => setTimeout(res, 5000));
+      await new Promise((res) => setTimeout(res, 10000));
 
       // Phase 2: Wastewater Drain Pump (GPIO 23) - exactly 9.0 seconds
       setCleanWastePhase('draining');
@@ -258,7 +266,7 @@ export const DevicesPage: React.FC = () => {
 
       await new Promise((res) => setTimeout(res, 9000));
 
-      // Phase 3: Zero / Tare scales - exactly 1.0 second (Total = 15.0 seconds)
+      // Phase 3: Zero / Tare scales - exactly 1.0 second (Total = 20.0 seconds)
       setCleanWastePhase('taring');
       if (tareScaleDirect) await tareScaleDirect(deviceId);
       if (tareWaterScaleDirect) await tareWaterScaleDirect(deviceId);
@@ -267,7 +275,7 @@ export const DevicesPage: React.FC = () => {
 
       clearInterval(timerInterval);
       setCleanWasteCountdown(0);
-      showToast('success', '✨ Clean Waste Completed (15s cycle)', 'Food bowl washed with spray, evacuated into waste tank, and scales tared to 0.0g!');
+      showToast('success', '✨ Clean Waste Completed (20s cycle)', 'Food gate confirmed closed, bowl washed with 10s spray, evacuated into waste tank, and scales tared to 0.0g!');
     } catch {
       clearInterval(timerInterval);
       setCleanWasteCountdown(0);

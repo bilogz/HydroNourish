@@ -145,7 +145,7 @@ function geminiDevPlugin(): Plugin {
             });
             req.on('end', async () => {
               try {
-                const { prompt, base64Image, mimeType = 'image/jpeg', model = 'gemini-3.6-flash' } = JSON.parse(bodyStr || '{}');
+                let { prompt, base64Image, mimeType = 'image/jpeg', model = 'gemini-2.5-flash' } = JSON.parse(bodyStr || '{}');
                 const parts: any[] = [];
                 if (prompt) parts.push({ text: prompt });
                 if (base64Image) {
@@ -158,12 +158,23 @@ function geminiDevPlugin(): Plugin {
                   });
                 }
 
-                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-                const geminiRes = await fetch(geminiUrl, {
+                let geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                let geminiRes = await fetch(geminiUrl, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ contents: [{ parts }] }),
                 });
+
+                // Fallback to gemini-3.6-flash or gemini-2.5-flash if requested model failed
+                if (!geminiRes.ok && model !== 'gemini-3.6-flash') {
+                  model = 'gemini-3.6-flash';
+                  geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                  geminiRes = await fetch(geminiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts }] }),
+                  });
+                }
 
                 if (!geminiRes.ok) {
                   const errText = await geminiRes.text();

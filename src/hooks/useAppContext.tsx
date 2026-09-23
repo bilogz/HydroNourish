@@ -998,19 +998,6 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     dispatchFastDeviceCommand(deviceId, '/api/gate/close', {
       usbAction: () => usbSerialService.closeGate(),
     });
-
-    const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const newSch: FeedingSchedule = {
-      id: `SCH-CLOSE-${Date.now()}`,
-      deviceId: deviceId,
-      foodType: 'Close Food Gate',
-      portionGrams: 0,
-      scheduledTime: 'Instant Manual',
-      dispenseStatus: 'Pending',
-      petId: dev?.assignedPetId || 'PET-001',
-      petName: dev?.assignedPetName || 'Pet',
-    };
-    insertScheduleToSupabase(newSch).catch(() => {});
   };
 
   const setPetEatingDirect = async (deviceId: string, isEating: boolean) => {
@@ -1202,15 +1189,20 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   // ─── Dual-Pump Sanitation & Drainage Handlers (Clean Water & 19W 12V Drain) ─
-  const dispenseCleaningWaterDirect = async (deviceId: string, amountMl: number = 200) => {
+  const dispenseCleaningWaterDirect = async (deviceId: string, amountMl: number = 10000) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
-    const durationMs = amountMl <= 500 ? amountMl * 12 : amountMl;
+    const durationMs = amountMl <= 500 ? (amountMl === 200 || amountMl === 250 ? 10000 : amountMl * 12) : amountMl;
+
+    // Ensure food gate is closed before spraying rinse water
+    if (dev?.foodGateOpen) {
+      await closeGateDirect(deviceId);
+    }
 
     setDevices((prev) =>
       prev.map((d) =>
         d.id === deviceId
-          ? { ...d, isCleaningRinse: true, sanitationStatus: 'rinsing_water' }
+          ? { ...d, isCleaningRinse: true, sanitationStatus: 'rinsing_water', foodGateOpen: false, petEatingActive: false }
           : d
       )
     );
@@ -1219,13 +1211,13 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       usbAction: () => usbSerialService.dispenseCleaningWater(durationMs),
     });
 
-    showToast('info', '🚿 Spray Water Active', `Spraying rinse water into bowl for ${petName} (${amountMl}ml).`);
+    showToast('info', '🚿 Spray Water Active', `Spraying rinse water into bowl for ${petName} (${Math.round(durationMs / 1000)}s - food gate closed).`);
 
     setTimeout(() => {
       setDevices((prev) =>
         prev.map((d) => (d.id === deviceId ? { ...d, isCleaningRinse: false } : d))
       );
-    }, durationMs > 500 ? durationMs : 4500);
+    }, durationMs > 500 ? durationMs : 10000);
   };
 
   const dispenseSprayWaterDirect = dispenseCleaningWaterDirect;
@@ -1284,11 +1276,14 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
 
-    showToast('info', '🔄 15-Second Sanitation Initiated', `Phase 1: Dispensing clean rinse water (GPIO 18 - 5s) for ${petName}...`);
+    // Step 0: Ensure Food Gate is CLOSED before any water spray
+    await closeGateDirect(deviceId);
 
-    // Stage 1: Dispense Cleaning Rinse Water (5.0s)
-    await dispenseCleaningWaterDirect(deviceId, 250);
-    await new Promise((res) => setTimeout(res, 5000));
+    showToast('info', '🔄 20-Second Sanitation Initiated', `Phase 1: Food gate closed & dispensing clean rinse water (GPIO 18 - 10s) for ${petName}...`);
+
+    // Stage 1: Dispense Cleaning Rinse Water (10.0s)
+    await dispenseCleaningWaterDirect(deviceId, 10000);
+    await new Promise((res) => setTimeout(res, 10000));
 
     // Stage 2: Evacuate Wastewater via 12V 19W Drain Pump (9.0s)
     showToast('warning', '⚡ Phase 2: Evacuating Water', '19W 12V water pump engaged to drain wastewater (GPIO 23 - 9s)...');
@@ -1306,7 +1301,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
-    showToast('success', '✨ Clean Waste Completed (15s cycle)', 'Food bowl washed with spray rinse (5s), completely evacuated by 12V drain pump (9s), and scales tared to 0.0g!');
+    showToast('success', '✨ Clean Waste Completed (20s cycle)', 'Food gate confirmed closed, food bowl washed with spray rinse (10s), completely evacuated by 12V drain pump (9s), and scales tared to 0.0g!');
     return true;
   };
 

@@ -106,7 +106,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
         const match = device.firmwareVersion.match(/CAM:([0-9.]+)/i);
         if (match && match[1]) return match[1].trim();
       }
-      if (device.ipAddress && device.ipAddress.trim().length > 0 && !device.ipAddress.includes('192.168.100.159')) {
+      if (device.ipAddress && device.ipAddress.trim().length > 0) {
         return device.ipAddress.trim();
       }
     }
@@ -121,13 +121,13 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           const match = d.firmwareVersion.match(/CAM:([0-9.]+)/i);
           if (match && match[1]) return match[1].trim();
         }
-        if (d.ipAddress && d.ipAddress.trim().length > 0 && !d.ipAddress.includes('192.168.100.159')) {
+        if (d.ipAddress && d.ipAddress.trim().length > 0) {
           return d.ipAddress.trim();
         }
       }
     }
 
-    return defaultIp && defaultIp !== '192.168.100.159' ? defaultIp : null;
+    return defaultIp || '192.168.100.159';
   }, [device, devices, defaultIp]);
 
   const [cameraIp, setCameraIp] = useState<string>(() => {
@@ -317,6 +317,18 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const [boxPosition, setBoxPosition] = useState({ top: 20, left: 22, width: 56, height: 60 });
   const [scanTick, setScanTick] = useState(0);
 
+  // Dynamic Appetite Intent & Food-Saving Servo Metering State
+  const [petWantsToEat, setPetWantsToEat] = useState(true);
+  const [eatingIntentScore, setEatingIntentScore] = useState(96.5);
+  const [headPosture, setHeadPosture] = useState<string>('Facing Bowl');
+  const [eatingIntentReason, setEatingIntentReason] = useState<string>('Pet is attentive and awaiting kibble at smart bowl.');
+  const [eatingSessionSeconds, setEatingSessionSeconds] = useState(0);
+  const [is45sTimeoutActive, setIs45sTimeoutActive] = useState(false);
+  const [isReevaluatingAppetite, setIsReevaluatingAppetite] = useState(false);
+  const [servoMeteringPhase, setServoMeteringPhase] = useState<'dispensing' | 'saving_pause' | 'idle'>('idle');
+  const [feedingCycleCount, setFeedingCycleCount] = useState(1);
+  const [reevalCountdown, setReevalCountdown] = useState(3);
+
   const petName = petContext?.name || 'Max';
   const petSpecies = petContext?.species || 'Canine (Dog)';
 
@@ -361,7 +373,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
 
   const cleanIp = rawInput.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
 
-  // Multi-Port & Multi-Protocol Fallback URIs:
+  // Multi-Port & Multi-Protocol Fallback URIs (Port 81 dedicated stream server prioritized):
   const streamCandidates = React.useMemo(() => {
     if (isDomainOrTunnel) {
       const proto = isHttps ? 'https:' : (typeof window !== 'undefined' ? window.location.protocol : 'https:');
@@ -373,9 +385,11 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       ];
     }
     return [
-      `http://${cleanIp}/stream?t=${streamKey}`,
       `http://${cleanIp}:81/stream?t=${streamKey}`,
+      `http://${cleanIp}/stream?t=${streamKey}`,
+      `http://hydronourish-cam.local:81/stream?t=${streamKey}`,
       `http://hydronourish-cam.local/stream?t=${streamKey}`,
+      `http://192.168.4.1:81/stream?t=${streamKey}`,
       `http://192.168.4.1/stream?t=${streamKey}`
     ];
   }, [cleanIp, isDomainOrTunnel, isHttps, streamKey]);
@@ -388,17 +402,38 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     setStreamError(false);
   }, [cameraIp, streamKey, streamPortIndex]);
 
-  // Watchdog timer: If loading takes longer than 3.5s on current candidate, auto-try next candidate or error
+  // Robust Frame Arrival Polling:
+  // Browsers (Chrome, Edge, Brave) do NOT reliably trigger onLoad on continuous multipart/x-mixed-replace streams.
+  // naturalWidth > 0 indicates decoded frames are arriving.
+  useEffect(() => {
+    if (!isStreamLoading && !streamError) return;
+    const interval = setInterval(() => {
+      const img = mjpegImgRef.current;
+      if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
+        setIsStreamLoading(false);
+        setStreamError(false);
+      }
+    }, 200);
+    return () => clearInterval(interval);
+  }, [isStreamLoading, streamError, streamPortIndex]);
+
+  // Watchdog timer: If loading takes longer than 5s on current candidate, auto-try next candidate or error
   useEffect(() => {
     if (!isStreamLoading || streamError) return;
     const t = setTimeout(() => {
+      // If the image already decoded frames, do NOT mark as error!
+      if (mjpegImgRef.current && mjpegImgRef.current.naturalWidth > 0) {
+        setIsStreamLoading(false);
+        setStreamError(false);
+        return;
+      }
       if (streamPortIndex < streamCandidates.length - 1) {
         setStreamPortIndex(prev => prev + 1);
       } else {
         setIsStreamLoading(false);
         setStreamError(true);
       }
-    }, 3500);
+    }, 5000);
     return () => clearTimeout(t);
   }, [isStreamLoading, streamError, streamPortIndex, streamCandidates.length]);
 
@@ -422,6 +457,10 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   };
 
   const handleStreamError = () => {
+    // If the image already has decoded frames, ignore synthetic abort/error events
+    if (mjpegImgRef.current && mjpegImgRef.current.naturalWidth > 0) {
+      return;
+    }
     if (streamPortIndex < streamCandidates.length - 1) {
       setStreamPortIndex(prev => prev + 1);
     } else {
@@ -617,18 +656,116 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     setActiveRecommendation(null);
   };
 
+  // ── Automatic 45-Second Meal Decision Resolver (Appetite Re-evaluation) ──
+  const handleResolve45sDecision = async (wantsMore: boolean) => {
+    const targetDeviceId = device?.id || 'HN-NODE-F778';
+    setIsReevaluatingAppetite(false);
+    setIs45sTimeoutActive(false);
+
+    if (wantsMore && isPetDetected) {
+      setEatingSessionSeconds(0);
+      setFeedingCycleCount((prev) => prev + 1);
+      lastEatingTimestampRef.current = Date.now();
+      await setPetEatingDirect(targetDeviceId, true);
+      await openGateDirect(targetDeviceId);
+      showToast(
+        'success',
+        `🐾 ${petName} Still Wants to Eat!`,
+        `AI appetite re-evaluation confirmed. Auto re-opened dispenser for Cycle ${feedingCycleCount + 1}.`
+      );
+    } else {
+      setEatingSessionSeconds(0);
+      setFeedingCycleCount(1);
+      setServoMeteringPhase('idle');
+      lastEatingTimestampRef.current = 0;
+      await closeGateDirect(targetDeviceId);
+      await setPetEatingDirect(targetDeviceId, false);
+      showToast(
+        'info',
+        '✨ Meal Finished',
+        `${petName} satisfied after 45s meal. Gate locked to save food.`
+      );
+    }
+  };
+
   // ── AI Vision Analysis Dispatcher with Closed-Loop Hardware Control ─────────
-  const handleRunAiScan = async (isWatchdog = false) => {
-    if (isAnalyzing) return;
+  const handleRunAiScan = async (
+    isWatchdog = false,
+    scanOptions?: { reevaluateAfter45s?: boolean; currentSessionSeconds?: number; forcedWantsToEat?: boolean; cycleCount?: number }
+  ) => {
+    if (isAnalyzing && !scanOptions?.reevaluateAfter45s) return;
     setIsAnalyzing(true);
 
     try {
       const frameBase64 = captureCurrentFrameBase64();
-      const result = await analyzePetVisionScan(frameBase64 || captureUrl, petContext);
+      const isReeval = Boolean(scanOptions?.reevaluateAfter45s || is45sTimeoutActive);
+      const currentSecs = scanOptions?.currentSessionSeconds ?? eatingSessionSeconds;
+      const currentCycle = scanOptions?.cycleCount ?? feedingCycleCount;
+
+      const result = await analyzePetVisionScan(frameBase64 || captureUrl, petContext, {
+        reevaluateAfter45s: isReeval,
+        currentSessionSeconds: currentSecs,
+        forcedWantsToEat: scanOptions?.forcedWantsToEat,
+        cycleCount: currentCycle,
+        isPetDetected: isPetDetected,
+      });
+
+      const targetDeviceId = device?.id || 'HN-NODE-F778';
+      const activeDev = (devices || []).find((d) => d.id === targetDeviceId) || device;
+      const isGateOpen = Boolean(activeDev?.foodGateOpen);
+      const isPetPresent = Boolean(isPetDetected && result.intakeState !== 'None Detected');
+
       setAiScanResult(result);
-      setIsPetDetected(result.intakeState !== 'None Detected');
-      setTrackingConfidence(result.confidenceScore);
+      setIsPetDetected(isPetPresent);
+      setTrackingConfidence(isPetPresent ? result.confidenceScore : 0);
       setBoxPosition(result.boundingBox);
+
+      // STRICT NO-PET GUARD: If NO pet is detected at the bowl station (e.g. human in view, or empty station)
+      if (!isPetPresent) {
+        setPetWantsToEat(false);
+        setEatingIntentScore(0);
+        setTrackingActivity('Resting near Dispenser');
+        // If gate is open while no pet is detected, immediately close it!
+        if (isGateOpen) {
+          await closeGateDirect(targetDeviceId);
+          await setPetEatingDirect(targetDeviceId, false);
+          lastEatingTimestampRef.current = 0;
+          setEatingSessionSeconds(0);
+          setFeedingCycleCount(1);
+          setServoMeteringPhase('idle');
+          showToast('info', '🔒 Gate Auto-Closed', 'No pet detected at smart bowl. Food gate locked.');
+        }
+
+        // Persist zeroed analytics record
+        await saveVisionAnalyticsRecord({
+          petId: device?.assignedPetId || 'PET-001',
+          petName,
+          species: petSpecies,
+          breed: 'None',
+          confidenceScore: 0,
+          activity: 'None Detected',
+          healthScore: 100,
+          dwellTimeSeconds: 0,
+          ambientLux,
+          actionTriggered: 'None',
+          actionDetails: 'Bowl station clear. Food gate locked.',
+          snapshotThumbnail: frameBase64 || undefined,
+          clinicalNotes: ['Optical scanner: 0 animals detected.', 'Food gate secured at 0°.'],
+          provider: result.provider,
+          boundingBox: { top: 20, left: 22, width: 56, height: 60 }
+        });
+
+        if (!isWatchdog) {
+          setIsAiModalOpen(true);
+        }
+        return;
+      }
+
+      // Pet is confirmed present at smart station
+      setPetWantsToEat(result.wantsToEat);
+      setEatingIntentScore(result.eatingIntentScore);
+      setHeadPosture(result.headPosture);
+      setEatingIntentReason(result.eatingIntentReason);
       setTrackingActivity(
         result.intakeState === 'Feeding'
           ? 'Feeding at Smart Bowl'
@@ -639,7 +776,6 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           : 'Resting near Dispenser'
       );
 
-      const targetDeviceId = device?.id || 'HN-NODE-F778';
       const actions = result.suggestedActions;
       let executedActionText: 'None' | 'Auto-Dispensed' | 'Auto-Refilled' | 'Auto-Flashlight' | 'Distress Alert' = 'None';
 
@@ -710,17 +846,28 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
 
       // 5. Intelligent Pet Eating & Food Gate Closed-Loop Watchdog
       const isCurrentlyEating = Boolean(result.isPetEating || result.intakeState === 'Feeding');
-      const activeDev = (devices || []).find((d) => d.id === targetDeviceId) || device;
-      const isGateOpen = Boolean(activeDev?.foodGateOpen);
 
-      if (isCurrentlyEating) {
+      // Branch A: 45-Second Re-evaluation Resolution
+      if (isReeval) {
+        await handleResolve45sDecision(Boolean(result.wantsToEat));
+      } else if (result.wantsToEat && result.intakeState === 'Approaching Bowl' && !isGateOpen && !isCurrentlyEating) {
+        // Pet wants to eat and approached smart bowl -> Open gate to begin feeding cycle!
         lastEatingTimestampRef.current = Date.now();
         await setPetEatingDirect(targetDeviceId, true);
-        if (!isGateOpen) {
+        await openGateDirect(targetDeviceId);
+        showToast(
+          'info',
+          '🐾 Pet Wants to Eat',
+          `Feeding intent detected (${result.eatingIntentScore.toFixed(0)}%). Food dispenser open for ${petName}.`
+        );
+      } else if (isCurrentlyEating) {
+        lastEatingTimestampRef.current = Date.now();
+        await setPetEatingDirect(targetDeviceId, true);
+        if (!isGateOpen && !is45sTimeoutActive) {
           await openGateDirect(targetDeviceId);
-          showToast('info', '🐾 Pet Eating Detected', `Food dispenser opened for ${petName}. Holding open while feeding.`);
+          showToast('info', '🐾 Pet Eating Detected', `Food dispenser opened for ${petName}. Pulse metering active to save food.`);
         }
-      } else if (isGateOpen) {
+      } else if (isGateOpen && !is45sTimeoutActive) {
         // Gate is currently open, but pet is not actively eating right now
         const elapsedSinceEating = Date.now() - (lastEatingTimestampRef.current || 0);
         // After 5s grace period of no eating detected, automatically close the gate!
@@ -728,6 +875,9 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           await closeGateDirect(targetDeviceId);
           await setPetEatingDirect(targetDeviceId, false);
           lastEatingTimestampRef.current = 0;
+          setEatingSessionSeconds(0);
+          setFeedingCycleCount(1);
+          setServoMeteringPhase('idle');
           showToast('success', '✨ Meal Completed', `${petName} finished eating. Food gate closed automatically.`);
         }
       }
@@ -751,28 +901,159 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       }
     } catch (err) {
       console.error('AI Vision Scan failed:', err);
+      if (scanOptions?.reevaluateAfter45s || is45sTimeoutActive) {
+        handleResolve45sDecision(Boolean(isPetDetected && petWantsToEat));
+      }
     } finally {
       setIsAnalyzing(false);
     }
   };
 
+  // ── Auto-Resolve Countdown for 45s Re-evaluation ───────────────────────────
+  useEffect(() => {
+    if (!is45sTimeoutActive && !isReevaluatingAppetite) {
+      setReevalCountdown(3);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setReevalCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // If no pet detected (0 animals / bowl station clear), pet walked away -> false!
+          const shouldReopen = Boolean(isPetDetected && petWantsToEat && eatingIntentScore >= 50);
+          handleResolve45sDecision(shouldReopen);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [is45sTimeoutActive, isReevaluatingAppetite, isPetDetected, petWantsToEat, eatingIntentScore, feedingCycleCount, petName]);
+
+  // ── Food-Saving Servo Pulse Metering & 45-Second Meal Window Watchdog ───────
+  useEffect(() => {
+    const targetDevId = device?.id || 'HN-NODE-F778';
+    const activeDev = (devices || []).find((d) => d.id === targetDevId) || device;
+    const isActivelyEating = Boolean(
+      isPetDetected &&
+      (activeDev?.petEatingActive ||
+       aiScanResult?.isPetEating ||
+       trackingActivity === 'Feeding at Smart Bowl')
+    );
+
+    if (!isActivelyEating || is45sTimeoutActive || isReevaluatingAppetite) {
+      if (!isActivelyEating && !is45sTimeoutActive && servoMeteringPhase !== 'idle') {
+        setServoMeteringPhase('idle');
+      }
+      // STRICT SAFETY GUARD: If pet is not detected and gate is open, lock it shut immediately!
+      if (!isPetDetected && activeDev?.foodGateOpen) {
+        closeGateDirect(targetDevId);
+      }
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setEatingSessionSeconds((prev) => {
+        // STRICT SAFETY GUARD: If pet leaves during pulse cycle, lock gate and reset immediately!
+        if (!isPetDetected) {
+          if (activeDev?.foodGateOpen) {
+            closeGateDirect(targetDevId);
+          }
+          setServoMeteringPhase('idle');
+          return 0;
+        }
+
+        const next = prev + 1;
+
+        // 1. Reached the 45-second feeding session limit!
+        if (next >= 45) {
+          closeGateDirect(targetDevId);
+          setServoMeteringPhase('idle');
+          setIs45sTimeoutActive(true);
+          setIsReevaluatingAppetite(true);
+          showToast(
+            'warning',
+            '⏱️ 45s Meal Window Reached',
+            `Feeder closed to save food. AI evaluating if ${petName} still wants to eat...`
+          );
+          // Trigger automatic appetite re-evaluation scan
+          handleRunAiScan(true, {
+            reevaluateAfter45s: true,
+            currentSessionSeconds: 45,
+            cycleCount: feedingCycleCount,
+          });
+          return 45;
+        }
+
+        // 2. Food-Saving Servo Pulse Metering Cycle (every 6 seconds):
+        //    Seconds 0, 1, 2 (3s): Open gate to dispense a controlled portion
+        //    Seconds 3, 4, 5 (3s): Close gate to save food while pet chews
+        const phaseSec = next % 6;
+        if (phaseSec < 3) {
+          setServoMeteringPhase('dispensing');
+          if (!activeDev?.foodGateOpen && isPetDetected) {
+            openGateDirect(targetDevId);
+          }
+        } else {
+          setServoMeteringPhase('saving_pause');
+          if (activeDev?.foodGateOpen) {
+            closeGateDirect(targetDevId);
+          }
+        }
+
+        return next;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [
+    devices,
+    device,
+    isPetDetected,
+    aiScanResult?.isPetEating,
+    trackingActivity,
+    is45sTimeoutActive,
+    isReevaluatingAppetite,
+    feedingCycleCount,
+    servoMeteringPhase,
+    petName,
+  ]);
+
   // ── Continuous AI Watchdog Monitor (Fast 3.5s loop when Gate is Open or Pet Eating) ──
   useEffect(() => {
-    if (!isWatchdogActive || streamError || cameraSource === 'webcam' && isStreamLoading) return;
+    if (!isWatchdogActive || streamError || (cameraSource === 'webcam' && isStreamLoading)) return;
 
     const targetDevId = device?.id || 'HN-NODE-F778';
     const activeDev = (devices || []).find((d) => d.id === targetDevId) || device;
-    const isFastWatchdog = Boolean(activeDev?.foodGateOpen || activeDev?.petEatingActive || lastEatingTimestampRef.current > 0);
+    const isFastWatchdog = Boolean(
+      activeDev?.foodGateOpen ||
+      activeDev?.petEatingActive ||
+      lastEatingTimestampRef.current > 0 ||
+      is45sTimeoutActive
+    );
     const intervalMs = isFastWatchdog ? 3500 : 30000;
 
     const timer = setInterval(() => {
-      if (!isAnalyzing) {
+      if (!isAnalyzing && !isReevaluatingAppetite) {
         handleRunAiScan(true);
       }
     }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [isWatchdogActive, isAnalyzing, streamError, cameraSource, aiControlMode, ambientLux, devices, device]);
+  }, [
+    isWatchdogActive,
+    isAnalyzing,
+    isReevaluatingAppetite,
+    streamError,
+    cameraSource,
+    aiControlMode,
+    ambientLux,
+    devices,
+    device,
+    is45sTimeoutActive,
+  ]);
 
   // ── Trigger Scan for Real 2.4GHz Wi-Fi Networks on Camera ──────────────────
   const handleScanNetworks = async () => {
@@ -1524,12 +1805,24 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                   <div className="w-2.5 h-2.5 rounded-full border border-rose-300 absolute animate-ping" />
                 </div>
 
-                <div className="absolute -top-8 left-0 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-[11px] px-3 py-1 rounded-lg flex items-center gap-1.5 shadow-lg tracking-wide uppercase backdrop-blur-md">
-                  <Scan className="w-3.5 h-3.5" />
-                  <span>🎯 {petName} ({petSpecies})</span>
-                  <span className="bg-slate-950/30 text-rose-100 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold">
-                    {trackingConfidence}%
-                  </span>
+                <div className="absolute -top-8 left-0 flex items-center gap-1.5">
+                  <div className="bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-[11px] px-3 py-1 rounded-lg flex items-center gap-1.5 shadow-lg tracking-wide uppercase backdrop-blur-md">
+                    <Scan className="w-3.5 h-3.5" />
+                    <span>🎯 {petName} ({petSpecies})</span>
+                    <span className="bg-slate-950/30 text-rose-100 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold">
+                      {trackingConfidence}%
+                    </span>
+                  </div>
+
+                  {/* Appetite Intent Badge */}
+                  <div className={`text-[10px] font-mono font-black px-2.5 py-1 rounded-lg shadow-lg flex items-center gap-1.5 backdrop-blur-md border ${
+                    petWantsToEat
+                      ? 'bg-amber-500/90 border-amber-300/80 text-amber-950 shadow-amber-500/20'
+                      : 'bg-slate-900/90 border-slate-700 text-slate-300'
+                  }`}>
+                    <span>{petWantsToEat ? '😋 WANTS TO EAT' : '💤 SATISFIED'}</span>
+                    <span className="text-[9px] opacity-80">({eatingIntentScore.toFixed(0)}%)</span>
+                  </div>
                 </div>
 
                 <div className="absolute -bottom-7 right-0 bg-slate-950/85 border border-rose-400/40 text-rose-300 font-bold text-[9px] px-2.5 py-0.5 rounded-md flex items-center gap-1 font-mono">
@@ -1572,38 +1865,113 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               </div>
             </div>
 
-            {/* Dynamic AI Food Gate & Eating Watchdog Pill */}
+            {/* Dynamic AI Food Gate & Eating Watchdog Pill with Food-Saving Servo Metering & 45s Countdown */}
             {(() => {
               const activeDev = (devices || []).find((d) => d.id === (device?.id || 'HN-NODE-F778')) || device;
               const isGateOpen = Boolean(activeDev?.foodGateOpen);
               const isEating = Boolean(activeDev?.petEatingActive || aiScanResult?.isPetEating || trackingActivity.includes('Feeding'));
 
-              if (!isGateOpen && !isEating) return null;
+              if (is45sTimeoutActive || isReevaluatingAppetite) {
+                return (
+                  <div className="flex items-center justify-center pointer-events-auto">
+                    <div className="bg-slate-950/95 border-2 border-amber-400 text-amber-200 px-5 py-3 rounded-2xl flex flex-col items-center gap-1.5 shadow-2xl backdrop-blur-md ring-1 ring-amber-400/40 animate-in fade-in zoom-in-95">
+                      <div className="flex items-center gap-2 text-[12px] font-mono font-black tracking-wide text-amber-300">
+                        <Clock className="w-4 h-4 text-amber-400 animate-spin" />
+                        <span>⏱️ 45s MEAL LIMIT REACHED • AI RE-EVALUATING APPETITE</span>
+                      </div>
+                      <p className="text-[10px] text-amber-200/90 font-sans text-center">
+                        Dispenser servo closed to save food. AI auto-resolving in{' '}
+                        <span className="font-bold text-amber-300 font-mono text-[11px] underline">
+                          {reevalCountdown}s
+                        </span>{' '}
+                        {isPetDetected ? `based on ${petName}'s posture & appetite...` : `(No pet at bowl station -> auto-closing)`}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <button
+                          onClick={() => handleResolve45sDecision(true)}
+                          className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold cursor-pointer transition-all shadow active:scale-95 flex items-center gap-1"
+                        >
+                          <span>🐾 Confirm Pet Wants to Eat (Re-open)</span>
+                        </button>
+                        <button
+                          onClick={() => handleResolve45sDecision(false)}
+                          className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold cursor-pointer transition-all border border-slate-700 active:scale-95 flex items-center gap-1"
+                        >
+                          <span>✨ Finished / Satiated (Stay Closed)</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (!isGateOpen && !isEating && !petWantsToEat) return null;
 
               return (
-                <div className="flex items-center justify-center pointer-events-auto">
-                  <div className={`px-3 py-1.5 rounded-full border text-[11px] font-bold font-mono flex items-center gap-2 backdrop-blur-md shadow-lg transition-all animate-in fade-in zoom-in-95 ${
-                    isGateOpen && isEating
-                      ? 'bg-emerald-950/90 border-emerald-400/80 text-emerald-300 shadow-emerald-500/30'
+                <div className="flex flex-col items-center justify-center gap-1.5 pointer-events-auto">
+                  <div className={`px-4 py-2 rounded-2xl border text-[11px] font-bold font-mono flex items-center gap-2.5 backdrop-blur-md shadow-xl transition-all animate-in fade-in zoom-in-95 ${
+                    isEating
+                      ? servoMeteringPhase === 'dispensing'
+                        ? 'bg-emerald-950/95 border-emerald-400/90 text-emerald-300 shadow-emerald-500/40 ring-1 ring-emerald-400/50'
+                        : 'bg-teal-950/95 border-teal-400/90 text-teal-300 shadow-teal-500/40'
                       : isGateOpen
                       ? 'bg-amber-950/90 border-amber-400/80 text-amber-300 shadow-amber-500/30'
                       : 'bg-indigo-950/90 border-indigo-400/80 text-indigo-300'
                   }`}>
-                    <span className={`w-2 h-2 rounded-full ${isEating ? 'bg-emerald-400 animate-ping' : 'bg-amber-400 animate-pulse'}`} />
-                    <span>
-                      {isGateOpen && isEating
-                        ? '🟢 GATE OPEN: PET ACTIVELY EATING'
+                    <span className={`w-2.5 h-2.5 rounded-full ${
+                      isEating && servoMeteringPhase === 'dispensing'
+                        ? 'bg-emerald-400 animate-ping'
+                        : isEating
+                        ? 'bg-teal-400 animate-pulse'
                         : isGateOpen
-                        ? '⏳ GATE CLOSING: PET STEPPED AWAY (5s GRACE)'
-                        : '🐾 PET AT BOWL: GATE READY'}
-                    </span>
-                    <button
-                      onClick={() => isGateOpen ? closeGateDirect(device?.id || 'HN-NODE-F778') : openGateDirect(device?.id || 'HN-NODE-F778')}
-                      className="ml-2 px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-white text-[10px] font-sans font-semibold cursor-pointer"
-                    >
-                      {isGateOpen ? 'Close Now' : 'Open Gate'}
-                    </button>
+                        ? 'bg-amber-400 animate-pulse'
+                        : 'bg-indigo-400 animate-ping'
+                    }`} />
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <span>
+                          {isEating
+                            ? servoMeteringPhase === 'dispensing'
+                              ? `🟢 SERVO OPEN: DISPENSING FOOD (Cycle ${feedingCycleCount})`
+                              : `🛡️ SERVO CLOSED: SAVING FOOD (Chewing Pause)`
+                            : isGateOpen
+                            ? '⏳ GATE CLOSING: PET STEPPED AWAY (5s GRACE)'
+                            : `🐾 PET WANTS TO EAT (${eatingIntentScore.toFixed(0)}%): GATE READY`}
+                        </span>
+                        {isEating && (
+                          <span className="bg-slate-900/80 text-white font-mono px-2 py-0.5 rounded text-[10px] border border-slate-700">
+                            {eatingSessionSeconds}s / 45s
+                          </span>
+                        )}
+                      </div>
+                      {isEating && (
+                        <span className="text-[9px] font-normal opacity-85 font-sans">
+                          {servoMeteringPhase === 'dispensing'
+                            ? 'Controlled micro-dispense to prevent overflow'
+                            : 'Servo closed to save food while pet consumes dispensed kibble'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 ml-2">
+                      <button
+                        onClick={() => isGateOpen ? closeGateDirect(device?.id || 'HN-NODE-F778') : openGateDirect(device?.id || 'HN-NODE-F778')}
+                        className="px-2.5 py-1 rounded bg-slate-800/90 hover:bg-slate-700 text-white text-[10px] font-sans font-semibold cursor-pointer border border-slate-700"
+                      >
+                        {isGateOpen ? 'Close Gate' : 'Open Gate'}
+                      </button>
+                    </div>
                   </div>
+
+                  {/* 45-Second Meal Countdown Progress Bar */}
+                  {isEating && (
+                    <div className="w-56 h-2 bg-slate-950/80 rounded-full overflow-hidden border border-slate-800 p-0.5 shadow-md flex items-center">
+                      <div 
+                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400 transition-all duration-300"
+                        style={{ width: `${Math.min(100, (eatingSessionSeconds / 45) * 100)}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -1622,7 +1990,26 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               {/* Interactive Detection Controls */}
               <div className="pointer-events-auto flex items-center gap-1.5">
                 <button
-                  onClick={() => setIsPetDetected(!isPetDetected)}
+                  onClick={() => {
+                    const next = !isPetDetected;
+                    setIsPetDetected(next);
+                    if (next) {
+                      setPetWantsToEat(true);
+                      setEatingIntentScore(98.5);
+                      setTrackingActivity('Feeding at Smart Bowl');
+                      lastEatingTimestampRef.current = Date.now();
+                      setPetEatingDirect(device?.id || 'HN-NODE-F778', true);
+                    } else {
+                      setEatingSessionSeconds(0);
+                      setFeedingCycleCount(1);
+                      setServoMeteringPhase('idle');
+                      setIs45sTimeoutActive(false);
+                      setIsReevaluatingAppetite(false);
+                      setReevalCountdown(3);
+                      setPetEatingDirect(device?.id || 'HN-NODE-F778', false);
+                      closeGateDirect(device?.id || 'HN-NODE-F778');
+                    }
+                  }}
                   className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 shadow-md cursor-pointer ${
                     isPetDetected
                       ? 'bg-slate-800/90 hover:bg-slate-700 text-slate-300 border-slate-700'
@@ -1632,6 +2019,40 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                   <Scan className="w-3 h-3" />
                   <span>{isPetDetected ? 'Clear Target' : `Detect ${petName}`}</span>
                 </button>
+
+                {/* Interactive Simulation: Wants to Eat toggle */}
+                {isPetDetected && (
+                  <button
+                    onClick={() => {
+                      const nextWants = !petWantsToEat;
+                      setPetWantsToEat(nextWants);
+                      setEatingIntentScore(nextWants ? 97.2 : 21.0);
+                      handleRunAiScan(false, { forcedWantsToEat: nextWants });
+                    }}
+                    className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1 cursor-pointer ${
+                      petWantsToEat
+                        ? 'bg-amber-600/90 hover:bg-amber-500 text-white border-amber-400/50'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                    }`}
+                    title="Toggle Pet Appetite (Wants to Eat vs Finished)"
+                  >
+                    <span>{petWantsToEat ? '😋 Wants to Eat' : '💤 Satiated'}</span>
+                  </button>
+                )}
+
+                {/* Trigger 45s Test Button */}
+                {isPetDetected && (
+                  <button
+                    onClick={() => {
+                      setEatingSessionSeconds(44);
+                    }}
+                    className="bg-purple-600/90 hover:bg-purple-500 text-white font-bold text-[10px] px-2 py-1 rounded-lg shadow flex items-center gap-1 transition-all cursor-pointer"
+                    title="Jump eating timer to 44s to immediately test 45s auto gate close and AI appetite re-evaluation"
+                  >
+                    <Clock className="w-3 h-3 text-purple-200" />
+                    <span>Test 45s</span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => handleRunAiScan()}
