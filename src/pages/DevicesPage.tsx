@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LiveCameraWidget } from '../components/LiveCameraWidget';
 import { DirectUSBConsoleWidget } from '../components/DirectUSBConsoleWidget';
 import { usbSerialService, ScannedWifiNetwork } from '../services/usbSerialService';
+import { sendWifiProvisionToSupabase, clearWifiProvisionInSupabase } from '../services/supabase';
 import { useAppContext } from '../hooks/useAppContext';
 import { Device, Pet } from '../types';
 import {
@@ -69,6 +70,10 @@ export const DevicesPage: React.FC = () => {
     closeGateDirect,
     runBowlSanitationCycle,
     dispenseCleaningWaterDirect,
+    dispenseSprayWaterDirect,
+    startDrainPumpDirect,
+    stopDrainPumpDirect,
+    invertDrainRelayDirect,
   } = useAppContext();
 
   const [connectModalOpen, setConnectModalOpen] = useState(false);
@@ -100,6 +105,10 @@ export const DevicesPage: React.FC = () => {
   const [activeWifiTab, setActiveWifiTab] = useState<'scanned' | 'manual'>('scanned');
   const [lastScanTimestamp, setLastScanTimestamp] = useState<Date | null>(new Date());
   const [pairingSuccessMsg, setPairingSuccessMsg] = useState<string | null>(null);
+  // Cloud WiFi Provisioning State
+  const [isCloudProvisioning, setIsCloudProvisioning] = useState(false);
+  const [cloudProvisionStatus, setCloudProvisionStatus] = useState<'idle' | 'sent' | 'confirmed' | 'error'>('idle');
+  const [cloudProvisionPollTimer, setCloudProvisionPollTimer] = useState<ReturnType<typeof setInterval> | null>(null);
 
   // Custom Manual Dispense State
   const [customPortionGrams, setCustomPortionGrams] = useState(75);
@@ -131,7 +140,6 @@ export const DevicesPage: React.FC = () => {
     }
   };
   const [isCleaningFood, setIsCleaningFood] = useState(false);
-  const [isCleaningWater, setIsCleaningWater] = useState(false);
 
   const handleCleanFood = async (deviceId: string) => {
     setIsCleaningFood(true);
@@ -149,45 +157,143 @@ export const DevicesPage: React.FC = () => {
     }
   };
 
-  const handleCleanWater = async (deviceId: string) => {
-    setIsCleaningWater(true);
-    showToast('info', 'Cleaning Water Bowl', 'Initiating water flush & drainage cycle...');
+  const [isSprayingWater, setIsSprayingWater] = useState(false);
+
+  const handleSprayWater = async (deviceId: string) => {
+    setIsSprayingWater(true);
+    showToast('info', 'Spraying Clean Water', 'Activating rinse sprayer pump (GPIO 18) to wash food bowl...');
     try {
-      if (runBowlSanitationCycle) {
-        await runBowlSanitationCycle(deviceId);
+      if (dispenseSprayWaterDirect) {
+        await dispenseSprayWaterDirect(deviceId, 250);
       } else if (dispenseCleaningWaterDirect) {
         await dispenseCleaningWaterDirect(deviceId, 250);
       }
-      await tareWaterScaleDirect(deviceId);
-      showToast('success', 'Water Bowl Cleaned', 'Water bowl rinsed & scale tared to 0 ml.');
+      showToast('success', 'Spray Completed', 'Rinse sprayer wash cycle finished.');
     } catch {
-      showToast('error', 'Cleaning Error', 'Failed to complete water cleaning sequence.');
+      showToast('error', 'Spray Error', 'Failed to activate spray pump.');
     } finally {
-      setIsCleaningWater(false);
+      setIsSprayingWater(false);
     }
   };
 
-  const [isDisposingWaste, setIsDisposingWaste] = useState(false);
+  const [isDrainingBowl, setIsDrainingBowl] = useState(false);
 
-  const handleWasteDisposal = async (deviceId: string) => {
-    setIsDisposingWaste(true);
-    showToast('info', 'Waste Disposal', 'Activating waste drain pump to evacuate bowl scraps & wastewater...');
+  const handleDrainBowl = async (deviceId: string) => {
+    setIsDrainingBowl(true);
+    showToast('warning', 'Draining Wastewater', 'Activating drain pump (GPIO 23) to evacuate bowl wastewater & scraps...');
     try {
-      const dev = devices.find(d => d.id === deviceId);
-      const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
-      if (cleanIp) {
-        await fetch(`http://${cleanIp}/api/waste/dispose`, { method: 'POST', mode: 'no-cors' });
-      } else if (usbSerialService.getIsConnected()) {
-        await usbSerialService.disposeWaste(5000);
+      if (startDrainPumpDirect) {
+        await startDrainPumpDirect(deviceId, 6000);
+      } else {
+        const dev = devices.find(d => d.id === deviceId);
+        const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+        if (cleanIp) {
+          await fetch(`http://${cleanIp}/api/drain?duration=6000`, { method: 'POST', mode: 'no-cors' });
+        }
       }
-      await tareScaleDirect(deviceId);
-      await tareWaterScaleDirect(deviceId);
-      showToast('success', 'Waste Disposed', 'Waste evacuated to collection receptacle and scales re-tared.');
+      setTimeout(async () => {
+        await tareScaleDirect(deviceId);
+        await tareWaterScaleDirect(deviceId);
+      }, 6000);
+      showToast('success', 'Drain Cycle Triggered', 'Wastewater pump activated for 6 seconds.');
     } catch {
-      showToast('error', 'Disposal Error', 'Failed to complete waste disposal.');
+      showToast('error', 'Drain Error', 'Failed to complete drainage.');
     } finally {
-      setIsDisposingWaste(false);
+      setTimeout(() => setIsDrainingBowl(false), 6000);
     }
+  };
+
+  const handleStopDrain = async (deviceId: string) => {
+    setIsDrainingBowl(false);
+    if (stopDrainPumpDirect) {
+      await stopDrainPumpDirect(deviceId);
+    }
+  };
+
+  const handleInvertDrain = async (deviceId: string) => {
+    if (invertDrainRelayDirect) {
+      await invertDrainRelayDirect(deviceId);
+    }
+  };
+
+  const [isCleaningWaste, setIsCleaningWaste] = useState(false);
+  const [cleanWastePhase, setCleanWastePhase] = useState<'idle' | 'spraying' | 'draining' | 'taring'>('idle');
+  const [cleanWasteCountdown, setCleanWasteCountdown] = useState<number>(0);
+
+  const handleCleanWaste = async (deviceId: string) => {
+    if (isCleaningWaste) return;
+    setIsCleaningWaste(true);
+    setCleanWastePhase('spraying');
+    setCleanWasteCountdown(15);
+
+    const timerInterval = setInterval(() => {
+      setCleanWasteCountdown((prev) => (prev > 1 ? prev - 1 : 1));
+    }, 1000);
+
+    showToast('info', '🧼 Clean Waste (1/3)', 'Step 1: Spraying clean rinse water (GPIO 18 - 5s) to wash food bowl...');
+
+    try {
+      // Phase 1: Spray Clean Rinse Water (GPIO 18) - exactly 5.0 seconds
+      if (dispenseSprayWaterDirect) {
+        await dispenseSprayWaterDirect(deviceId, 5000);
+      } else {
+        const dev = devices.find((d) => d.id === deviceId);
+        const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.157';
+        fetch(`http://${cleanIp}/api/spray?duration=5000`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      }
+
+      await new Promise((res) => setTimeout(res, 5000));
+
+      // Phase 2: Wastewater Drain Pump (GPIO 23) - exactly 9.0 seconds
+      setCleanWastePhase('draining');
+      showToast('warning', '🌀 Clean Waste (2/3)', 'Step 2: Evacuating dirty wastewater via Drain Pump (GPIO 23 - 9s)...');
+
+      if (startDrainPumpDirect) {
+        await startDrainPumpDirect(deviceId, 9000);
+      } else {
+        const dev = devices.find((d) => d.id === deviceId);
+        const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.157';
+        fetch(`http://${cleanIp}/api/drain?duration=9000`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      }
+
+      await new Promise((res) => setTimeout(res, 9000));
+
+      // Phase 3: Zero / Tare scales - exactly 1.0 second (Total = 15.0 seconds)
+      setCleanWastePhase('taring');
+      if (tareScaleDirect) await tareScaleDirect(deviceId);
+      if (tareWaterScaleDirect) await tareWaterScaleDirect(deviceId);
+
+      await new Promise((res) => setTimeout(res, 1000));
+
+      clearInterval(timerInterval);
+      setCleanWasteCountdown(0);
+      showToast('success', '✨ Clean Waste Completed (15s cycle)', 'Food bowl washed with spray, evacuated into waste tank, and scales tared to 0.0g!');
+    } catch {
+      clearInterval(timerInterval);
+      setCleanWasteCountdown(0);
+      showToast('error', 'Clean Waste Error', 'Failed to complete full sanitation sequence.');
+    } finally {
+      clearInterval(timerInterval);
+      setIsCleaningWaste(false);
+      setCleanWastePhase('idle');
+      setCleanWasteCountdown(0);
+    }
+  };
+
+  const handleStopCleanWaste = async (deviceId: string) => {
+    setIsCleaningWaste(false);
+    setCleanWastePhase('idle');
+    setCleanWasteCountdown(0);
+    const dev = devices.find((d) => d.id === deviceId);
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.157';
+    try {
+      fetch(`http://${cleanIp}/api/spray/stop`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      fetch(`http://${cleanIp}/api/drain/stop`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+      if (stopDrainPumpDirect) {
+        await stopDrainPumpDirect(deviceId);
+      }
+      showToast('info', 'Sanitation Halted', 'Clean waste sequence stopped.');
+    } catch {}
   };
 
   const handleWaterTareClick = async (deviceId: string) => {
@@ -623,6 +729,78 @@ export const DevicesPage: React.FC = () => {
       }
     } finally {
       setIsSerialFlashing(false);
+    }
+  };
+
+  // Method 3: Cloud Provisioning via Supabase (works from anywhere worldwide, no USB or LAN needed)
+  const handleCloudProvisionWifi = async () => {
+    if (!wifiSsid.trim()) {
+      showToast('warning', 'Missing SSID', 'Please enter or select a Wi-Fi network SSID name.');
+      return;
+    }
+
+    setIsCloudProvisioning(true);
+    setCloudProvisionStatus('idle');
+    setPairingSuccessMsg(null);
+
+    const targetDevice = (devices || []).find(d => d.id === 'HN-NODE-F778' || d.status === 'Online') || (devices || [])[0];
+    if (!targetDevice) {
+      showToast('warning', 'No Device Found', 'No ESP32 device is registered. Register a device first.');
+      setIsCloudProvisioning(false);
+      return;
+    }
+
+    try {
+      const ok = await sendWifiProvisionToSupabase(targetDevice.id, wifiSsid.trim(), wifiPassword.trim());
+      if (ok) {
+        setCloudProvisionStatus('sent');
+        showToast('info', '☁️ Credentials Queued', `'${wifiSsid}' dispatched to Supabase cloud queue. ESP32 will pick it up within 10 seconds.`);
+
+        // Save to localStorage for UI persistence
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('hydronourish_paired_ssid', wifiSsid.trim());
+        }
+
+        // Poll device status every 3s for up to 60s waiting for ESP32 to apply new credentials
+        let pollCount = 0;
+        const maxPolls = 20; // 20 × 3s = 60 seconds
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          // Clear the provision columns once ESP32 has reconnected (status = Online again)
+          const currentDev = (devices || []).find(d => d.id === targetDevice.id);
+          if (currentDev?.status === 'Online') {
+            clearInterval(pollInterval);
+            setCloudProvisionPollTimer(null);
+            await clearWifiProvisionInSupabase(targetDevice.id);
+            setCloudProvisionStatus('confirmed');
+            const msg = `✅ ESP32 successfully reconnected to '${wifiSsid}'! WiFi credentials are now permanently saved in NVS flash.`;
+            setPairingSuccessMsg(msg);
+            showToast('success', '✅ ESP32 Connected!', msg);
+            await updateDevice(targetDevice.id, { wifiSsid: wifiSsid.trim(), status: 'Online' });
+            setIsCloudProvisioning(false);
+          }
+          if (pollCount >= maxPolls) {
+            clearInterval(pollInterval);
+            setCloudProvisionPollTimer(null);
+            if (cloudProvisionStatus !== 'confirmed') {
+              setCloudProvisionStatus('error');
+              const msg = `Credentials dispatched for '${wifiSsid}'. If ESP32 doesn't connect in 60s, verify the password is correct or try USB Flash.`;
+              setPairingSuccessMsg(msg);
+              showToast('warning', 'Timeout', msg);
+            }
+            setIsCloudProvisioning(false);
+          }
+        }, 3000);
+        setCloudProvisionPollTimer(pollInterval);
+      } else {
+        setCloudProvisionStatus('error');
+        showToast('error', 'Cloud Dispatch Failed', 'Could not write credentials to Supabase. Check your internet connection.');
+        setIsCloudProvisioning(false);
+      }
+    } catch (err: any) {
+      setCloudProvisionStatus('error');
+      showToast('error', 'Cloud Error', err.message || 'Unexpected error dispatching WiFi credentials.');
+      setIsCloudProvisioning(false);
     }
   };
 
@@ -1315,51 +1493,85 @@ export const DevicesPage: React.FC = () => {
                             Auto-Flush: Dirty Water & 15m Waste
                           </span>
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div>
                           <button
                             type="button"
-                            onClick={() => handleCleanFood(featuredDevice.id)}
-                            disabled={!isOnline || isCleaningFood}
-                            className={`py-2 px-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 border text-xs cursor-pointer shadow-2xs active:scale-95 ${
-                              isCleaningFood
-                                ? 'bg-amber-50 border-amber-300 text-amber-800'
-                                : 'bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200/80 text-emerald-800 hover:from-emerald-100 hover:to-teal-100'
+                            onClick={() => {
+                              if (isCleaningWaste) {
+                                handleStopCleanWaste(featuredDevice.id);
+                              } else {
+                                handleCleanWaste(featuredDevice.id);
+                              }
+                            }}
+                            disabled={!isOnline}
+                            className={`w-full py-2.5 px-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border text-xs cursor-pointer shadow-2xs active:scale-95 ${
+                              isCleaningWaste
+                                ? 'bg-rose-50 border-rose-300 text-rose-700 animate-pulse'
+                                : 'bg-gradient-to-r from-purple-50 via-indigo-50 to-sky-50 border-purple-200/80 text-purple-900 hover:from-purple-100 hover:to-indigo-100'
                             }`}
-                            title="Open gate to purge old food, clear debris, and zero the food scale"
+                            title="3-in-1 Sanitation Cycle: 1. Spray Rinse (GPIO 18 - 5s) ➔ 2. Drain Wastewater (GPIO 23 - 9s) ➔ 3. Tare Scales (1s) = 15s Total"
                           >
-                            <Sparkles className={`w-3.5 h-3.5 ${isCleaningFood ? 'animate-spin text-amber-600' : 'text-emerald-600'}`} />
-                            <span>{isCleaningFood ? 'Cleaning...' : 'Clean Food'}</span>
+                            {isCleaningWaste ? (
+                              <>
+                                <Trash2 className="w-4 h-4 animate-pulse text-rose-600" />
+                                <span className="font-mono">
+                                  {cleanWastePhase === 'spraying' && `🚿 1/2 Spraying (${cleanWasteCountdown}s)...`}
+                                  {cleanWastePhase === 'draining' && `🌀 2/2 Draining (${cleanWasteCountdown}s)...`}
+                                  {cleanWastePhase === 'taring' && `✨ Taring Scales (${cleanWasteCountdown}s)...`}
+                                  {cleanWastePhase === 'idle' && 'Stopping...'}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="w-4 h-4 text-purple-600" />
+                                <span>Clean Waste (Spray + Drain)</span>
+                              </>
+                            )}
                           </button>
+                        </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleCleanWater(featuredDevice.id)}
-                            disabled={!isOnline || isCleaningWater}
-                            className={`py-2 px-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 border text-xs cursor-pointer shadow-2xs active:scale-95 ${
-                              isCleaningWater
-                                ? 'bg-sky-50 border-sky-300 text-sky-800'
-                                : 'bg-gradient-to-r from-sky-50 to-blue-50 border-sky-200/80 text-sky-800 hover:from-sky-100 hover:to-blue-100'
-                            }`}
-                            title="Rinse bowl with clean water pump and drain dirty water"
-                          >
-                            <Droplets className={`w-3.5 h-3.5 ${isCleaningWater ? 'animate-bounce text-sky-600' : 'text-sky-600'}`} />
-                            <span>{isCleaningWater ? 'Flushing...' : 'Clean Water'}</span>
-                          </button>
+                        {/* Manual Pump Overrides sub-row */}
+                        <div className="flex items-center justify-between gap-2 pt-0.5">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                            Manual Overrides:
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleSprayWater(featuredDevice.id)}
+                              disabled={!isOnline || isSprayingWater || isCleaningWaste}
+                              className={`py-1 px-2.5 rounded-lg font-semibold transition-all flex items-center gap-1 border text-[11px] cursor-pointer shadow-2xs active:scale-95 ${
+                                isSprayingWater
+                                  ? 'bg-sky-100 border-sky-300 text-sky-800'
+                                  : 'bg-sky-50/80 border-sky-200 text-sky-700 hover:bg-sky-100'
+                              }`}
+                              title="Manually spray clean rinse water (GPIO 18)"
+                            >
+                              <Droplets className={`w-3 h-3 ${isSprayingWater ? 'animate-bounce text-sky-600' : 'text-sky-600'}`} />
+                              <span>{isSprayingWater ? 'Spraying...' : 'Spray Water'}</span>
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={() => handleWasteDisposal(featuredDevice.id)}
-                            disabled={!isOnline || isDisposingWaste}
-                            className={`py-2 px-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 border text-xs cursor-pointer shadow-2xs active:scale-95 ${
-                              isDisposingWaste
-                                ? 'bg-purple-50 border-purple-300 text-purple-800'
-                                : 'bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-200/80 text-purple-800 hover:from-purple-100 hover:to-indigo-100'
-                            }`}
-                            title="Active Waste Disposal: Runs drain pump (GPIO 19) to evacuate bowl scraps & wastewater to waste receptacle"
-                          >
-                            <Trash2 className={`w-3.5 h-3.5 ${isDisposingWaste ? 'animate-pulse text-purple-600' : 'text-purple-600'}`} />
-                            <span>{isDisposingWaste ? 'Draining...' : 'Waste Disposal'}</span>
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isDrainingBowl) {
+                                  handleStopDrain(featuredDevice.id);
+                                } else {
+                                  handleDrainBowl(featuredDevice.id);
+                                }
+                              }}
+                              disabled={!isOnline || isCleaningWaste}
+                              className={`py-1 px-2.5 rounded-lg font-semibold transition-all flex items-center gap-1 border text-[11px] cursor-pointer shadow-2xs active:scale-95 ${
+                                isDrainingBowl
+                                  ? 'bg-rose-100 border-rose-300 text-rose-800 animate-pulse'
+                                  : 'bg-purple-50/80 border-purple-200 text-purple-700 hover:bg-purple-100'
+                              }`}
+                              title="Manually run or stop wastewater drain pump (GPIO 23)"
+                            >
+                              <Trash2 className={`w-3 h-3 ${isDrainingBowl ? 'animate-pulse text-rose-600' : 'text-purple-600'}`} />
+                              <span>{isDrainingBowl ? 'Stop Drain' : 'Drain Bowl'}</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
 
@@ -1423,7 +1635,64 @@ export const DevicesPage: React.FC = () => {
         subtitle="Universal 2.4 GHz Network Scanner, SoftAP Hotspot & Direct USB Hardware Provisioning"
       >
         <form onSubmit={handlePairWifiSubmit} className="space-y-4 text-xs">
-          <p className="text-slate-600 leading-relaxed">
+          {/* ── Cloud Provision Method (Primary — Works From Anywhere) ── */}
+          <div className="p-3.5 rounded-2xl border-2 border-indigo-300 bg-gradient-to-br from-indigo-50 to-violet-50 space-y-2.5 shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
+                <Globe className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="font-extrabold text-indigo-900 text-xs">☁️ Cloud Provision — Works From Anywhere</p>
+                <p className="text-[10px] text-indigo-600 font-medium">Sends credentials to Supabase. ESP32 picks them up within 10 seconds.</p>
+              </div>
+              <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-indigo-600 text-white shadow-sm shrink-0">RECOMMENDED</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleCloudProvisionWifi}
+              disabled={isCloudProvisioning || !wifiSsid.trim()}
+              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-[0.98] shadow-md shadow-indigo-200"
+              id="btn-cloud-provision-wifi"
+            >
+              {isCloudProvisioning ? (
+                <><RefreshCw className="w-4 h-4 animate-spin" /> Waiting for ESP32 ({cloudProvisionStatus === 'sent' ? 'Credentials Queued...' : 'Processing...'}) </>
+              ) : cloudProvisionStatus === 'confirmed' ? (
+                <><CheckCircle2 className="w-4 h-4 text-emerald-200" /> ESP32 Connected Successfully!</>
+              ) : (
+                <><Globe className="w-4 h-4" /> Send via Cloud (Supabase Queue)</>
+              )}
+            </button>
+            {/* Cloud Provision Live Status Banner */}
+            {cloudProvisionStatus === 'sent' && isCloudProvisioning && (
+              <div className="p-2.5 bg-indigo-100/80 rounded-xl border border-indigo-200 flex items-center gap-2 animate-pulse">
+                <Radio className="w-4 h-4 text-indigo-600 animate-bounce shrink-0" />
+                <div>
+                  <p className="font-bold text-indigo-900 text-[11px]">☁️ Credentials queued in Supabase</p>
+                  <p className="text-[10px] text-indigo-700">ESP32 polls every 10s and will reconnect automatically. No action needed.</p>
+                </div>
+              </div>
+            )}
+            {cloudProvisionStatus === 'confirmed' && (
+              <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <p className="text-[11px] font-bold text-emerald-800">ESP32 connected to '{wifiSsid}' and is now Online!</p>
+              </div>
+            )}
+            {cloudProvisionStatus === 'error' && (
+              <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                <p className="text-[11px] text-amber-800">Timed out. Try USB Flash or check password.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-px bg-slate-200" />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">or use fallback methods below</span>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
+
+          <p className="text-slate-500 text-[11px] leading-relaxed">
             Scan nearby 2.4 GHz wireless networks or enter credentials for any Wi-Fi network (Clinic Wi-Fi, Home Wi-Fi, or Phone Hotspot). Credentials will be <strong>saved permanently into ESP32 NVS Flash memory</strong>.
           </p>
 
@@ -1672,24 +1941,33 @@ export const DevicesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Dual-Mode Provisioning Options Info */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div className="p-3 bg-indigo-50/70 rounded-xl border border-indigo-200/60 text-indigo-900 text-[11px] space-y-1">
+          {/* Three-Method Provisioning Options Info */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="p-2.5 bg-indigo-50/70 rounded-xl border border-indigo-200/60 text-indigo-900 text-[11px] space-y-1">
               <p className="font-bold flex items-center gap-1">
-                <Wifi className="w-3.5 h-3.5 text-indigo-600" />
-                Network Auto-Pair:
+                <Globe className="w-3.5 h-3.5 text-indigo-600" />
+                ☁️ Cloud (Above):
               </p>
               <p className="text-indigo-700 leading-tight">
-                Dispatches credentials over SoftAP (192.168.4.1) or LAN directly to ESP32 node.
+                Works from anywhere worldwide. ESP32 polls Supabase automatically.
               </p>
             </div>
-            <div className="p-3 bg-emerald-50/70 rounded-xl border border-emerald-200/60 text-emerald-900 text-[11px] space-y-1">
+            <div className="p-2.5 bg-violet-50/70 rounded-xl border border-violet-200/60 text-violet-900 text-[11px] space-y-1">
+              <p className="font-bold flex items-center gap-1">
+                <Wifi className="w-3.5 h-3.5 text-violet-600" />
+                📶 Network Auto-Pair:
+              </p>
+              <p className="text-violet-700 leading-tight">
+                Dispatches over SoftAP (192.168.4.1) or LAN when ESP32 is nearby.
+              </p>
+            </div>
+            <div className="p-2.5 bg-emerald-50/70 rounded-xl border border-emerald-200/60 text-emerald-900 text-[11px] space-y-1">
               <p className="font-bold flex items-center gap-1">
                 <Usb className="w-3.5 h-3.5 text-emerald-600" />
-                Direct USB Flash:
+                ⚡ USB Flash:
               </p>
               <p className="text-emerald-700 leading-tight">
-                Flashes Wi-Fi credentials via USB Serial (100% offline guarantee).
+                Flashes via USB Serial (100% offline, requires cable).
               </p>
             </div>
           </div>
@@ -2088,7 +2366,7 @@ export const DevicesPage: React.FC = () => {
               </div>
               <div>
                 <span className="text-slate-400 font-bold uppercase text-[10px]">IP Address:</span>
-                <p className="font-mono font-bold text-indigo-600">{selectedDevice.ipAddress || '192.168.100.159'}</p>
+                <p className="font-mono font-bold text-indigo-600">{selectedDevice.ipAddress || '192.168.100.157'}</p>
               </div>
               <div>
                 <span className="text-slate-400 font-bold uppercase text-[10px]">MAC Address:</span>
@@ -2199,6 +2477,32 @@ export const DevicesPage: React.FC = () => {
                   </p>
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border bg-sky-100/80 text-sky-800 border-sky-200">
                     HX711 (GPIO 32/33)
+                  </span>
+                </div>
+              </div>
+              <div className="bg-purple-50/70 p-2.5 rounded-xl border border-purple-200/70">
+                <div className="flex items-center justify-between">
+                  <span className="text-purple-800 font-bold uppercase text-[10px] flex items-center gap-1">
+                    <Trash2 className="w-3.5 h-3.5 text-purple-600" />
+                    Drain Relay (GPIO 23):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedDevice) handleInvertDrain(selectedDevice.id);
+                    }}
+                    className="text-[9px] font-bold text-purple-800 bg-purple-100 hover:bg-purple-200 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                    title="Flip Active-HIGH / Active-LOW logic if drain pump stays on continuously"
+                  >
+                    Invert Polarity
+                  </button>
+                </div>
+                <div className="flex items-baseline justify-between mt-1">
+                  <p className="text-xs font-semibold text-purple-950">
+                    Drain Pump (Relay 3)
+                  </p>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border bg-purple-100/80 text-purple-800 border-purple-200">
+                    GPIO 23
                   </span>
                 </div>
               </div>

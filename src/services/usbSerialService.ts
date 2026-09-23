@@ -363,17 +363,19 @@ class USBSerialService {
     return this.sendCommand({ action: 'motor', state, steps });
   }
 
-  public async dispenseCleaningWater(durationMs: number = 4500): Promise<boolean> {
-    return this.sendCommand({ action: 'clean_water', duration: durationMs });
+  public async dispenseCleaningWater(durationMs: number = 3500): Promise<boolean> {
+    await this.sendRaw('SPRAY');
+    return this.sendCommand({ action: 'spray', duration: durationMs });
   }
 
-  public async run19WDrainPump(durationMs: number = 7000): Promise<boolean> {
-    return this.sendCommand({ action: 'drain_19w', duration: durationMs });
+  public async run19WDrainPump(durationMs: number = 6000): Promise<boolean> {
+    await this.sendRaw('DRAIN');
+    return this.sendCommand({ action: 'drain', duration: durationMs });
   }
 
-  public async disposeWaste(durationMs: number = 5000): Promise<boolean> {
-    await this.sendRaw('DISPOSE');
-    return this.sendCommand({ action: 'dispose_waste', duration: durationMs });
+  public async disposeWaste(durationMs: number = 6000): Promise<boolean> {
+    await this.sendRaw('DRAIN');
+    return this.sendCommand({ action: 'drain', duration: durationMs });
   }
 
   public async fullSanitation(): Promise<boolean> {

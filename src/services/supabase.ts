@@ -7,6 +7,7 @@
  */
 
 import { supabase } from '../lib/supabase';
+export { supabase };
 import type {
   Pet,
   FeedingSchedule,
@@ -658,6 +659,52 @@ export async function deleteDeviceFromSupabase(id: string): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   try {
     const { error } = await supabase.from('devices').delete().eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// ─── 7b. CLOUD WI-FI PROVISIONING ─────────────────────────────────────────
+
+/**
+ * Writes pending WiFi credentials into the devices row in Supabase.
+ * The ESP32 polls this every 10 seconds. When it detects pending_wifi_ssid is
+ * non-empty it connects to the new network, saves credentials to NVS, and
+ * clears the column via a subsequent PATCH.
+ *
+ * @param deviceId   The target device ID (e.g. 'HN-NODE-F778')
+ * @param ssid       WiFi SSID to provision
+ * @param password   WiFi password (empty string for open networks)
+ */
+export async function sendWifiProvisionToSupabase(
+  deviceId: string,
+  ssid: string,
+  password: string
+): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await (supabase.from('devices') as any)
+      .update({ pending_wifi_ssid: ssid.trim(), pending_wifi_pass: password.trim() })
+      .eq('id', deviceId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Clears the pending WiFi provision columns after the ESP32 has acknowledged
+ * and applied the credentials. The ESP32 also clears these itself after applying.
+ *
+ * @param deviceId   The target device ID
+ */
+export async function clearWifiProvisionInSupabase(deviceId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await (supabase.from('devices') as any)
+      .update({ pending_wifi_ssid: '', pending_wifi_pass: '' })
+      .eq('id', deviceId);
     return !error;
   } catch {
     return false;

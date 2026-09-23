@@ -29,8 +29,12 @@ import {
   Send,
   RefreshCw,
   Sparkles,
-  ShieldAlert
+  ShieldAlert,
+  Sliders,
+  Gauge,
+  Video
 } from 'lucide-react';
+import { CameraSetupStudioModal } from '../components/camera/CameraSetupStudioModal';
 
 const PRESET_AVATARS = [
   { label: 'Male Doctor', url: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=200' },
@@ -42,12 +46,15 @@ const PRESET_AVATARS = [
 ];
 
 export const SettingsPage: React.FC = () => {
-  const { settings, updateSettings, showToast, users } = useAppContext();
+  const { settings, updateSettings, showToast, users, devices } = useAppContext();
   const { adminProfile, isAdmin, refreshAdminProfile, user } = useAuth();
 
   const [activeTab, setActiveTab] = useState<
-    'clinic' | 'feeding' | 'hydration' | 'notifications' | 'account' | 'api'
+    'clinic' | 'feeding' | 'hydration' | 'notifications' | 'account' | 'api' | 'camera'
   >(isAdmin ? 'clinic' : 'account');
+
+  const [isCameraStudioOpen, setIsCameraStudioOpen] = useState(false);
+  const activeCameraIp = devices?.[0]?.cameraIp || '192.168.100.159';
 
   // Clinic System Settings Form State
   const [form, setForm] = useState(settings);
@@ -307,6 +314,7 @@ export const SettingsPage: React.FC = () => {
         <div className="lg:col-span-3 space-y-1">
           {[
             { id: 'account', label: 'Account Profile & Security', icon: User, adminOnly: false },
+            { id: 'camera', label: 'Camera & Vision Studio', icon: Camera, adminOnly: false },
             { id: 'clinic', label: 'Clinic Information', icon: Building, adminOnly: true },
             { id: 'feeding', label: 'Feeding Defaults', icon: Utensils, adminOnly: true },
             { id: 'hydration', label: 'Hydration Defaults', icon: Droplets, adminOnly: true },
@@ -648,9 +656,112 @@ export const SettingsPage: React.FC = () => {
           )}
 
           {/* ═════════════════════════════════════════════════════════════════════ */}
+          {/* TAB: CAMERA & VISION STUDIO                                         */}
+          {/* ═════════════════════════════════════════════════════════════════════ */}
+          {activeTab === 'camera' && (
+            <div className="space-y-6 text-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <Camera className="w-4 h-4 text-rose-600" />
+                    ESP32-CAM Setup &amp; Vision Studio
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Configure Wi-Fi, stream framerate (25–30 FPS), sensor orientation, and USB auto-setup directly from the website.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCameraStudioOpen(true)}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-md cursor-pointer transition-all"
+                >
+                  <Sliders className="w-4 h-4" />
+                  Launch 1-Click Setup Studio
+                </button>
+              </div>
+
+              {/* Status and Diagnostics Banner */}
+              <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span className="font-extrabold text-sm text-slate-100">Live AI Vision Node</span>
+                    <span className="font-mono text-xs text-rose-300 font-bold px-2 py-0.5 rounded bg-slate-800">
+                      IP: {activeCameraIp}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/30">
+                    High-Framerate Mode (25–30 FPS)
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Real-time MJPEG video is streamed directly from the AI-Thinker node to your browser with zero local AP configuration required.
+                </p>
+              </div>
+
+              {/* Quick Preset Selector Cards */}
+              <div className="space-y-3">
+                <h4 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                  <Gauge className="w-4 h-4 text-rose-600" />
+                  Stream Smoothness Profiles (Cuts Stutter on Slow Wi-Fi):
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-sm text-emerald-900">⚡ Ultra-Smooth</span>
+                      <span className="text-[10px] font-bold bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">30 FPS</span>
+                    </div>
+                    <p className="text-xs text-emerald-800">
+                      Low-latency CIF resolution (~10 KB/f). Best for slow or weak 2.4 GHz Wi-Fi.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-sm text-sky-900">⚖️ Balanced</span>
+                      <span className="text-[10px] font-bold bg-sky-200 text-sky-900 px-1.5 py-0.5 rounded">20–25 FPS</span>
+                    </div>
+                    <p className="text-xs text-sky-800">
+                      VGA 640x480 resolution (~16 KB/f). Crisp and fluid for everyday clinic monitoring.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-sm text-indigo-900">💎 High-Definition</span>
+                      <span className="text-[10px] font-bold bg-indigo-200 text-indigo-900 px-1.5 py-0.5 rounded">15–20 FPS</span>
+                    </div>
+                    <p className="text-xs text-indigo-800">
+                      SVGA 800x600 resolution (~35 KB/f). Maximum detail for high-bandwidth networks.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Direct Setup Studio Launcher Card */}
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                  <h4 className="font-extrabold text-sm text-slate-800">Need to pair camera to a new Wi-Fi network?</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-md">
+                    Use our <strong>1-Click USB Auto-Setup</strong> (plug camera via USB into this computer and click once) or configure remotely via Supabase cloud auto-sync.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCameraStudioOpen(true)}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-2 shadow-md cursor-pointer transition-all shrink-0"
+                >
+                  <Sliders className="w-4 h-4 text-rose-400" />
+                  Open Camera Setup Studio
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ═════════════════════════════════════════════════════════════════════ */}
           {/* TAB 2 - 6: CLINIC SYSTEM CONFIGURATIONS (ADMIN PRIVILEGED)         */}
           {/* ═════════════════════════════════════════════════════════════════════ */}
-          {activeTab !== 'account' && (
+          {activeTab !== 'account' && activeTab !== 'camera' && (
             <form onSubmit={handleSaveClinicSettings} className="space-y-6 text-xs">
               {/* 1. CLINIC INFORMATION TAB */}
               {activeTab === 'clinic' && (
@@ -829,6 +940,17 @@ export const SettingsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Camera Setup Studio & Performance Modal */}
+      <CameraSetupStudioModal
+        isOpen={isCameraStudioOpen}
+        onClose={() => setIsCameraStudioOpen(false)}
+        cameraIp={activeCameraIp}
+        onUpdateCameraIp={(newIp) => {
+          showToast('success', 'Camera IP Updated', `Assigned new IP: ${newIp}`);
+        }}
+        deviceId={devices?.[0]?.id || 'HN-NODE-F778'}
+      />
     </DashboardLayout>
   );
 };

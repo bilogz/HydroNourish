@@ -121,8 +121,10 @@ interface AppContextType {
   startPumpDirect: (deviceId: string) => Promise<void>;
   stopPumpDirect: (deviceId: string) => Promise<void>;
   dispenseCleaningWaterDirect: (deviceId: string, amountMl?: number) => Promise<void>;
+  dispenseSprayWaterDirect: (deviceId: string, amountMl?: number) => Promise<void>;
   startDrainPumpDirect: (deviceId: string, durationMs?: number) => Promise<void>;
   stopDrainPumpDirect: (deviceId: string) => Promise<void>;
+  invertDrainRelayDirect: (deviceId: string) => Promise<boolean>;
   runBowlSanitationCycle: (deviceId: string) => Promise<boolean>;
   toggleAutoRefillDirect: (deviceId: string, enable?: boolean) => Promise<void>;
   togglePumpMasterDirect: (deviceId: string) => Promise<void>;
@@ -898,6 +900,55 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     await updateScheduleInSupabase(scheduleId, { dispenseStatus: 'Pending' });
   };
 
+  // ⚡ Universal Zero-Delay Device Dispatcher (<10ms LAN HTTP + 0ms USB WebSerial)
+  const dispatchFastDeviceCommand = (
+    deviceId: string | undefined,
+    path: string,
+    options?: {
+      method?: 'POST' | 'GET';
+      body?: string;
+      usbAction?: () => Promise<any> | void;
+    }
+  ) => {
+    // 1. Instant Direct USB WebSerial Execution (0ms)
+    if (options?.usbAction && usbSerialService.getIsConnected()) {
+      try {
+        const res = options.usbAction();
+        if (res && typeof (res as Promise<any>).catch === 'function') {
+          (res as Promise<any>).catch(() => {});
+        }
+      } catch {}
+    }
+
+    // 2. Resolve Candidate LAN IPs (Exclude dead .159, prioritize actual .157)
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const devIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    const candidateIps = [
+      devIp && !devIp.includes('192.168.100.159') ? devIp : null,
+      '192.168.100.157', // Active ESP32 node IP (1C:C3:AB:F9:F7:78)
+      'hydronourish.local',
+    ].filter(Boolean) as string[];
+
+    const uniqueIps = Array.from(new Set(candidateIps));
+    const endpointPath = path.startsWith('/') ? path : `/${path}`;
+
+    // 3. Fast LAN fetch with strict 1200ms AbortController (prevents 5-second TCP SYN hangs)
+    uniqueIps.forEach((ip) => {
+      const url = `http://${ip}${endpointPath}`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 1200);
+
+      fetch(url, {
+        method: options?.method || 'POST',
+        mode: 'no-cors',
+        body: options?.body,
+        signal: controller.signal,
+      })
+        .catch(() => {})
+        .finally(() => clearTimeout(timer));
+    });
+  };
+
   const dispenseDirect = async (deviceId: string, portionGrams: number = 75, foodType: string = '90° Gate Cycle (+90° Open / -90° Close)') => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
@@ -918,62 +969,37 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     setSchedules((prev) => [newSch, ...prev]);
     showToast('success', '90° Gate Cycle Triggered', `Opening +90° & closing -90° on node ${targetDeviceId}.`);
 
-    // ⚡ Zero-Latency Parallel Dispatch: Direct LAN REST + Supabase Cloud Queue
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
-    try {
-      if (cleanIp) {
-        fetch(`http://${cleanIp}/api/dispense/food`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-        fetch(`http://${cleanIp}/api/dispense/food`, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-      }
-      fetch('http://hydronourish.local/api/dispense/food', { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      fetch('http://192.168.4.1/api/dispense/food', { method: 'POST', mode: 'no-cors' }).catch(() => {});
-    } catch {}
+    // ⚡ Zero-Latency Parallel Dispatch: Direct LAN REST + USB WebSerial
+    dispatchFastDeviceCommand(targetDeviceId, '/api/dispense/food', {
+      usbAction: () => usbSerialService.dispenseFood(portionGrams),
+    });
 
     // Optimistically update device gate state
     setDevices((prev) =>
       prev.map((d) => (d.id === targetDeviceId ? { ...d, foodGateOpen: true } : d))
     );
 
-    await insertScheduleToSupabase(newSch);
+    insertScheduleToSupabase(newSch).catch(() => {});
   };
 
   const openGateDirect = async (deviceId: string) => {
-    const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, foodGateOpen: true } : d))
     );
-    try {
-      if (usbSerialService.getIsConnected()) {
-        await usbSerialService.openGate();
-      }
-      if (cleanIp) {
-        fetch(`http://${cleanIp}/api/gate/open`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-        fetch(`http://${cleanIp}/api/dispense/open`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      }
-      fetch('http://hydronourish.local/api/gate/open', { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      fetch('http://192.168.4.1/api/gate/open', { method: 'POST', mode: 'no-cors' }).catch(() => {});
-    } catch {}
+    dispatchFastDeviceCommand(deviceId, '/api/gate/open', {
+      usbAction: () => usbSerialService.openGate(),
+    });
   };
 
   const closeGateDirect = async (deviceId: string) => {
-    const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, foodGateOpen: false, petEatingActive: false } : d))
     );
-    try {
-      if (usbSerialService.getIsConnected()) {
-        await usbSerialService.closeGate();
-      }
-      if (cleanIp) {
-        fetch(`http://${cleanIp}/api/gate/close`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-        fetch(`http://${cleanIp}/api/dispense/close`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      }
-      fetch('http://hydronourish.local/api/gate/close', { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      fetch('http://192.168.4.1/api/gate/close', { method: 'POST', mode: 'no-cors' }).catch(() => {});
-    } catch {}
+    dispatchFastDeviceCommand(deviceId, '/api/gate/close', {
+      usbAction: () => usbSerialService.closeGate(),
+    });
 
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
     const newSch: FeedingSchedule = {
       id: `SCH-CLOSE-${Date.now()}`,
       deviceId: deviceId,
@@ -984,131 +1010,71 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       petId: dev?.assignedPetId || 'PET-001',
       petName: dev?.assignedPetName || 'Pet',
     };
-    await insertScheduleToSupabase(newSch);
+    insertScheduleToSupabase(newSch).catch(() => {});
   };
 
   const setPetEatingDirect = async (deviceId: string, isEating: boolean) => {
-    const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, petEatingActive: isEating } : d))
     );
-    try {
-      if (cleanIp) {
-        fetch(`http://${cleanIp}/api/pet/eating?eating=${isEating ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      }
-      fetch(`http://hydronourish.local/api/pet/eating?eating=${isEating ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      fetch(`http://192.168.4.1/api/pet/eating?eating=${isEating ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-    } catch {}
+    dispatchFastDeviceCommand(deviceId, `/api/pet/eating?eating=${isEating ? '1' : '0'}`);
   };
 
   const setPetDrinkingDirect = async (deviceId: string, isDrinking: boolean) => {
-    const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, petDrinkingActive: isDrinking } : d))
     );
-    try {
-      if (cleanIp) {
-        fetch(`http://${cleanIp}/api/pet/drinking?drinking=${isDrinking ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      }
-      fetch(`http://hydronourish.local/api/pet/drinking?drinking=${isDrinking ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      fetch(`http://192.168.4.1/api/pet/drinking?drinking=${isDrinking ? '1' : '0'}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-    } catch {}
+    dispatchFastDeviceCommand(deviceId, `/api/pet/drinking?drinking=${isDrinking ? '1' : '0'}`);
   };
 
   const tareWaterScaleDirect = async (deviceId: string) => {
-    const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, waterLiters: 0.0, waterLevelPct: 0 } : d))
     );
-    try {
-      if (cleanIp) {
-        fetch(`http://${cleanIp}/api/water/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      }
-      fetch(`http://hydronourish.local/api/water/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      fetch(`http://192.168.4.1/api/water/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      if (usbSerialService.getIsConnected()) {
-        usbSerialService.tareWaterScale().catch(() => {});
-      }
-      showToast('success', 'Water Scale Tared', 'Water reservoir load cell tared to 0 ml (Zero Reference)');
-    } catch {
-      showToast('error', 'Scale Error', 'Failed to communicate with water scale');
-    }
+    dispatchFastDeviceCommand(deviceId, '/api/water/tare', {
+      usbAction: () => usbSerialService.tareWaterScale(),
+    });
+    showToast('success', 'Water Scale Tared', 'Water reservoir load cell tared to 0 ml (Zero Reference)');
   };
 
   const calibrateWaterScaleDirect = async (deviceId: string, knownMl?: number, factor?: number) => {
-    const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
     const query = knownMl ? `known_ml=${knownMl}` : `factor=${factor || 420.0}`;
-    try {
-      if (cleanIp) {
-        fetch(`http://${cleanIp}/api/water/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      }
-      fetch(`http://hydronourish.local/api/water/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      fetch(`http://192.168.4.1/api/water/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      if (usbSerialService.getIsConnected()) {
-        usbSerialService.calibrateWaterScale(knownMl, factor).catch(() => {});
-      }
-      showToast('success', 'Water Calibrated', `Water scale reference applied: ${knownMl ? `${knownMl}ml` : `factor ${factor}`}`);
-    } catch {
-      showToast('error', 'Scale Error', 'Failed to communicate with water scale calibration');
-    }
+    dispatchFastDeviceCommand(deviceId, `/api/water/calibrate?${query}`, {
+      usbAction: () => usbSerialService.calibrateWaterScale(knownMl, factor),
+    });
+    showToast('success', 'Water Calibrated', `Water scale reference applied: ${knownMl ? `${knownMl}ml` : `factor ${factor}`}`);
   };
 
   const tareScaleDirect = async (deviceId: string) => {
-    const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, foodBowlWeightGrams: 0.0, scaleReady: true } : d))
     );
-    try {
-      if (cleanIp) {
-        fetch(`http://${cleanIp}/api/scale/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      }
-      fetch(`http://hydronourish.local/api/scale/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      fetch(`http://192.168.4.1/api/scale/tare`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      if (usbSerialService.getIsConnected()) {
-        usbSerialService.tareScale().catch(() => {});
-      }
-      showToast('success', 'Scale Tared', 'Food bowl scale tared to 0.0g');
-    } catch {
-      showToast('error', 'Scale Error', 'Failed to communicate with weight scale');
-    }
+    dispatchFastDeviceCommand(deviceId, '/api/scale/tare', {
+      usbAction: () => usbSerialService.tareScale(),
+    });
+    showToast('success', 'Scale Tared', 'Food bowl scale tared to 0.0g (Zero Reference)');
   };
 
   const calibrateScaleDirect = async (deviceId: string, knownGrams?: number, factor?: number) => {
-    const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
     const query = knownGrams ? `known_grams=${knownGrams}` : `factor=${factor || 420.0}`;
-    try {
-      if (cleanIp) {
-        fetch(`http://${cleanIp}/api/scale/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      }
-      fetch(`http://hydronourish.local/api/scale/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      fetch(`http://192.168.4.1/api/scale/calibrate?${query}`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-      if (usbSerialService.getIsConnected()) {
-        usbSerialService.calibrateScale(knownGrams, factor).catch(() => {});
-      }
-      showToast('success', 'Scale Calibrated', `Calibration reference applied: ${knownGrams ? `${knownGrams}g` : `factor ${factor}`}`);
-    } catch {
-      showToast('error', 'Scale Error', 'Failed to communicate with weight scale calibration');
-    }
+    dispatchFastDeviceCommand(deviceId, `/api/scale/calibrate?${query}`, {
+      usbAction: () => usbSerialService.calibrateScale(knownGrams, factor),
+    });
+    showToast('success', 'Scale Calibrated', `Calibration reference applied: ${knownGrams ? `${knownGrams}g` : `factor ${factor}`}`);
   };
 
   const fetchScaleWeightDirect = async (deviceId: string): Promise<number | null> => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
-    const endpoints = [
-      cleanIp ? `http://${cleanIp}/api/scale/weight` : '',
-      'http://hydronourish.local/api/scale/weight',
-      'http://192.168.4.1/api/scale/weight'
-    ].filter(Boolean);
+    const devIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    const candidateIps = [
+      devIp && !devIp.includes('192.168.100.159') ? devIp : null,
+      '192.168.100.157',
+      'hydronourish.local',
+    ].filter(Boolean) as string[];
 
-    for (const url of endpoints) {
+    for (const ip of candidateIps) {
       try {
-        const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
+        const res = await fetch(`http://${ip}/api/scale/weight`, { signal: AbortSignal.timeout(1200) });
         if (res.ok) {
           const data = await res.json();
           if (data && typeof data.weight_grams === 'number') {
@@ -1127,7 +1093,6 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
 
     const newSch: FeedingSchedule = {
       id: `SCH-WTR-${Date.now().toString().slice(-4)}`,
@@ -1142,21 +1107,10 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
 
     setSchedules((prev) => [newSch, ...prev]);
 
-    // ⚡ Ultra-Fast Parallel Dispatch: Direct LAN REST + Supabase Cloud Queue
-    try {
-      const endpoints = [
-        `http://${cleanIp}/api/dispense/water?amount=${amountMl}`,
-        `http://192.168.100.157/api/dispense/water?amount=${amountMl}`,
-        `http://192.168.100.159/api/dispense/water?amount=${amountMl}`,
-        `http://hydronourish.local/api/dispense/water?amount=${amountMl}`
-      ];
-      endpoints.forEach((url) => {
-        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-        const img = new Image();
-        img.src = `${url}&_t=${Date.now()}`;
-      });
-    } catch {}
+    // ⚡ Ultra-Fast Parallel Dispatch (<10ms LAN / 0ms USB)
+    dispatchFastDeviceCommand(deviceId, `/api/dispense/water?amount=${amountMl}`, {
+      usbAction: () => usbSerialService.dispenseWater(amountMl <= 500 ? amountMl * 10 : amountMl),
+    });
 
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const newLog: HydrationLog = {
@@ -1170,33 +1124,16 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     setHydrationLogs((prev) => [newLog, ...prev]);
 
     showToast('success', 'Water Dispense Triggered', `Triggered ${amountMl}ml water pump to ${deviceId}.`);
-    await insertScheduleToSupabase(newSch);
-    await insertHydrationLogToSupabase(newLog);
+    insertScheduleToSupabase(newSch).catch(() => {});
+    insertHydrationLogToSupabase(newLog).catch(() => {});
   };
 
   const startPumpDirect = async (deviceId: string) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
 
-    // 1. Direct LAN call
-    try {
-      const endpoints = [
-        `http://${cleanIp}/api/pump/on`,
-        `http://192.168.100.157/api/pump/on`,
-        `http://192.168.100.159/api/pump/on`,
-        `http://hydronourish.local/api/pump/on`
-      ];
-      endpoints.forEach((url) => {
-        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-        const img = new Image();
-        img.src = `${url}?_t=${Date.now()}`;
-      });
-    } catch {}
-
-    // 2. Immediate Optimistic update
+    // 1. Immediate Optimistic update
     setDevices((prev) =>
       prev.map((d) =>
         d.id === deviceId
@@ -1208,6 +1145,11 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
           : d
       )
     );
+
+    // 2. Direct fast dispatch
+    dispatchFastDeviceCommand(deviceId, '/api/pump/on', {
+      usbAction: () => usbSerialService.setPump(true),
+    });
 
     // 3. Supabase Cloud Remote Command
     const newSch: FeedingSchedule = {
@@ -1224,33 +1166,24 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     setSchedules((prev) => [newSch, ...prev]);
     showToast('success', '🌊 Water Pump Started', `Turned water pump ON for node ${deviceId}.`);
 
-    await insertScheduleToSupabase(newSch);
+    insertScheduleToSupabase(newSch).catch(() => {});
   };
 
   const stopPumpDirect = async (deviceId: string) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
 
-    // 1. Fast Local LAN Call (Dual HTTP / mDNS endpoints with catch to avoid unhandled errors)
-    try {
-      const endpoints = [
-        `http://${cleanIp}/api/pump/stop`,
-        `http://${cleanIp}/api/pump/off`,
-        `http://192.168.100.157/api/pump/stop`,
-        `http://192.168.100.159/api/pump/stop`,
-        `http://hydronourish.local/api/pump/stop`
-      ];
-      endpoints.forEach((url) => {
-        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-        const img = new Image();
-        img.src = `${url}?_t=${Date.now()}`;
-      });
-    } catch {}
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId ? { ...d, isPumping: false } : d
+      )
+    );
 
-    // 2. Supabase Cloud Remote Command
+    dispatchFastDeviceCommand(deviceId, '/api/pump/stop', {
+      usbAction: () => usbSerialService.setPump(false),
+    });
+
     const newSch: FeedingSchedule = {
       id: `SCH-STOP-${Date.now()}`,
       deviceId: deviceId,
@@ -1265,16 +1198,15 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     setSchedules((prev) => [newSch, ...prev]);
     showToast('info', 'Water Pump Stopped', `Deactivated water pump relay on node ${deviceId}.`);
 
-    await insertScheduleToSupabase(newSch);
+    insertScheduleToSupabase(newSch).catch(() => {});
   };
 
   // ─── Dual-Pump Sanitation & Drainage Handlers (Clean Water & 19W 12V Drain) ─
   const dispenseCleaningWaterDirect = async (deviceId: string, amountMl: number = 200) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
+    const durationMs = amountMl <= 500 ? amountMl * 12 : amountMl;
 
-    // Update state to indicate cleaning rinse pump is running
     setDevices((prev) =>
       prev.map((d) =>
         d.id === deviceId
@@ -1283,34 +1215,22 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
-    try {
-      const endpoints = [
-        `http://${cleanIp}/api/dispense/clean-water?amount=${amountMl}`,
-        `http://${cleanIp}/api/dispense/water?type=rinse&amount=${amountMl}`,
-        `http://192.168.100.159/api/dispense/clean-water?amount=${amountMl}`,
-        `http://hydronourish.local/api/dispense/clean-water?amount=${amountMl}`
-      ];
-      endpoints.forEach((url) => {
-        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-        const img = new Image();
-        img.src = `${url}&_t=${Date.now()}`;
-      });
-    } catch {}
+    dispatchFastDeviceCommand(deviceId, `/api/spray?duration=${durationMs}`, {
+      usbAction: () => usbSerialService.dispenseCleaningWater(durationMs),
+    });
 
-    showToast('info', '🚿 Cleaning Water Dispensed', `Dispensing fresh rinse water into bowl for ${petName} (${amountMl}ml).`);
+    showToast('info', '🚿 Spray Water Active', `Spraying rinse water into bowl for ${petName} (${amountMl}ml).`);
 
     setTimeout(() => {
       setDevices((prev) =>
         prev.map((d) => (d.id === deviceId ? { ...d, isCleaningRinse: false } : d))
       );
-    }, 4500);
+    }, durationMs > 500 ? durationMs : 4500);
   };
 
-  const startDrainPumpDirect = async (deviceId: string, durationMs: number = 8000) => {
-    const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
+  const dispenseSprayWaterDirect = dispenseCleaningWaterDirect;
 
+  const startDrainPumpDirect = async (deviceId: string, durationMs: number = 6000) => {
     setDevices((prev) =>
       prev.map((d) =>
         d.id === deviceId
@@ -1319,22 +1239,11 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
-    try {
-      const endpoints = [
-        `http://${cleanIp}/api/pump/drain?duration=${durationMs}`,
-        `http://${cleanIp}/api/pump/drainage?state=1`,
-        `http://192.168.100.159/api/pump/drain?duration=${durationMs}`,
-        `http://hydronourish.local/api/pump/drain`
-      ];
-      endpoints.forEach((url) => {
-        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-        const img = new Image();
-        img.src = `${url}?_t=${Date.now()}`;
-      });
-    } catch {}
+    dispatchFastDeviceCommand(deviceId, `/api/drain?duration=${durationMs}`, {
+      usbAction: () => usbSerialService.disposeWaste(durationMs),
+    });
 
-    showToast('warning', '⚡ 19W 12V Drain Pump Active', `Pumping out rinse wastewater from bowl (${Math.round(durationMs / 1000)}s cycle)...`);
+    showToast('warning', '🌀 Drain Pump Active', `Draining bowl and evacuating wastewater (${Math.round(durationMs / 1000)}s cycle)...`);
 
     setTimeout(() => {
       setDevices((prev) =>
@@ -1348,9 +1257,6 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   const stopDrainPumpDirect = async (deviceId: string) => {
-    const dev = (devices ?? []).find((d) => d.id === deviceId);
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
-
     setDevices((prev) =>
       prev.map((d) =>
         d.id === deviceId
@@ -1359,39 +1265,40 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
-    try {
-      const endpoints = [
-        `http://${cleanIp}/api/pump/drain?state=0`,
-        `http://${cleanIp}/api/pump/drain/stop`,
-        `http://192.168.100.159/api/pump/drain?state=0`
-      ];
-      endpoints.forEach((url) => {
-        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-      });
-    } catch {}
+    dispatchFastDeviceCommand(deviceId, '/api/drain/stop', {
+      usbAction: () => usbSerialService.sendRaw('DRAIN OFF'),
+    });
 
-    showToast('info', 'Drain Pump Stopped', '19W 12V drainage pump halted.');
+    showToast('info', 'Drain Pump Stopped', 'Drain pump halted.');
+  };
+
+  const invertDrainRelayDirect = async (deviceId: string): Promise<boolean> => {
+    dispatchFastDeviceCommand(deviceId, '/api/drain/invert', {
+      usbAction: () => usbSerialService.sendRaw('DRAIN INVERT'),
+    });
+    showToast('info', 'Drain Polarity Toggled', 'Flipped drain relay Active-HIGH / Active-LOW logic.');
+    return true;
   };
 
   const runBowlSanitationCycle = async (deviceId: string): Promise<boolean> => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
 
-    showToast('info', '🔄 Automated Sanitation Sequence Initiated', `Phase 1: Dispensing clean rinse water for ${petName}...`);
+    showToast('info', '🔄 15-Second Sanitation Initiated', `Phase 1: Dispensing clean rinse water (GPIO 18 - 5s) for ${petName}...`);
 
-    // Stage 1: Dispense Cleaning Rinse Water (Pump 1)
-    await dispenseCleaningWaterDirect(deviceId, 200);
+    // Stage 1: Dispense Cleaning Rinse Water (5.0s)
+    await dispenseCleaningWaterDirect(deviceId, 250);
+    await new Promise((res) => setTimeout(res, 5000));
 
-    // Allow 4.5 seconds for water flush & debris detachment
-    await new Promise((res) => setTimeout(res, 4500));
+    // Stage 2: Evacuate Wastewater via 12V 19W Drain Pump (9.0s)
+    showToast('warning', '⚡ Phase 2: Evacuating Water', '19W 12V water pump engaged to drain wastewater (GPIO 23 - 9s)...');
+    await startDrainPumpDirect(deviceId, 9000);
+    await new Promise((res) => setTimeout(res, 9000));
 
-    // Stage 2: 19W 12V High-Power Evacuation Drainage Pump (Pump 2)
-    showToast('warning', '⚡ Phase 2: Evacuating Water', '19W 12V water pump engaged to drain wastewater.');
-    await startDrainPumpDirect(deviceId, 7000);
-
-    // Allow 7.5 seconds for evacuation
-    await new Promise((res) => setTimeout(res, 7500));
+    // Stage 3: Zero / Tare scales (1.0s)
+    await tareScaleDirect(deviceId);
+    await tareWaterScaleDirect(deviceId);
+    await new Promise((res) => setTimeout(res, 1000));
 
     setDevices((prev) =>
       prev.map((d) =>
@@ -1399,7 +1306,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
-    showToast('success', '✨ Sanitation Cycle Completed', 'Food bowl washed with clean water and drained by 19W 12V pump.');
+    showToast('success', '✨ Clean Waste Completed (15s cycle)', 'Food bowl washed with spray rinse (5s), completely evacuated by 12V drain pump (9s), and scales tared to 0.0g!');
     return true;
   };
 
@@ -1415,7 +1322,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     const shouldEnable = enable !== undefined ? enable : !isCurrentlyOn;
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.157';
 
     // Persist immediately in localStorage
     if (typeof window !== 'undefined') {
@@ -1450,28 +1357,17 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     });
 
     // 1. Direct LAN call with immediate pump stop if disabling
-    try {
-      const endpoints = [
-        `http://${cleanIp}/api/auto-refill?enabled=${shouldEnable ? '1' : '0'}`,
-        `http://192.168.100.157/api/auto-refill?enabled=${shouldEnable ? '1' : '0'}`,
-        `http://192.168.100.159/api/auto-refill?enabled=${shouldEnable ? '1' : '0'}`,
-      ];
-      endpoints.forEach((url) => {
-        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-      });
+    const refillPath = `/api/auto-refill?enabled=${shouldEnable ? '1' : '0'}`;
+    dispatchFastDeviceCommand(deviceId, refillPath, {
+      method: 'GET',
+      usbAction: () => usbSerialService.toggleAutoRefill(shouldEnable),
+    });
 
-      // If turning off auto-refill, kill physical pump power immediately
-      if (!shouldEnable) {
-        [
-          `http://${cleanIp}/api/pump/stop`,
-          `http://192.168.100.157/api/pump/stop`,
-          `http://192.168.100.159/api/pump/stop`,
-        ].forEach((url) => {
-          fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-          fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-        });
-      }
-    } catch {}
+    if (!shouldEnable) {
+      dispatchFastDeviceCommand(deviceId, '/api/pump/stop', {
+        usbAction: () => usbSerialService.setPump(false),
+      });
+    }
 
     // 2. Optimistic UI state update (pump stays UNLOCKED and ready for manual use)
     setDevices((prev) =>
@@ -1510,7 +1406,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
 
     // 4. Persist to Supabase device row so subsequent polls don't revert
     updateDeviceInSupabase(deviceId, { firmwareVersion: newFw }).catch(() => {});
-    await insertScheduleToSupabase(newSch);
+    insertScheduleToSupabase(newSch).catch(() => {});
   };
 
   const togglePumpMasterDirect = async (deviceId: string) => {
@@ -1529,22 +1425,12 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     const nextAction = makeDeactivated ? 'Deactivate Pump' : 'Activate Pump';
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
 
-    // 1. Direct LAN call with IDEMPOTENT endpoints (strictly deactivate or activate, NEVER toggle)
-    try {
-      const path = makeDeactivated ? '/api/pump/deactivate' : '/api/pump/activate';
-      const endpoints = [
-        `http://${cleanIp}${path}`,
-        `http://192.168.100.157${path}`,
-        `http://192.168.100.159${path}`,
-        `http://hydronourish.local${path}`
-      ];
-      endpoints.forEach((url) => {
-        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-      });
-    } catch {}
+    // 1. Direct fast LAN dispatch + USB WebSerial
+    const path = makeDeactivated ? '/api/pump/deactivate' : '/api/pump/activate';
+    dispatchFastDeviceCommand(deviceId, path, {
+      usbAction: () => usbSerialService.togglePumpMaster(makeDeactivated),
+    });
 
     // 2. Lock anti-bounce override & Immediate Optimistic update
     pendingUserOverrides.set(deviceId, {
@@ -1602,22 +1488,12 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
-    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.159';
+    const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.157';
 
-    try {
-      const path = deactivate ? '/api/pump/deactivate' : '/api/pump/activate';
-      const endpoints = [
-        `http://${cleanIp}${path}`,
-        `http://192.168.100.159${path}`,
-        `http://hydronourish.local${path}`
-      ];
-      endpoints.forEach((url) => {
-        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {});
-        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
-        const img = new Image();
-        img.src = `${url}?_t=${Date.now()}`;
-      });
-    } catch {}
+    const path = deactivate ? '/api/pump/deactivate' : '/api/pump/activate';
+    dispatchFastDeviceCommand(deviceId, path, {
+      usbAction: () => usbSerialService.sendRaw(deactivate ? 'PUMP LOCK' : 'PUMP UNLOCK'),
+    });
 
     let newFw = dev?.firmwareVersion || 'v2.5.0-ESP32';
     if (deactivate) {
@@ -2146,8 +2022,10 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         startPumpDirect,
         stopPumpDirect,
         dispenseCleaningWaterDirect,
+        dispenseSprayWaterDirect,
         startDrainPumpDirect,
         stopDrainPumpDirect,
+        invertDrainRelayDirect,
         runBowlSanitationCycle,
         toggleAutoRefillDirect,
         togglePumpMasterDirect,
