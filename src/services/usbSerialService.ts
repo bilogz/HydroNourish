@@ -443,6 +443,11 @@ class USBSerialService {
     await this.sendRaw(`SETWEIGHT:${grams}`);
     return this.sendCommand({ action: 'set_weight', weight: grams });
   }
+
+  public async setSimulatedWater(ml: number): Promise<boolean> {
+    await this.sendRaw(`SETWATER:${ml}`);
+    return this.sendCommand({ action: 'set_water', ml, waterMl: ml });
+  }
 }
 
 export const usbSerialService = new USBSerialService();

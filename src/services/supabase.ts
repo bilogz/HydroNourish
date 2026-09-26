@@ -522,6 +522,9 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
       let parsedCamIp = item.camera_ip || '';
       let parsedScaleReady: boolean | undefined = item.scale_ready !== undefined && item.scale_ready !== null ? Boolean(item.scale_ready) : undefined;
       let parsedLastIntakeFoodGrams: number | undefined = item.last_intake_food_grams !== undefined && item.last_intake_food_grams !== null ? Number(item.last_intake_food_grams) : undefined;
+      let parsedWaterMl: number | undefined = (item.water_ml !== null && item.water_ml !== undefined) ? Number(item.water_ml) : undefined;
+      let parsedWaterLiters: number | undefined = (item.water_liters !== null && item.water_liters !== undefined) ? Number(item.water_liters) : undefined;
+      let parsedWaterScaleReady: boolean | undefined = item.water_scale_ready !== undefined && item.water_scale_ready !== null ? Boolean(item.water_scale_ready) : undefined;
       let parsedGateOpenDeg: number | undefined = undefined;
 
       if (rawFw && rawFw.includes('|')) {
@@ -539,6 +542,19 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
             const tag = p.replace('SCALE:', '').trim().toUpperCase();
             if (tag === 'READY') parsedScaleReady = true;
             else if (tag === 'WAITING' || tag === 'NO') parsedScaleReady = false;
+          }
+          if (p.startsWith('WML:')) {
+            const val = Number(p.replace('WML:', ''));
+            if (!isNaN(val)) parsedWaterMl = val;
+          }
+          if (p.startsWith('WTR:')) {
+            const val = Number(p.replace('WTR:', ''));
+            if (!isNaN(val)) parsedWaterLiters = val;
+          }
+          if (p.startsWith('WSCALE:')) {
+            const tag = p.replace('WSCALE:', '').trim().toUpperCase();
+            if (tag === 'READY') parsedWaterScaleReady = true;
+            else if (tag === 'WAITING' || tag === 'NO') parsedWaterScaleReady = false;
           }
           if (p.startsWith('IP:')) {
             parsedIp = p.replace('IP:', '').trim();
@@ -612,6 +628,18 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
         finalFw += `|GATE:${finalGateDeg}`;
       }
 
+      const parsedWaterLevelPct = item.water_level_pct !== null && item.water_level_pct !== undefined ? Number(item.water_level_pct) : 85;
+
+      const finalWaterMl = parsedWaterMl !== undefined
+        ? Math.round(parsedWaterMl)
+        : (parsedWaterLiters !== undefined
+            ? Math.round(parsedWaterLiters * 1000)
+            : Math.round((parsedWaterLevelPct / 100) * 2500));
+
+      const finalWaterLiters = parsedWaterLiters !== undefined
+        ? parsedWaterLiters
+        : Math.round((finalWaterMl / 1000) * 100) / 100;
+
       return {
         id: item.id,
         deviceName: 'HydroNourish Smart Cage Unit',
@@ -621,7 +649,12 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
         hardwareStatus: 'occupied' as Device['hardwareStatus'],
         wifiSignalDbm: Number(item.wifi_signal_dbm) !== 0 ? Number(item.wifi_signal_dbm) : -55,
         foodLevelPct: Number(item.food_level_pct) !== undefined ? Number(item.food_level_pct) : 90,
-        waterLevelPct: Number(item.water_level_pct) !== undefined ? Number(item.water_level_pct) : 85,
+        waterLevelPct: parsedWaterLevelPct,
+        waterLiters: finalWaterLiters,
+        waterMl: finalWaterMl,
+        waterScaleReady: parsedWaterScaleReady,
+        reservoirCapacityLiters: 2.50,
+        reservoirCapacityMl: 2500,
         foodBowlWeightGrams: parsedWeight,
         scaleReady: parsedScaleReady,
         lastIntakeFoodGrams: parsedLastIntakeFoodGrams,

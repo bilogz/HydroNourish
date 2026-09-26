@@ -116,6 +116,7 @@ interface AppContextType {
   tareScaleDirect: (deviceId: string) => Promise<void>;
   tareWaterScaleDirect: (deviceId: string) => Promise<void>;
   calibrateWaterScaleDirect: (deviceId: string, knownMl?: number, factor?: number) => Promise<void>;
+  setSimulatedWaterDirect: (deviceId: string, ml: number) => Promise<void>;
   calibrateScaleDirect: (deviceId: string, knownGrams?: number, factor?: number) => Promise<void>;
   fetchScaleWeightDirect: (deviceId: string) => Promise<number | null>;
   dispenseWaterDirect: (deviceId: string, amountMl?: number) => void;
@@ -490,6 +491,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 lastIntakeFoodGrams: typeof telemetry.lastIntakeFoodGrams === 'number' ? telemetry.lastIntakeFoodGrams : d.lastIntakeFoodGrams,
                 foodLevelPct: typeof telemetry.foodLevel === 'number' ? telemetry.foodLevel : d.foodLevelPct,
                 waterLevelPct: typeof telemetry.waterLevel === 'number' ? telemetry.waterLevel : d.waterLevelPct,
+                waterMl: typeof telemetry.waterMl === 'number'
+                  ? telemetry.waterMl
+                  : (typeof telemetry.waterLiters === 'number'
+                      ? Math.round(telemetry.waterLiters * 1000)
+                      : (typeof telemetry.waterLevel === 'number'
+                          ? Math.round((telemetry.waterLevel / 100) * (d.reservoirCapacityMl || 2500))
+                          : d.waterMl)),
+                waterLiters: typeof telemetry.waterLiters === 'number'
+                  ? telemetry.waterLiters
+                  : (typeof telemetry.waterMl === 'number'
+                      ? Number((telemetry.waterMl / 1000).toFixed(2))
+                      : (typeof telemetry.waterLevel === 'number'
+                          ? Number(((telemetry.waterLevel / 100) * (d.reservoirCapacityLiters || 2.5)).toFixed(2))
+                          : d.waterLiters)),
+                waterScaleReady: telemetry.waterScaleReady !== undefined ? telemetry.waterScaleReady : d.waterScaleReady,
                 waterQualityPpm: typeof telemetry.tds === 'number' ? telemetry.tds : d.waterQualityPpm,
                 isPumping: telemetry.isPumping !== undefined ? telemetry.isPumping : d.isPumping,
                 autoRefillEnabled: telemetry.autoRefill !== undefined ? telemetry.autoRefill : d.autoRefillEnabled,
@@ -1019,24 +1035,35 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       petId,
       petName,
       foodType,
-      portionGrams: 75,
+      portionGrams,
       scheduledTime: 'Instant Manual',
       dispenseStatus: 'Pending',
       deviceId: targetDeviceId,
     };
 
     setSchedules((prev) => [newSch, ...prev]);
-    showToast('success', '90° Gate Cycle Triggered', `Opening +90° & closing -90° on node ${targetDeviceId}.`);
+    showToast('success', 'Feeding Dispense Cycle', `Dispensing ideal meal (${portionGrams}g) & closing gate on node ${targetDeviceId}.`);
 
     // ⚡ Zero-Latency Parallel Dispatch: Direct LAN REST + USB WebSerial
-    dispatchFastDeviceCommand(targetDeviceId, '/api/dispense/food', {
+    dispatchFastDeviceCommand(targetDeviceId, `/api/dispense/food?portion=${portionGrams}&amount=${portionGrams}`, {
       usbAction: () => usbSerialService.dispenseFood(portionGrams),
     });
 
-    // Optimistically update device gate state
+    // Optimistically update device gate state to OPEN during dispense
     setDevices((prev) =>
-      prev.map((d) => (d.id === targetDeviceId ? { ...d, foodGateOpen: true } : d))
+      prev.map((d) => (d.id === targetDeviceId ? { ...d, foodGateOpen: true, isManualGateHold: false } : d))
     );
+
+    // After 2.5 seconds (gate cycle completion on ESP32), gate closes
+    setTimeout(() => {
+      setDevices((prev) =>
+        prev.map((d) =>
+          d.id === targetDeviceId
+            ? { ...d, foodGateOpen: false, isManualGateHold: false }
+            : d
+        )
+      );
+    }, 2500);
 
     insertScheduleToSupabase(newSch).catch(() => {});
   };
@@ -1191,7 +1218,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
 
   const tareWaterScaleDirect = async (deviceId: string) => {
     setDevices((prev) =>
-      prev.map((d) => (d.id === deviceId ? { ...d, waterLiters: 0.0, waterLevelPct: 0 } : d))
+      prev.map((d) => (d.id === deviceId ? { ...d, waterLiters: 0.0, waterMl: 0, waterLevelPct: 0, waterScaleReady: true } : d))
     );
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const tareWtrSch: FeedingSchedule = {
@@ -1218,6 +1245,29 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       usbAction: () => usbSerialService.calibrateWaterScale(knownMl, factor),
     });
     showToast('success', 'Water Calibrated', `Water scale reference applied: ${knownMl ? `${knownMl}ml` : `factor ${factor}`}`);
+  };
+
+  const setSimulatedWaterDirect = async (deviceId: string, ml: number) => {
+    const liters = Number((ml / 1000).toFixed(2));
+    const capacity = 2500;
+    const pct = Math.min(100, Math.max(0, Math.round((ml / capacity) * 100)));
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId
+          ? {
+              ...d,
+              waterMl: ml,
+              waterLiters: liters,
+              waterLevelPct: pct,
+              waterScaleReady: true,
+            }
+          : d
+      )
+    );
+    dispatchFastDeviceCommand(deviceId, `/api/water/simulate?ml=${ml}`, {
+      usbAction: () => usbSerialService.setSimulatedWater(ml),
+    });
+    showToast('info', 'Water Reservoir Updated', `Water volume set to ${ml} ml (${pct}%)`);
   };
 
   const tareScaleDirect = async (deviceId: string) => {
@@ -2273,6 +2323,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         tareScaleDirect,
         tareWaterScaleDirect,
         calibrateWaterScaleDirect,
+        setSimulatedWaterDirect,
         calibrateScaleDirect,
         fetchScaleWeightDirect,
         dispenseWaterDirect,

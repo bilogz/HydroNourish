@@ -39,6 +39,7 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { formatHydration } from '../utils/formatters';
+import { getDeviceWaterMl } from '../types';
 
 const PAGE_SIZE = 10;
 
@@ -127,9 +128,7 @@ export const HydrationPage: React.FC = () => {
   }, [isDeviceConnected, pets]);
 
   const reservoirCapacityMl = Math.round((selectedDevice?.reservoirCapacityLiters || 2.50) * 1000); // 2500 ml
-  const currentWaterMl = selectedDevice
-    ? Math.round(selectedDevice.waterLiters !== undefined ? selectedDevice.waterLiters * 1000 : ((selectedDevice.waterLevelPct || 0) / 100 * reservoirCapacityMl))
-    : null;
+  const currentWaterMl = selectedDevice ? getDeviceWaterMl(selectedDevice) : null;
 
   const lowWaterDevices = useMemo(() => {
     if (!isDeviceConnected || !selectedDevice) return [];
@@ -721,7 +720,7 @@ export const HydrationPage: React.FC = () => {
                       {dev.assignedPetName || pets.find(p => p.id === dev.assignedPetId)?.name || pets[0]?.name || 'Max'} ({dev.id})
                     </span>
                     <p className="text-xs text-amber-700 font-semibold mt-0.5">
-                      Reservoir Volume: {Math.round(dev.waterLiters !== undefined ? dev.waterLiters * 1000 : ((dev.waterLevelPct || 0) / 100) * 2500)} ml
+                      Reservoir Volume: {getDeviceWaterMl(dev)} ml
                     </p>
                   </div>
                   <button

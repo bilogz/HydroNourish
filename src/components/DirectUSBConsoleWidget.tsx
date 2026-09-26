@@ -706,17 +706,23 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
         {/* Tab 3: Live Telemetry Gauges */}
         {activeTab === 'telemetry' && (
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            {/* Water Level */}
+            {/* Water Volume & Level */}
             <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800">
               <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-                <span className="font-semibold">Water Level</span>
+                <span className="font-semibold">Water Reservoir</span>
                 <Droplets className="w-4 h-4 text-sky-400" />
               </div>
-              <div className="text-2xl font-black text-white">
-                {telemetry ? `${telemetry.waterLevel}%` : '--'}
+              <div className="text-2xl font-black text-sky-400">
+                {telemetry
+                  ? (telemetry.waterMl !== undefined
+                      ? `${Math.round(telemetry.waterMl)} ml`
+                      : (telemetry.waterLiters !== undefined
+                          ? `${Math.round(telemetry.waterLiters * 1000)} ml`
+                          : `${Math.round((telemetry.waterLevel / 100) * 2500)} ml`))
+                  : '--'}
               </div>
               <p className="text-[10px] text-slate-500 mt-1">
-                ADC: {telemetry?.waterRaw ?? '--'}
+                {telemetry?.waterLevel ?? '--'}% | HX711 {telemetry?.waterScaleReady ? 'Ready' : 'Standby'}
               </p>
             </div>
 

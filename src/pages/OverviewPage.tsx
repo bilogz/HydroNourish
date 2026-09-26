@@ -6,7 +6,7 @@
  * hardware control, feeding & hydration tracking, and direct patient management.
  */
 
-import { PetSession } from '../types';
+import { PetSession, getDeviceWaterMl } from '../types';
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { DashboardLayout } from '../layouts/DashboardLayout';
@@ -249,13 +249,13 @@ export const OverviewPage: React.FC = () => {
           />
           <StatCard
             title="Water Reservoir"
-            value={hasDeviceConnected ? `${Math.round(hardware.waterLiters !== undefined ? hardware.waterLiters * 1000 : ((hardware.waterLevelPct || 0) / 100) * 2500)} ml` : 'N/A'}
+            value={hasDeviceConnected ? `${getDeviceWaterMl(hardware)} ml` : 'N/A'}
             subtitle={hasDeviceConnected ? 'Reservoir volume (2500 ml max)' : 'No device active'}
             icon={Droplets}
             iconBgColor="bg-sky-50"
             iconTextColor="text-sky-600"
-            badgeText={hasDeviceConnected ? ((hardware.waterLiters !== undefined ? hardware.waterLiters > 0.60 : hardware.waterLevelPct > 30) ? 'OK' : 'Low') : 'Offline'}
-            badgeType={hasDeviceConnected ? ((hardware.waterLiters !== undefined ? hardware.waterLiters > 0.60 : hardware.waterLevelPct > 30) ? 'success' : 'alert') : 'info'}
+            badgeText={hasDeviceConnected ? (getDeviceWaterMl(hardware) > 600 ? 'OK' : 'Low') : 'Offline'}
+            badgeType={hasDeviceConnected ? (getDeviceWaterMl(hardware) > 600 ? 'success' : 'alert') : 'info'}
           />
           <StatCard
             title="Device Connection"
@@ -458,7 +458,7 @@ export const OverviewPage: React.FC = () => {
               </div>
               <div className="p-4 bg-slate-50 border-t border-slate-100 grid grid-cols-3 gap-2 text-xs text-center">
                 <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Food Level</span><span className="font-bold text-slate-800">{hardware.foodLevelPct}%</span></div>
-                <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Water Volume</span><span className="font-bold text-slate-800">{Math.round(hardware.waterLiters !== undefined ? hardware.waterLiters * 1000 : ((hardware.waterLevelPct || 0) / 100) * 2500)} ml</span></div>
+                <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Water Volume</span><span className="font-bold text-slate-800">{getDeviceWaterMl(hardware)} ml</span></div>
                 <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Assignment</span><span className="font-bold text-rose-700">{hardware.assignedPetName || 'Vacant'}</span></div>
               </div>
             </div>

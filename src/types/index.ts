@@ -118,7 +118,10 @@ export interface Device {
   foodLevelPct: number;
   waterLevelPct: number;
   waterLiters?: number;
+  waterMl?: number;
+  waterScaleReady?: boolean;
   reservoirCapacityLiters?: number;
+  reservoirCapacityMl?: number;
   waterRawAdc?: number;
   foodBowlWeightGrams?: number;
   waterQualityPpm?: number;
@@ -158,7 +161,10 @@ export interface DeviceTelemetryPayload {
   timestamp: string;
   waterLevelPercent: number;
   waterLiters?: number;
+  waterMl?: number;
+  waterScaleReady?: boolean;
   reservoirCapacityLiters?: number;
+  reservoirCapacityMl?: number;
   waterRawAdc?: number;
   foodLevelPercent: number;
   tdsPpm?: number;
@@ -431,3 +437,24 @@ export interface PetVisionAnalyticsRecord {
   };
 }
 
+export function getDeviceWaterMl(device?: Partial<Device> | null): number {
+  if (!device) return 0;
+  if (typeof device.waterMl === 'number' && device.waterMl > 0) {
+    return Math.round(device.waterMl);
+  }
+  if (typeof device.waterLiters === 'number' && device.waterLiters > 0) {
+    return Math.round(device.waterLiters * 1000);
+  }
+  const capacity = device.reservoirCapacityMl || ((device.reservoirCapacityLiters || 2.5) * 1000);
+  if (typeof device.waterLevelPct === 'number' && device.waterLevelPct > 0) {
+    return Math.round((device.waterLevelPct / 100) * capacity);
+  }
+  if (typeof device.waterMl === 'number') return Math.round(device.waterMl);
+  if (typeof device.waterLiters === 'number') return Math.round(device.waterLiters * 1000);
+  return 0;
+}
+
+export function getDeviceWaterLiters(device?: Partial<Device> | null): number {
+  const ml = getDeviceWaterMl(device);
+  return Number((ml / 1000).toFixed(2));
+}

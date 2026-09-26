@@ -9,7 +9,7 @@ import { DirectUSBConsoleWidget } from '../components/DirectUSBConsoleWidget';
 import { usbSerialService, ScannedWifiNetwork } from '../services/usbSerialService';
 import { sendWifiProvisionToSupabase, clearWifiProvisionInSupabase } from '../services/supabase';
 import { useAppContext } from '../hooks/useAppContext';
-import { Device, Pet } from '../types';
+import { Device, Pet, getDeviceWaterMl } from '../types';
 import {
   Cpu,
   Wifi,
@@ -1309,7 +1309,7 @@ export const DevicesPage: React.FC = () => {
                               <span className="flex items-center gap-1.5"><Droplets className="w-3.5 h-3.5 text-sky-600" /> Water Reservoir Volume</span>
                               <div className="flex items-center gap-2">
                                 <span className="font-mono text-sky-600 font-extrabold">
-                                  {Math.round((featuredDevice.waterLiters !== undefined ? featuredDevice.waterLiters * 1000 : ((featuredDevice.waterLevelPct || 0) / 100) * 2500))} ml
+                                  {getDeviceWaterMl(featuredDevice)} ml
                                 </span>
                                 <button
                                   type="button"
@@ -1340,7 +1340,7 @@ export const DevicesPage: React.FC = () => {
                             </div>
                             <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
                               <div
-                                style={{ width: `${Math.min(100, Math.max(0, ((featuredDevice.waterLiters !== undefined ? featuredDevice.waterLiters : ((featuredDevice.waterLevelPct || 0) / 100) * 2.50) / (featuredDevice.reservoirCapacityLiters || 2.50)) * 100))}%` }}
+                                style={{ width: `${Math.min(100, Math.max(0, Math.round((getDeviceWaterMl(featuredDevice) / (featuredDevice.reservoirCapacityMl || ((featuredDevice.reservoirCapacityLiters || 2.50) * 1000))) * 100)))}%` }}
                                 className="h-full bg-gradient-to-r from-sky-500 to-blue-500 rounded-full transition-all duration-500"
                               />
                             </div>
@@ -1353,86 +1353,73 @@ export const DevicesPage: React.FC = () => {
                     <div className="pt-4 border-t border-slate-100 space-y-3 text-xs">
                       {/* Action Row 1: Direct Manual Dispense Buttons */}
                       <div className="grid grid-cols-2 gap-2">
-                        {/* Food Gate Open and Close Control Buttons */}
+                        {/* Food Gate Open and Close Control Buttons (Feed & Stop Feeding) */}
                         {(() => {
                           const isGateOpen = Boolean(featuredDevice.foodGateOpen);
-                          const handleToggleGate = (targetOpen?: boolean) => {
-                            if (!isOnline) return;
-                            // Seamless toggle: if targetOpen is undefined or matches current state, toggle opposite
-                            const nextOpen = targetOpen !== undefined
-                              ? (targetOpen === isGateOpen ? !isGateOpen : targetOpen)
-                              : !isGateOpen;
+                          const isCat = assignedPet?.species?.toLowerCase() === 'cat';
+                          const idealMealPortion = isCat ? 35 : (!assignedPet ? 75 : assignedPet.weight < 10 ? 60 : assignedPet.weight > 25 ? 220 : 110);
 
-                            if (nextOpen) {
-                              openGateDirect(featuredDevice.id, featuredGateAngle, true);
-                            } else {
-                              closeGateDirect(featuredDevice.id);
-                            }
+                          const handleFeed = (e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            if (!isOnline) return;
+                            dispenseDirect(featuredDevice.id, idealMealPortion, `Ideal Meal (${idealMealPortion}g)`);
+                          };
+
+                          const handleStopFeeding = (e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            if (!isOnline) return;
+                            closeGateDirect(featuredDevice.id);
                           };
 
                           return (
                             <div
-                              onClick={() => handleToggleGate(!isGateOpen)}
                               className={`flex rounded-xl overflow-hidden shadow-xs border border-slate-200 select-none ${
-                                !isOnline ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-slate-300'
+                                !isOnline ? 'cursor-not-allowed opacity-60' : 'hover:border-slate-300'
                               }`}
-                              title={
-                                !isOnline
-                                  ? 'Node is offline'
-                                  : isGateOpen
-                                  ? 'Food Gate is OPEN — Click to Toggle Close'
-                                  : `Food Gate is CLOSED — Click to Toggle Open (${featuredGateAngle}°)`
-                              }
                             >
                               <button
                                 type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleGate(!isGateOpen);
-                                }}
+                                onClick={handleFeed}
                                 disabled={!isOnline}
                                 className={`flex-1 py-2.5 px-2 font-bold transition-all flex items-center justify-center gap-1.5 ${
                                   !isOnline
                                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                     : isGateOpen
-                                    ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-500/50'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer active:scale-95'
+                                    ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-500/50 cursor-pointer active:scale-95'
+                                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white cursor-pointer active:scale-95'
                                 }`}
                                 title={
                                   !isOnline
                                     ? 'Node is offline'
                                     : isGateOpen
-                                    ? 'Food Gate is OPEN (Click to toggle close)'
-                                    : `Open Food Gate (${featuredGateAngle}° Sweep - Click to Toggle)`
+                                    ? `Dispensing ideal meal (${idealMealPortion}g) — Gate will close automatically`
+                                    : `Feed Ideal Meal (${idealMealPortion}g for ${assignedPet?.name || 'Pet'}) — Dispenses and closes gate`
                                 }
                               >
-                                <Unlock className="w-3.5 h-3.5 shrink-0" />
-                                <span>Open ({featuredGateAngle}°)</span>
+                                <Utensils className="w-3.5 h-3.5 shrink-0" />
+                                <span>{isGateOpen ? 'Feeding...' : `Feed (${idealMealPortion}g)`}</span>
                               </button>
                               <button
                                 type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleGate(!isGateOpen);
-                                }}
+                                onClick={handleStopFeeding}
                                 disabled={!isOnline}
                                 className={`flex-1 py-2.5 px-2 font-bold transition-all flex items-center justify-center gap-1.5 border-l border-slate-200 ${
                                   !isOnline
                                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                    : !isGateOpen
-                                    ? 'bg-slate-900 text-white shadow-xs ring-1 ring-slate-800'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer active:scale-95'
+                                    : isGateOpen
+                                    ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs cursor-pointer active:scale-95 animate-pulse'
+                                    : 'bg-slate-900 text-white shadow-xs ring-1 ring-slate-800 cursor-pointer active:scale-95'
                                 }`}
                                 title={
                                   !isOnline
                                     ? 'Node is offline'
-                                    : !isGateOpen
-                                    ? 'Food Gate is CLOSED (Click to toggle open)'
-                                    : 'Close Food Gate (0° Return - Click to Toggle)'
+                                    : isGateOpen
+                                    ? 'Stop Feeding Immediately (Close Gate)'
+                                    : 'Food Gate is Closed'
                                 }
                               >
-                                <Lock className="w-3.5 h-3.5 shrink-0" />
-                                <span>Close Gate</span>
+                                <Square className="w-3.5 h-3.5 shrink-0 fill-current" />
+                                <span>Stop Feeding</span>
                               </button>
                             </div>
                           );
@@ -2351,7 +2338,7 @@ export const DevicesPage: React.FC = () => {
                 </div>
                 <div className="flex items-baseline gap-1.5 my-1">
                   <span className="text-2xl font-mono font-black text-sky-400">
-                    {Math.round((selectedDevice?.waterLiters !== undefined ? selectedDevice.waterLiters * 1000 : ((selectedDevice?.waterLevelPct || 0) / 100) * 2500))}
+                    {getDeviceWaterMl(selectedDevice)}
                   </span>
                   <span className="text-xs font-bold text-slate-400">ml (1g = 1ml)</span>
                 </div>
@@ -2667,7 +2654,7 @@ export const DevicesPage: React.FC = () => {
                 </div>
                 <div className="flex items-baseline justify-between mt-1">
                   <p className="font-mono font-black text-sm text-sky-950">
-                    {Math.round((selectedDevice.waterLiters !== undefined ? selectedDevice.waterLiters * 1000 : ((selectedDevice.waterLevelPct || 0) / 100) * 2500))} ml
+                    {getDeviceWaterMl(selectedDevice)} ml
                   </p>
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border bg-sky-100/80 text-sky-800 border-sky-200">
                     HX711 (GPIO 32/33)
