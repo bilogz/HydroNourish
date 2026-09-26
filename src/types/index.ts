@@ -136,6 +136,10 @@ export interface Device {
   isPumpDeactivated?: boolean;
   sanitationStatus?: 'idle' | 'pet_eating' | 'rinsing_water' | 'draining_19w' | 'completed' | 'aborted_pet_returned';
   foodGateOpen?: boolean;
+  isManualGateHold?: boolean;
+  gateOpenDeg?: number;
+  gateClosedDeg?: number;
+  currentServoAngle?: number;
   petEatingActive?: boolean;
   petWantsToEat?: boolean;
   servoMeteringPhase?: 'dispensing' | 'saving_pause' | 'idle';
@@ -164,6 +168,10 @@ export interface DeviceTelemetryPayload {
   firmwareVersion?: string;
   cameraIp?: string;
   foodGateOpen?: boolean;
+  isManualGateHold?: boolean;
+  gateOpenDeg?: number;
+  gateClosedDeg?: number;
+  currentServoAngle?: number;
   petEatingActive?: boolean;
   petWantsToEat?: boolean;
   servoMeteringPhase?: 'dispensing' | 'saving_pause' | 'idle';

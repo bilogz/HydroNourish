@@ -383,7 +383,7 @@ export const HydrationPage: React.FC = () => {
                         : 'bg-slate-100 text-slate-600 border border-slate-200'
                     }`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${isAutoRefillOn ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                      {isAutoRefillOn ? 'Auto-Refill (<=10%)' : 'Auto Paused'}
+                      {isAutoRefillOn ? 'Auto-Refill (150ml Target)' : 'Auto Paused'}
                     </span>
                   </div>
                 </div>
@@ -393,14 +393,14 @@ export const HydrationPage: React.FC = () => {
             {/* Pump Live Control Toolbar */}
             <div className="space-y-2">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {/* 1. Quick Water Pump (250ml) */}
+                {/* 1. Quick Water Pump (10s) */}
                 <button
-                  onClick={() => dispenseWaterDirect(selectedDevice.id, 250)}
+                  onClick={() => dispenseWaterDirect(selectedDevice.id, 10000)}
                   className="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-                  title="Pump 250ml Water (~2.5s Cycle)"
+                  title="Refill Drinking Water (10s Pump Active)"
                 >
                   <Droplets className="w-3.5 h-3.5" />
-                  Pump 250ml
+                  Refill Water (10s)
                 </button>
 
                 {/* 2. Force Pump ON (Continuous) */}
@@ -431,10 +431,10 @@ export const HydrationPage: React.FC = () => {
                       ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
                       : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
                   }`}
-                  title="Toggle Autonomous Water Refilling below 10%"
+                  title="Toggle Autonomous Water Refilling (Stops pump at 150ml)"
                 >
                   <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                  Auto: {isAutoRefillOn ? 'ON' : 'OFF'}
+                  Auto: {isAutoRefillOn ? 'ON (150ml)' : 'OFF'}
                 </button>
               </div>
 

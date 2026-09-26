@@ -35,6 +35,10 @@ export interface USBTelemetry {
   waterLiters?: number;
   waterMl?: number;
   waterScaleReady?: boolean;
+  foodGateOpen?: boolean;
+  gateOpenDeg?: number;
+  gateClosedDeg?: number;
+  currentServoAngle?: number;
   lastIntakeFoodGrams?: number;
   lastIntakeWaterMl?: number;
 }
@@ -314,17 +318,29 @@ class USBSerialService {
     return this.sendCommand({ action: 'feed', amount: portionGrams, steps });
   }
 
-  public async openGate(): Promise<boolean> {
+  public async openGate(angle?: number): Promise<boolean> {
+    if (typeof angle === 'number') {
+      const clamped = Math.max(10, Math.min(180, Math.round(angle)));
+      await this.sendRaw(`GATEANGLE:${clamped}`);
+      await this.sendRaw('OPEN');
+      return this.sendCommand({ action: 'gate_open', angle: clamped, manual: true });
+    }
     await this.sendRaw('OPEN');
-    return this.sendCommand({ action: 'gate_open' });
+    return this.sendCommand({ action: 'gate_open', manual: true });
   }
 
   public async closeGate(): Promise<boolean> {
     await this.sendRaw('CLOSE');
-    return this.sendCommand({ action: 'gate_close' });
+    return this.sendCommand({ action: 'gate_close', manual: true });
   }
 
-  public async dispenseWater(durationMs: number = 2500): Promise<boolean> {
+  public async setServoAngle(angle: number, test: boolean = false): Promise<boolean> {
+    const clamped = Math.max(10, Math.min(180, Math.round(angle)));
+    await this.sendRaw(`GATEANGLE:${clamped}`);
+    return this.sendCommand({ action: 'set_servo_angle', angle: clamped, test });
+  }
+
+  public async dispenseWater(durationMs: number = 10000): Promise<boolean> {
     return this.sendCommand({ action: 'water', duration: durationMs });
   }
 

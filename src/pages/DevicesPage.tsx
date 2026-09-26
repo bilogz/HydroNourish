@@ -43,6 +43,7 @@ import {
   ArrowRight,
   ShieldCheck,
   Smartphone,
+  RotateCw,
   Dog,
 } from 'lucide-react';
 
@@ -68,6 +69,7 @@ export const DevicesPage: React.FC = () => {
     calibrateWaterScaleDirect,
     openGateDirect,
     closeGateDirect,
+    setGateAngleDirect,
     runBowlSanitationCycle,
     dispenseCleaningWaterDirect,
     dispenseSprayWaterDirect,
@@ -120,6 +122,11 @@ export const DevicesPage: React.FC = () => {
   const [calibratingFoodDevId, setCalibratingFoodDevId] = useState<string | null>(null);
   const [calibratingWaterDevId, setCalibratingWaterDevId] = useState<string | null>(null);
 
+  // Feeder Servo Angle Calibration State
+  const [calServoAngle, setCalServoAngle] = useState(90);
+  const [isTestingServo, setIsTestingServo] = useState(false);
+  const [isSavingServo, setIsSavingServo] = useState(false);
+
   const handleCalibrateFood = async (deviceId: string) => {
     if (!foodCalWeight || foodCalWeight <= 0) return;
     setCalibratingFoodDevId(deviceId);
@@ -161,17 +168,17 @@ export const DevicesPage: React.FC = () => {
 
   const handleSprayWater = async (deviceId: string) => {
     setIsSprayingWater(true);
-    showToast('info', 'Spraying Clean Water', 'Closing food gate & activating rinse sprayer pump (GPIO 18 - 10s) to wash food bowl...');
+    showToast('info', 'Spraying Clean Water', 'Closing food gate & activating rinse sprayer pump (GPIO 18 - 8s) to wash food bowl...');
     try {
       if (closeGateDirect) {
         await closeGateDirect(deviceId);
       }
       if (dispenseSprayWaterDirect) {
-        await dispenseSprayWaterDirect(deviceId, 10000);
+        await dispenseSprayWaterDirect(deviceId, 8000);
       } else if (dispenseCleaningWaterDirect) {
-        await dispenseCleaningWaterDirect(deviceId, 10000);
+        await dispenseCleaningWaterDirect(deviceId, 8000);
       }
-      showToast('success', 'Spray Completed', 'Rinse sprayer wash cycle (10s) finished.');
+      showToast('success', 'Spray Completed', 'Rinse sprayer wash cycle (8s) finished.');
     } catch {
       showToast('error', 'Spray Error', 'Failed to activate spray pump.');
     } finally {
@@ -183,26 +190,26 @@ export const DevicesPage: React.FC = () => {
 
   const handleDrainBowl = async (deviceId: string) => {
     setIsDrainingBowl(true);
-    showToast('warning', 'Draining Wastewater', 'Activating drain pump (GPIO 23) to evacuate bowl wastewater & scraps...');
+    showToast('warning', 'Flushing Wastewater', 'Activating wastewater flush pump (GPIO 23 - 15s) to evacuate bowl wastewater & scraps...');
     try {
       if (startDrainPumpDirect) {
-        await startDrainPumpDirect(deviceId, 6000);
+        await startDrainPumpDirect(deviceId, 15000);
       } else {
         const dev = devices.find(d => d.id === deviceId);
         const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
         if (cleanIp) {
-          await fetch(`http://${cleanIp}/api/drain?duration=6000`, { method: 'POST', mode: 'no-cors' });
+          await fetch(`http://${cleanIp}/api/drain?duration=15000`, { method: 'POST', mode: 'no-cors' });
         }
       }
       setTimeout(async () => {
         await tareScaleDirect(deviceId);
         await tareWaterScaleDirect(deviceId);
-      }, 6000);
-      showToast('success', 'Drain Cycle Triggered', 'Wastewater pump activated for 6 seconds.');
+      }, 15000);
+      showToast('success', 'Flush Cycle Completed', 'Wastewater flush pump finished (15s).');
     } catch {
       showToast('error', 'Drain Error', 'Failed to complete drainage.');
     } finally {
-      setTimeout(() => setIsDrainingBowl(false), 6000);
+      setTimeout(() => setIsDrainingBowl(false), 15000);
     }
   };
 
@@ -227,13 +234,13 @@ export const DevicesPage: React.FC = () => {
     if (isCleaningWaste) return;
     setIsCleaningWaste(true);
     setCleanWastePhase('spraying');
-    setCleanWasteCountdown(20);
+    setCleanWasteCountdown(24);
 
     const timerInterval = setInterval(() => {
       setCleanWasteCountdown((prev) => (prev > 1 ? prev - 1 : 1));
     }, 1000);
 
-    showToast('info', '🧼 Clean Waste (1/3)', 'Step 1: Food gate closed & spraying clean rinse water (GPIO 18 - 10s) to wash food bowl...');
+    showToast('info', '🧼 Clean Waste (1/3)', 'Step 1: Food gate closed & spraying clean rinse water (GPIO 18 - 8s) to wash food bowl...');
 
     try {
       // Step 0: Ensure Food Gate is CLOSED before any water spray
@@ -241,32 +248,32 @@ export const DevicesPage: React.FC = () => {
         await closeGateDirect(deviceId);
       }
 
-      // Phase 1: Spray Clean Rinse Water (GPIO 18) - exactly 10.0 seconds
+      // Phase 1: Spray Clean Rinse Water (GPIO 18) - exactly 8.0 seconds
       if (dispenseSprayWaterDirect) {
-        await dispenseSprayWaterDirect(deviceId, 10000);
+        await dispenseSprayWaterDirect(deviceId, 8000);
       } else {
         const dev = devices.find((d) => d.id === deviceId);
         const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.157';
-        fetch(`http://${cleanIp}/api/spray?duration=10000`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(`http://${cleanIp}/api/spray?duration=8000`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
       }
 
-      await new Promise((res) => setTimeout(res, 10000));
+      await new Promise((res) => setTimeout(res, 8000));
 
-      // Phase 2: Wastewater Drain Pump (GPIO 23) - exactly 9.0 seconds
+      // Phase 2: Wastewater Flush / Drain Pump (GPIO 23) - exactly 15.0 seconds
       setCleanWastePhase('draining');
-      showToast('warning', '🌀 Clean Waste (2/3)', 'Step 2: Evacuating dirty wastewater via Drain Pump (GPIO 23 - 9s)...');
+      showToast('warning', '🌀 Clean Waste (2/3)', 'Step 2: Evacuating dirty wastewater via Flush Pump (GPIO 23 - 15s)...');
 
       if (startDrainPumpDirect) {
-        await startDrainPumpDirect(deviceId, 9000);
+        await startDrainPumpDirect(deviceId, 15000);
       } else {
         const dev = devices.find((d) => d.id === deviceId);
         const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.157';
-        fetch(`http://${cleanIp}/api/drain?duration=9000`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(`http://${cleanIp}/api/drain?duration=15000`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
       }
 
-      await new Promise((res) => setTimeout(res, 9000));
+      await new Promise((res) => setTimeout(res, 15000));
 
-      // Phase 3: Zero / Tare scales - exactly 1.0 second (Total = 20.0 seconds)
+      // Phase 3: Zero / Tare scales - exactly 1.0 second (Total = 24.0 seconds)
       setCleanWastePhase('taring');
       if (tareScaleDirect) await tareScaleDirect(deviceId);
       if (tareWaterScaleDirect) await tareWaterScaleDirect(deviceId);
@@ -275,7 +282,7 @@ export const DevicesPage: React.FC = () => {
 
       clearInterval(timerInterval);
       setCleanWasteCountdown(0);
-      showToast('success', '✨ Clean Waste Completed (20s cycle)', 'Food gate confirmed closed, bowl washed with 10s spray, evacuated into waste tank, and scales tared to 0.0g!');
+      showToast('success', '✨ Clean Waste Completed (24s cycle)', 'Food gate confirmed closed, bowl washed with 8s spray, evacuated with 15s flush into waste tank, and scales tared to 0.0g!');
     } catch {
       clearInterval(timerInterval);
       setCleanWasteCountdown(0);
@@ -329,6 +336,19 @@ export const DevicesPage: React.FC = () => {
 
   // Primary active/featured device node
   const featuredDevice = (devices || []).find(d => d.id === 'HN-NODE-F778') || (devices || [])[0] || null;
+
+  // Persistent configured gate open angle for featured node
+  const featuredGateAngle = featuredDevice?.gateOpenDeg || (typeof window !== 'undefined'
+    ? (Number(localStorage.getItem(`hn_gate_angle_${featuredDevice?.id}`) || localStorage.getItem('hn_gate_angle')) || 90)
+    : 90);
+
+  useEffect(() => {
+    const saved = typeof window !== 'undefined'
+      ? Number(localStorage.getItem(`hn_gate_angle_${selectedDevice?.id}`) || localStorage.getItem('hn_gate_angle'))
+      : null;
+    const effective = selectedDevice?.gateOpenDeg || (saved && !isNaN(saved) && saved >= 10 && saved <= 180 ? saved : 90);
+    setCalServoAngle(effective);
+  }, [selectedDevice?.id, selectedDevice?.gateOpenDeg, calibrateModalOpen]);
 
   // Auto-trigger live hardware scan on modal open
   useEffect(() => {
@@ -706,6 +726,7 @@ export const DevicesPage: React.FC = () => {
         await port.open({ baudRate: 115200 });
 
         const textEncoder = new TextEncoderStream();
+        // Keep a reference to the pipe promise so we can await it before closing
         const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
         const writer = textEncoder.writable.getWriter();
 
@@ -714,9 +735,16 @@ export const DevicesPage: React.FC = () => {
         const jsonCmd = JSON.stringify({ action: 'pair_wifi', ssid: wifiSsid.trim(), password: wifiPassword.trim() }) + '\n';
         await writer.write(asciiCmd);
         await writer.write(jsonCmd);
-        writer.releaseLock();
 
-        await new Promise(r => setTimeout(r, 600));
+        // Properly tear down the stream chain:
+        // 1. Release the writer lock so the writable side can be closed
+        writer.releaseLock();
+        // 2. Close the TextEncoderStream's writable — signals EOF to the pipe
+        await textEncoder.writable.close();
+        // 3. Wait for the pipe to drain and finish (unlocks port.writable)
+        await writableStreamClosed.catch(() => {}); // ignore abort errors
+
+        await new Promise(r => setTimeout(r, 300));
         await port.close();
 
         const msg = `⚡ Successfully flashed '${wifiSsid}' via USB Serial directly to ESP32 NVS Flash memory!`;
@@ -802,7 +830,7 @@ export const DevicesPage: React.FC = () => {
         setCloudProvisionPollTimer(pollInterval);
       } else {
         setCloudProvisionStatus('error');
-        showToast('error', 'Cloud Dispatch Failed', 'Could not write credentials to Supabase. Check your internet connection.');
+        showToast('error', 'Cloud Dispatch Failed', 'Could not write Wi-Fi credentials to Supabase. Make sure the pending_wifi_ssid & pending_wifi_pass columns exist in your devices table (run the latest supabase_schema.sql migration), then try again.');
         setIsCloudProvisioning(false);
       }
     } catch (err: any) {
@@ -1326,41 +1354,92 @@ export const DevicesPage: React.FC = () => {
                       {/* Action Row 1: Direct Manual Dispense Buttons */}
                       <div className="grid grid-cols-2 gap-2">
                         {/* Food Gate Open and Close Control Buttons */}
-                        <div className="flex rounded-xl overflow-hidden shadow-xs border border-slate-200">
-                          <button
-                            onClick={() => openGateDirect(featuredDevice.id)}
-                            disabled={!isOnline}
-                            className={`flex-1 py-2.5 px-2 font-bold transition-all flex items-center justify-center gap-1.5 ${
-                              !isOnline
-                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                : featuredDevice.foodGateOpen
-                                ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer'
-                                : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95'
-                            }`}
-                            title={isOnline ? 'Open Food Gate (90° Sweep)' : 'Node is offline'}
-                          >
-                            <Unlock className="w-3.5 h-3.5 shrink-0" />
-                            <span>Open Gate</span>
-                          </button>
-                          <button
-                            onClick={() => closeGateDirect(featuredDevice.id)}
-                            disabled={!isOnline}
-                            className={`flex-1 py-2.5 px-2 font-bold transition-all flex items-center justify-center gap-1.5 border-l border-slate-200 ${
-                              !isOnline
-                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                : featuredDevice.foodGateOpen
-                                ? 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer active:scale-95'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer active:scale-95'
-                            }`}
-                            title={isOnline ? 'Close Food Gate (0° Return)' : 'Node is offline'}
-                          >
-                            <Lock className="w-3.5 h-3.5 shrink-0" />
-                            <span>Close Gate</span>
-                          </button>
-                        </div>
+                        {(() => {
+                          const isGateOpen = Boolean(featuredDevice.foodGateOpen);
+                          const handleToggleGate = (targetOpen?: boolean) => {
+                            if (!isOnline) return;
+                            // Seamless toggle: if targetOpen is undefined or matches current state, toggle opposite
+                            const nextOpen = targetOpen !== undefined
+                              ? (targetOpen === isGateOpen ? !isGateOpen : targetOpen)
+                              : !isGateOpen;
+
+                            if (nextOpen) {
+                              openGateDirect(featuredDevice.id, featuredGateAngle, true);
+                            } else {
+                              closeGateDirect(featuredDevice.id);
+                            }
+                          };
+
+                          return (
+                            <div
+                              onClick={() => handleToggleGate(!isGateOpen)}
+                              className={`flex rounded-xl overflow-hidden shadow-xs border border-slate-200 select-none ${
+                                !isOnline ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-slate-300'
+                              }`}
+                              title={
+                                !isOnline
+                                  ? 'Node is offline'
+                                  : isGateOpen
+                                  ? 'Food Gate is OPEN — Click to Toggle Close'
+                                  : `Food Gate is CLOSED — Click to Toggle Open (${featuredGateAngle}°)`
+                              }
+                            >
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleGate(!isGateOpen);
+                                }}
+                                disabled={!isOnline}
+                                className={`flex-1 py-2.5 px-2 font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                  !isOnline
+                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                    : isGateOpen
+                                    ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-500/50'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer active:scale-95'
+                                }`}
+                                title={
+                                  !isOnline
+                                    ? 'Node is offline'
+                                    : isGateOpen
+                                    ? 'Food Gate is OPEN (Click to toggle close)'
+                                    : `Open Food Gate (${featuredGateAngle}° Sweep - Click to Toggle)`
+                                }
+                              >
+                                <Unlock className="w-3.5 h-3.5 shrink-0" />
+                                <span>Open ({featuredGateAngle}°)</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleGate(!isGateOpen);
+                                }}
+                                disabled={!isOnline}
+                                className={`flex-1 py-2.5 px-2 font-bold transition-all flex items-center justify-center gap-1.5 border-l border-slate-200 ${
+                                  !isOnline
+                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                    : !isGateOpen
+                                    ? 'bg-slate-900 text-white shadow-xs ring-1 ring-slate-800'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer active:scale-95'
+                                }`}
+                                title={
+                                  !isOnline
+                                    ? 'Node is offline'
+                                    : !isGateOpen
+                                    ? 'Food Gate is CLOSED (Click to toggle open)'
+                                    : 'Close Food Gate (0° Return - Click to Toggle)'
+                                }
+                              >
+                                <Lock className="w-3.5 h-3.5 shrink-0" />
+                                <span>Close Gate</span>
+                              </button>
+                            </div>
+                          );
+                        })()}
 
                         <button
-                          onClick={() => dispenseWaterDirect(featuredDevice.id, 250)}
+                          onClick={() => dispenseWaterDirect(featuredDevice.id, 10000)}
                           disabled={!isOnline || isPumpDeactivated}
                           className={`py-2.5 px-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-xs ${
                             !isOnline
@@ -1374,7 +1453,7 @@ export const DevicesPage: React.FC = () => {
                               ? 'Node is offline'
                               : isPumpDeactivated
                               ? '🔒 Water pump is currently locked & deactivated. Toggle Pump Power switch below to unlock.'
-                              : 'Pump Water for 5 Seconds (250ml)'
+                              : 'Refill Drinking Water (10s Pump Active)'
                           }
                         >
                           {isPumpDeactivated ? (
@@ -1450,7 +1529,7 @@ export const DevicesPage: React.FC = () => {
                               ? 'bg-rose-50/60 border-rose-300 hover:bg-rose-100/60 cursor-pointer'
                               : 'bg-slate-100/80 border-slate-200 hover:bg-slate-200/80 cursor-pointer'
                           }`}
-                          title="Toggle Autonomous Water Refilling below 25%"
+                          title="Toggle Autonomous Water Refilling (Refills bowl until 150ml is reached)"
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
@@ -1463,7 +1542,7 @@ export const DevicesPage: React.FC = () => {
                             <div className="min-w-0">
                               <p className="font-bold text-xs text-slate-800 leading-tight">Auto-Refill</p>
                               <p className={`text-[10px] font-extrabold ${isAutoRefillOn ? 'text-rose-700' : 'text-slate-500'}`}>
-                                {isAutoRefillOn ? 'SMART ON' : 'PAUSED'}
+                                {isAutoRefillOn ? 'SMART ON (150ml)' : 'PAUSED'}
                               </p>
                             </div>
                           </div>
@@ -1517,14 +1596,14 @@ export const DevicesPage: React.FC = () => {
                                 ? 'bg-rose-50 border-rose-300 text-rose-700 animate-pulse'
                                 : 'bg-gradient-to-r from-purple-50 via-indigo-50 to-sky-50 border-purple-200/80 text-purple-900 hover:from-purple-100 hover:to-indigo-100'
                             }`}
-                            title="3-in-1 Sanitation Cycle: 1. Spray Rinse (GPIO 18 - 5s) ➔ 2. Drain Wastewater (GPIO 23 - 9s) ➔ 3. Tare Scales (1s) = 15s Total"
+                            title="3-in-1 Sanitation Cycle: 1. Spray Rinse (GPIO 18 - 8s) ➔ 2. Flush Wastewater (GPIO 23 - 15s) ➔ 3. Tare Scales (1s) = 24s Total"
                           >
                             {isCleaningWaste ? (
                               <>
                                 <Trash2 className="w-4 h-4 animate-pulse text-rose-600" />
                                 <span className="font-mono">
                                   {cleanWastePhase === 'spraying' && `🚿 1/2 Spraying (${cleanWasteCountdown}s)...`}
-                                  {cleanWastePhase === 'draining' && `🌀 2/2 Draining (${cleanWasteCountdown}s)...`}
+                                  {cleanWastePhase === 'draining' && `🌀 2/2 Flushing (${cleanWasteCountdown}s)...`}
                                   {cleanWastePhase === 'taring' && `✨ Taring Scales (${cleanWasteCountdown}s)...`}
                                   {cleanWastePhase === 'idle' && 'Stopping...'}
                                 </span>
@@ -1532,7 +1611,7 @@ export const DevicesPage: React.FC = () => {
                             ) : (
                               <>
                                 <Trash2 className="w-4 h-4 text-purple-600" />
-                                <span>Clean Waste (Spray + Drain)</span>
+                                <span>Clean Waste (Spray + Flush)</span>
                               </>
                             )}
                           </button>
@@ -1553,10 +1632,10 @@ export const DevicesPage: React.FC = () => {
                                   ? 'bg-sky-100 border-sky-300 text-sky-800'
                                   : 'bg-sky-50/80 border-sky-200 text-sky-700 hover:bg-sky-100'
                               }`}
-                              title="Manually spray clean rinse water (GPIO 18)"
+                              title="Manually spray clean rinse water (GPIO 18 - 8s)"
                             >
                               <Droplets className={`w-3 h-3 ${isSprayingWater ? 'animate-bounce text-sky-600' : 'text-sky-600'}`} />
-                              <span>{isSprayingWater ? 'Spraying...' : 'Spray Water'}</span>
+                              <span>{isSprayingWater ? 'Spraying...' : 'Spray Water (8s)'}</span>
                             </button>
 
                             <button
@@ -1574,10 +1653,10 @@ export const DevicesPage: React.FC = () => {
                                   ? 'bg-rose-100 border-rose-300 text-rose-800 animate-pulse'
                                   : 'bg-purple-50/80 border-purple-200 text-purple-700 hover:bg-purple-100'
                               }`}
-                              title="Manually run or stop wastewater drain pump (GPIO 23)"
+                              title="Manually run or stop wastewater flush pump (GPIO 23 - 15s)"
                             >
                               <Trash2 className={`w-3 h-3 ${isDrainingBowl ? 'animate-pulse text-rose-600' : 'text-purple-600'}`} />
-                              <span>{isDrainingBowl ? 'Stop Drain' : 'Drain Bowl'}</span>
+                              <span>{isDrainingBowl ? 'Flushing...' : 'Flush Bowl (15s)'}</span>
                             </button>
                           </div>
                         </div>
@@ -1687,9 +1766,12 @@ export const DevicesPage: React.FC = () => {
               </div>
             )}
             {cloudProvisionStatus === 'error' && (
-              <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
-                <p className="text-[11px] text-amber-800">Timed out. Try USB Flash or check password.</p>
+              <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="text-[11px] font-bold text-amber-800">Cloud dispatch failed or timed out.</p>
+                  <p className="text-[10px] text-amber-700">If the ESP32 is not connecting: verify the password is correct, or use <strong>USB Flash</strong> (requires cable). If you see "Cloud Dispatch Failed", run the latest <code>supabase_schema.sql</code> to add the <code>pending_wifi_ssid</code> column to your Supabase <code>devices</code> table.</p>
+                </div>
               </div>
             )}
           </div>
@@ -2333,6 +2415,110 @@ export const DevicesPage: React.FC = () => {
                     <span>{selectedDevice && calibratingWaterDevId === selectedDevice.id ? 'Calibrating...' : `Calibrate with ${waterCalVolume}ml`}</span>
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Feeder Servo Gate Aperture & Rotation Card */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-xs border border-amber-500/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                <RotateCw className="w-3.5 h-3.5" /> Feeder Servo Motor Aperture & Sweep
+              </span>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                GPIO 25 PWM
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-mono font-black text-amber-400">
+                  {calServoAngle}°
+                </span>
+                <span className="text-xs font-bold text-slate-400">Opening Angle</span>
+              </div>
+              <span className="text-[10px] font-semibold text-slate-400">
+                Node Memory: <strong className="text-white font-mono">{selectedDevice?.gateOpenDeg || (typeof window !== 'undefined' ? (Number(localStorage.getItem(`hn_gate_angle_${selectedDevice?.id}`) || localStorage.getItem('hn_gate_angle')) || 90) : 90)}°</strong>
+              </span>
+            </div>
+
+            <div className="space-y-2 pt-1 border-t border-slate-700/60">
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min="10"
+                  max="180"
+                  step="5"
+                  value={calServoAngle}
+                  onChange={(e) => setCalServoAngle(Number(e.target.value))}
+                  className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                />
+                <input
+                  type="number"
+                  min="10"
+                  max="180"
+                  step="5"
+                  value={calServoAngle}
+                  onChange={(e) => setCalServoAngle(Math.max(10, Math.min(180, Number(e.target.value) || 10)))}
+                  className="w-16 px-1.5 py-0.5 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono font-bold text-xs text-center focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Quick Presets */}
+              <div className="flex flex-wrap gap-1">
+                {[30, 45, 60, 90, 120, 150, 180].map((deg) => (
+                  <button
+                    key={deg}
+                    type="button"
+                    onClick={() => setCalServoAngle(deg)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all ${
+                      calServoAngle === deg
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    {deg}°
+                  </button>
+                ))}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={Boolean(selectedDevice && isSavingServo)}
+                  onClick={async () => {
+                    if (!selectedDevice) return;
+                    setIsSavingServo(true);
+                    try {
+                      await setGateAngleDirect(selectedDevice.id, calServoAngle, false);
+                    } finally {
+                      setIsSavingServo(false);
+                    }
+                  }}
+                  className="py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all text-xs"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isSavingServo ? 'Saving...' : `Save ${calServoAngle}° to NVS`}</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={Boolean(selectedDevice && isTestingServo)}
+                  onClick={async () => {
+                    if (!selectedDevice) return;
+                    setIsTestingServo(true);
+                    try {
+                      await setGateAngleDirect(selectedDevice.id, calServoAngle, true);
+                    } finally {
+                      setTimeout(() => setIsTestingServo(false), 2200);
+                    }
+                  }}
+                  className="py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 font-bold flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all text-xs"
+                >
+                  <RotateCw className={`w-3.5 h-3.5 ${isTestingServo ? 'animate-spin' : ''}`} />
+                  <span>{isTestingServo ? 'Testing...' : `Test Sweep (${calServoAngle}°)`}</span>
+                </button>
               </div>
             </div>
           </div>

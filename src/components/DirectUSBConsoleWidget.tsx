@@ -53,8 +53,21 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
   const [wifiPassInput, setWifiPassInput] = useState('GaRCi4F4m');
   const [scannedUsbNetworks, setScannedUsbNetworks] = useState<ScannedWifiNetwork[]>(usbSerialService.getLastScannedNetworks());
   const [isScanningWifi, setIsScanningWifi] = useState(false);
+  const [usbGateAngle, setUsbGateAngle] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = Number(localStorage.getItem('hn_gate_angle_HN-NODE-F778') || localStorage.getItem('hn_gate_angle'));
+      if (!isNaN(saved) && saved >= 10 && saved <= 180) return saved;
+    }
+    return 90;
+  });
 
   const logsEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (telemetry?.gateOpenDeg) {
+      setUsbGateAngle(telemetry.gateOpenDeg);
+    }
+  }, [telemetry?.gateOpenDeg]);
 
   useEffect(() => {
     const unsubStatus = usbSerialService.onStatus((connected) => {
@@ -293,7 +306,7 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
                 </div>
                 <div>
                   <p className="font-bold text-xs text-white">Open Gate</p>
-                  <p className="text-[10px] text-slate-400">90° Hold Open</p>
+                  <p className="text-[10px] text-slate-400">{telemetry?.gateOpenDeg || usbGateAngle}° Hold Open</p>
                 </div>
               </button>
 
@@ -314,7 +327,7 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
 
               {/* Water Dispense */}
               <button
-                onClick={() => runAction(() => usbSerialService.dispenseWater(2500))}
+                onClick={() => runAction(() => usbSerialService.dispenseWater(10000))}
                 disabled={!isConnected || isActing}
                 className="p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-sky-500/50 flex flex-col items-center text-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group active:scale-95"
               >
@@ -323,7 +336,7 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
                 </div>
                 <div>
                   <p className="font-bold text-xs text-white">Pump Water</p>
-                  <p className="text-[10px] text-slate-400">2.5s Hydration Pulse</p>
+                  <p className="text-[10px] text-slate-400">10s Drinking Refill</p>
                 </div>
               </button>
 
@@ -421,43 +434,87 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
             </div>
 
             {/* Feeder Servo Motor & Gate Hardware Controls */}
-            <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
-                  <Cpu className="w-5 h-5" />
+            <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                    <Cpu className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-white">Feeder Servo Gate Aperture ({usbGateAngle}°)</h4>
+                    <p className="text-[11px] text-slate-400">Smooth velocity-controlled 0° ↔ {usbGateAngle}° transit with zero-buzz idle auto-detach</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-bold text-xs text-white">Feeder Servo Gate (90° Sweep)</h4>
-                  <p className="text-[11px] text-slate-400">Smooth velocity-controlled 0° ↔ 90° transit with zero-buzz idle auto-detach</p>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => runAction(() => usbSerialService.setServoAngle(usbGateAngle, true))}
+                    disabled={!isConnected || isActing}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
+                  >
+                    <RotateCw className="w-3.5 h-3.5 text-indigo-400" />
+                    {usbGateAngle}° Servo Test
+                  </button>
+                  <button
+                    onClick={() => runAction(() => usbSerialService.dispenseFood(75, usbGateAngle))}
+                    disabled={!isConnected || isActing}
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
+                    title={`Open ${usbGateAngle}° and dispense meal`}
+                  >
+                    <Utensils className="w-3.5 h-3.5 text-emerald-400" />
+                    Dispense 75g
+                  </button>
+                  <button
+                    onClick={() => runAction(() => usbSerialService.refillHopper())}
+                    disabled={!isConnected || isActing}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    Reset Hopper 100%
+                  </button>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => runAction(() => usbSerialService.sendRaw('TESTMOTOR'))}
-                  disabled={!isConnected || isActing}
-                  className="px-3 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
-                >
-                  <RotateCw className="w-3.5 h-3.5 text-indigo-400" />
-                  90° Servo Test
-                </button>
-                <button
-                  onClick={() => runAction(() => usbSerialService.dispenseFood(75, 90))}
-                  disabled={!isConnected || isActing}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
-                  title="Open 90° and dispense meal"
-                >
-                  <Utensils className="w-3.5 h-3.5 text-emerald-400" />
-                  Dispense 75g
-                </button>
-                <button
-                  onClick={() => runAction(() => usbSerialService.refillHopper())}
-                  disabled={!isConnected || isActing}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  Reset Hopper 100%
-                </button>
+              {/* Angle Tuning Controls */}
+              <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                  <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">Gate Angle:</span>
+                  <input
+                    type="range"
+                    min="10"
+                    max="180"
+                    step="5"
+                    value={usbGateAngle}
+                    onChange={(e) => setUsbGateAngle(Number(e.target.value))}
+                    className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  />
+                  <span className="font-mono text-xs font-bold text-indigo-400 w-10 text-right">{usbGateAngle}°</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  {[30, 45, 60, 90, 120, 150, 180].map((deg) => (
+                    <button
+                      key={deg}
+                      type="button"
+                      onClick={() => setUsbGateAngle(deg)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all ${
+                        usbGateAngle === deg
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                      }`}
+                    >
+                      {deg}°
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => runAction(() => usbSerialService.setServoAngle(usbGateAngle, false))}
+                    disabled={!isConnected || isActing}
+                    className="ml-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer disabled:opacity-40"
+                  >
+                    Save Angle
+                  </button>
+                </div>
               </div>
             </div>
 

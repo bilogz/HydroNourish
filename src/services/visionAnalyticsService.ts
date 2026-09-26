@@ -65,7 +65,7 @@ function getInitialSeedRecords(): PetVisionAnalyticsRecord[] {
       dwellTimeSeconds: 95,
       ambientLux: 195,
       actionTriggered: 'Auto-Refilled',
-      actionDetails: 'Micro-refill +250ml fresh water pump triggered',
+      actionDetails: 'Refilling drinking water (10s pump active)',
       clinicalNotes: ['Continuous hydration rhythm', 'Normal oral clearance'],
       provider: 'Gemini 1.5 Vision',
       boundingBox: { top: 22, left: 26, width: 52, height: 58 }

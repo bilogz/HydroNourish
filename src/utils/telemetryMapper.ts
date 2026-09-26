@@ -40,6 +40,8 @@ export function validateTelemetryPayload(body: any): { valid: boolean; error?: s
   const waterLitersRaw = body.waterLiters !== undefined ? Number(body.waterLiters) : (body.water_liters !== undefined ? Number(body.water_liters) : NaN);
   const waterLiters = !isNaN(waterLitersRaw) ? Math.round(waterLitersRaw * 100) / 100 : Math.round((waterLevel / 100) * reservoirCapacity * 100) / 100;
   const foodGateOpen = Boolean(body.foodGateOpen ?? body.food_gate_open ?? false);
+  const gateOpenDeg = body.gateOpenDeg !== undefined ? Number(body.gateOpenDeg) : (body.gate_open_deg !== undefined ? Number(body.gate_open_deg) : (body.gateAngle !== undefined ? Number(body.gateAngle) : undefined));
+  const currentServoAngle = body.currentServoAngle !== undefined ? Number(body.currentServoAngle) : (body.current_servo_angle !== undefined ? Number(body.current_servo_angle) : undefined);
   const petEatingActive = Boolean(body.petEatingActive ?? body.pet_eating ?? false);
   const foodBowlWeightGrams = body.foodBowlWeightGrams !== undefined ? Number(body.foodBowlWeightGrams) : (body.food_bowl_weight_grams !== undefined ? Number(body.food_bowl_weight_grams) : undefined);
   const scaleReady = body.scaleReady !== undefined ? Boolean(body.scaleReady) : (body.scale_ready !== undefined ? Boolean(body.scale_ready) : undefined);
@@ -61,6 +63,9 @@ export function validateTelemetryPayload(body: any): { valid: boolean; error?: s
     firmwareVersion: rawFwOriginal,
     cameraIp,
     foodGateOpen,
+    gateOpenDeg,
+    gateClosedDeg: 0,
+    currentServoAngle,
     petEatingActive,
     foodBowlWeightGrams,
     scaleReady,
@@ -156,6 +161,7 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
   let parsedSsid = item.wifi_ssid || item.ssid || item.wifiSsid || '';
 
   let parsedScaleReady: boolean | undefined = item.scale_ready !== undefined && item.scale_ready !== null ? Boolean(item.scale_ready) : undefined;
+  let parsedGateOpenDeg: number | undefined = undefined;
 
   if (rawFw && rawFw.includes('|')) {
     const parts = rawFw.split('|');
@@ -186,7 +192,36 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
       if (p.startsWith('WIFI:') && !p.includes('dBm')) {
         parsedSsid = p.replace('WIFI:', '').trim();
       }
+      if (p.startsWith('GATE:')) {
+        const val = Number(p.replace('GATE:', '').trim());
+        if (!isNaN(val) && val >= 10 && val <= 180) parsedGateOpenDeg = val;
+      }
     }
+  }
+
+  if (parsedGateOpenDeg === undefined) {
+    if (item.gate_open_deg !== undefined && item.gate_open_deg !== null) {
+      const g = Number(item.gate_open_deg);
+      if (!isNaN(g) && g >= 10 && g <= 180) parsedGateOpenDeg = g;
+    } else if (item.gateOpenDeg !== undefined && item.gateOpenDeg !== null) {
+      const g = Number(item.gateOpenDeg);
+      if (!isNaN(g) && g >= 10 && g <= 180) parsedGateOpenDeg = g;
+    }
+  }
+
+  if (parsedGateOpenDeg === undefined && typeof window !== 'undefined') {
+    const saved = (item.id ? localStorage.getItem(`hn_gate_angle_${item.id}`) : null) || localStorage.getItem('hn_gate_angle');
+    if (saved) {
+      const val = Number(saved);
+      if (!isNaN(val) && val >= 10 && val <= 180) parsedGateOpenDeg = val;
+    }
+  }
+
+  if (typeof window !== 'undefined' && item.id && parsedGateOpenDeg !== undefined) {
+    try {
+      localStorage.setItem(`hn_gate_angle_${item.id}`, String(parsedGateOpenDeg));
+      localStorage.setItem('hn_gate_angle', String(parsedGateOpenDeg));
+    } catch {}
   }
 
   // Regex fallback for SSID:<name> anywhere in firmware string
@@ -273,6 +308,9 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
     autoRefillEnabled,
     isPumpDeactivated,
     foodGateOpen: Boolean(item.food_gate_open),
+    gateOpenDeg: parsedGateOpenDeg ?? 90,
+    gateClosedDeg: 0,
+    currentServoAngle: Number(item.current_servo_angle ?? item.currentServoAngle ?? (Boolean(item.food_gate_open) ? (parsedGateOpenDeg ?? 90) : 0)),
     petEatingActive: Boolean(item.pet_eating_active),
     scaleReady: parsedScaleReady ?? (item.scale_ready !== undefined ? Boolean(item.scale_ready) : undefined),
     petDrinkingActive: item.pet_drinking_active !== undefined ? Boolean(item.pet_drinking_active) : undefined,

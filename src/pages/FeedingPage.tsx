@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { StatCard } from '../components/StatCard';
 import { StatusBadge } from '../components/StatusBadge';
@@ -25,7 +25,12 @@ import {
   RefreshCw,
   Settings2,
   Target,
-  HelpCircle
+  HelpCircle,
+  RotateCw,
+  Compass,
+  Check,
+  Unlock,
+  Lock
 } from 'lucide-react';
 
 const PAGE_SIZE = 10;
@@ -46,6 +51,7 @@ export const FeedingPage: React.FC = () => {
     fetchScaleWeightDirect,
     openGateDirect,
     closeGateDirect,
+    setGateAngleDirect,
     setPetEatingDirect,
     showToast
   } = useAppContext();
@@ -80,6 +86,49 @@ export const FeedingPage: React.FC = () => {
   // Custom Manual Dispense State
   const [customPortion, setCustomPortion] = useState(75);
   const [customPetId, setCustomPetId] = useState(pets[0]?.id || 'PET-001');
+
+  // Persistent configured gate open angle for selected feeder node
+  const nodeGateAngle = selectedDevice?.gateOpenDeg || (typeof window !== 'undefined'
+    ? (Number(localStorage.getItem(`hn_gate_angle_${selectedDevice?.id}`) || localStorage.getItem('hn_gate_angle')) || 90)
+    : 90);
+
+  // Feeder Servo Angle Customization State
+  const [customAngle, setCustomAngle] = useState<number>(() => {
+    if (selectedDevice?.gateOpenDeg) return selectedDevice.gateOpenDeg;
+    if (typeof window !== 'undefined') {
+      const saved = Number(localStorage.getItem(`hn_gate_angle_${selectedDevice?.id}`) || localStorage.getItem('hn_gate_angle'));
+      if (!isNaN(saved) && saved >= 10 && saved <= 180) return saved;
+    }
+    return 90;
+  });
+  const [isSavingAngle, setIsSavingAngle] = useState(false);
+  const [isTestingAngle, setIsTestingAngle] = useState(false);
+
+  useEffect(() => {
+    if (nodeGateAngle && nodeGateAngle !== customAngle && !isSavingAngle) {
+      setCustomAngle(nodeGateAngle);
+    }
+  }, [nodeGateAngle, selectedDevice?.id]);
+
+  const handleSaveAngle = async () => {
+    if (!selectedDevice) return;
+    setIsSavingAngle(true);
+    try {
+      await setGateAngleDirect(selectedDevice.id, customAngle, false);
+    } finally {
+      setIsSavingAngle(false);
+    }
+  };
+
+  const handleTestAngle = async () => {
+    if (!selectedDevice) return;
+    setIsTestingAngle(true);
+    try {
+      await setGateAngleDirect(selectedDevice.id, customAngle, true);
+    } finally {
+      setTimeout(() => setIsTestingAngle(false), 2200);
+    }
+  };
 
   // Add Schedule Form State
   const [formData, setFormData] = useState({
@@ -402,7 +451,7 @@ export const FeedingPage: React.FC = () => {
                 <span className="text-xs font-bold text-slate-700">Dispense Gate</span>
                 {selectedDevice?.foodGateOpen ? (
                   <span className="text-xs font-extrabold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-                    90° OPEN
+                    {nodeGateAngle}° OPEN
                   </span>
                 ) : (
                   <span className="text-xs font-extrabold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
@@ -466,7 +515,7 @@ export const FeedingPage: React.FC = () => {
                         await closeGateDirect(selectedDevice.id);
                         showToast('info', 'Gate Closed', 'Dispenser gate manually closed.');
                       } else {
-                        await openGateDirect(selectedDevice.id);
+                        await openGateDirect(selectedDevice.id, undefined, true);
                         showToast('info', 'Gate Opened', 'Dispenser gate opened and holding for pet.');
                       }
                     }}
@@ -523,6 +572,244 @@ export const FeedingPage: React.FC = () => {
                 <Scale className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Execute Zero-Point Tare Now</span>
               </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ================= SERVO MOTOR ROTATION / APERTURE CUSTOMIZER ================= */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs relative overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                <RotateCw className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  Feeder Servo Gate Aperture & Rotation Control
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    GPIO 25 PWM
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Customize the opening rotation angle of the feeder servo gate from 10° to 180°. Saved directly to ESP32 non-volatile memory.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500">Node Configured Opening:</span>
+              <span className="text-xs font-mono font-black px-2.5 py-1 rounded-lg bg-slate-900 text-amber-400 border border-slate-800 shadow-2xs">
+                {nodeGateAngle}°
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-4 items-center">
+            {/* Left Column: Visual Servo Dial & Arc Gauge */}
+            <div className="lg:col-span-4 flex flex-col items-center justify-center p-4 rounded-xl bg-gradient-to-b from-slate-950 to-slate-900 text-white border border-slate-800 shadow-inner">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1">
+                <Compass className="w-3.5 h-3.5 text-amber-400" />
+                Physical Servo Rotation Arc
+              </span>
+
+              {/* Dynamic SVG Rotary Gauge */}
+              <div className="relative w-36 h-36 flex items-center justify-center my-1">
+                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                  {/* Background Track 0 to 180 deg */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="40"
+                    stroke="#334155"
+                    strokeWidth="8"
+                    fill="transparent"
+                    strokeDasharray="251.2"
+                    strokeDashoffset="125.6"
+                    strokeLinecap="round"
+                  />
+                  {/* Active Angle Arc */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="40"
+                    stroke="#f59e0b"
+                    strokeWidth="8"
+                    fill="transparent"
+                    strokeDasharray="251.2"
+                    strokeDashoffset={`${251.2 - (customAngle / 180) * 125.6}`}
+                    strokeLinecap="round"
+                    className="transition-all duration-300"
+                  />
+                </svg>
+
+                {/* Rotating Needle indicator */}
+                <div
+                  className="absolute w-1 h-14 bg-gradient-to-t from-amber-500 to-amber-300 origin-bottom rounded-full transition-transform duration-300 shadow-md"
+                  style={{
+                    transform: `rotate(${customAngle - 90}deg) translateY(-28px)`,
+                    boxShadow: '0 0 8px rgba(245, 158, 11, 0.6)'
+                  }}
+                />
+                <div className="absolute w-5 h-5 rounded-full bg-slate-100 border-2 border-slate-900 z-10 shadow-sm" />
+
+                {/* Digital Readout */}
+                <div className="absolute bottom-1 text-center">
+                  <span className="text-xl font-mono font-black text-amber-400">{customAngle}°</span>
+                  <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-tight">Open Sweep</span>
+                </div>
+              </div>
+
+              <div className="w-full flex justify-between items-center text-[10px] text-slate-400 font-mono px-2 pt-1 border-t border-slate-800">
+                <span>0° (Closed)</span>
+                <span className="text-amber-400 font-bold">{customAngle}° (Target)</span>
+                <span>180° (Max)</span>
+              </div>
+            </div>
+
+            {/* Right Column: Interactive Slider, Presets & Actions */}
+            <div className="lg:col-span-8 space-y-3.5">
+              {/* Slider Control */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-xs">
+                  <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-amber-600" />
+                    Customize Gate Opening Angle:
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min="10"
+                      max="180"
+                      step="5"
+                      value={customAngle}
+                      onChange={(e) => setCustomAngle(Math.max(10, Math.min(180, Number(e.target.value) || 10)))}
+                      className="w-16 px-2 py-0.5 rounded-lg border border-slate-300 font-mono font-black text-xs text-center text-slate-900 focus:outline-none focus:border-amber-500"
+                    />
+                    <span className="font-bold text-slate-500 text-xs">degrees</span>
+                  </div>
+                </div>
+
+                <input
+                  type="range"
+                  min="10"
+                  max="180"
+                  step="5"
+                  value={customAngle}
+                  onChange={(e) => setCustomAngle(Number(e.target.value))}
+                  className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                />
+
+                <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                  <span>10° (Minimal)</span>
+                  <span>45° (Quarter)</span>
+                  <span className="font-bold text-slate-700">90° (Standard)</span>
+                  <span>135° (Wide)</span>
+                  <span>180° (Full Swing)</span>
+                </div>
+              </div>
+
+              {/* Angle Preset Chips */}
+              <div>
+                <span className="text-[11px] font-bold text-slate-600 block mb-1.5">Quick Presets & Kibble Sizing:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { deg: 30, label: '30° Micro', desc: 'Cats / Mini Kibble' },
+                    { deg: 45, label: '45° Quarter', desc: 'Slow Metred Dispense' },
+                    { deg: 60, label: '60° Moderate', desc: 'Small Breed' },
+                    { deg: 90, label: '90° Standard', desc: 'Production Default' },
+                    { deg: 120, label: '120° Wide', desc: 'Large Breed Kibble' },
+                    { deg: 150, label: '150° Heavy Flow', desc: 'Rapid Delivery' },
+                    { deg: 180, label: '180° Maximum', desc: 'Full Chute Swing' },
+                  ].map((preset) => (
+                    <button
+                      key={preset.deg}
+                      type="button"
+                      onClick={() => setCustomAngle(preset.deg)}
+                      className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        customAngle === preset.deg
+                          ? 'bg-amber-500 text-white shadow-xs scale-102'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                      title={preset.desc}
+                    >
+                      <span>{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dynamic Flow Guidance Badge */}
+              <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-amber-900 text-xs flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span className="text-[11px] font-medium">
+                    {customAngle <= 35 && 'Restricted Aperture: Slow metered flow ideal for small bites, cats, and portion control.'}
+                    {customAngle > 35 && customAngle <= 70 && 'Controlled Opening: Smooth steady flow for medium kibble and moderate appetite.'}
+                    {customAngle > 70 && customAngle <= 110 && 'Standard Production Sweep (90°): Optimal balance of flow clearance and gate seal.'}
+                    {customAngle > 110 && customAngle <= 150 && 'Wide Aperture Opening: High clearance for large breed kibble, biscuits, and treats.'}
+                    {customAngle > 150 && 'Maximum 180° Swing: Complete chute opening for unobstructed high-volume gravity feeding.'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-md bg-amber-200/60 text-amber-900 shrink-0">
+                  {customAngle}° Aperture
+                </span>
+              </div>
+
+              {/* Action Buttons Row */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleSaveAngle}
+                  disabled={!isDeviceConnected || isSavingAngle}
+                  className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-xs"
+                  title="Flash this custom opening angle to ESP32 NVS memory"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isSavingAngle ? 'Saving to NVS...' : `Save ${customAngle}° to Feeder Node`}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleTestAngle}
+                  disabled={!isDeviceConnected || isTestingAngle}
+                  className="py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-amber-400 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-xs"
+                  title="Physically test servo rotation: sweeps to this angle, holds 1.5s, then returns to 0°"
+                >
+                  <RotateCw className={`w-3.5 h-3.5 ${isTestingAngle ? 'animate-spin' : ''}`} />
+                  <span>{isTestingAngle ? 'Testing Sweep...' : `Test Rotate to ${customAngle}°`}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!selectedDevice) return;
+                    if (selectedDevice.foodGateOpen) {
+                      await closeGateDirect(selectedDevice.id);
+                    } else {
+                      await openGateDirect(selectedDevice.id, customAngle, true);
+                    }
+                  }}
+                  disabled={!isDeviceConnected}
+                  className={`py-2 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+                    selectedDevice?.foodGateOpen
+                      ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                  }`}
+                  title="Open or close gate at this configured angle right now"
+                >
+                  {selectedDevice?.foodGateOpen ? (
+                    <>
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Close Gate</span>
+                    </>
+                  ) : (
+                    <>
+                      <Unlock className="w-3.5 h-3.5" />
+                      <span>Open at {customAngle}°</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -612,7 +899,7 @@ export const FeedingPage: React.FC = () => {
                                 ? 'bg-rose-600 hover:bg-rose-700 text-white cursor-pointer active:scale-95 shadow-xs'
                                 : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                             }`}
-                            title="Trigger 90° Servo Gate Cycle on ESP32 now"
+                            title={`Trigger ${nodeGateAngle}° Servo Gate Cycle on ESP32 now`}
                           >
                             <Play className="w-3 h-3 fill-white" />
                             Feed Now
@@ -874,7 +1161,7 @@ export const FeedingPage: React.FC = () => {
 
           <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/60 text-amber-800 text-[11px] flex items-center gap-2">
             <Sliders className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>Dispenser node <strong>{selectedDevice?.id || 'HN-NODE-F778'}</strong> will execute a precision 90° gate cycle.</span>
+            <span>Dispenser node <strong>{selectedDevice?.id || 'HN-NODE-F778'}</strong> will execute a precision {nodeGateAngle}° gate cycle.</span>
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">

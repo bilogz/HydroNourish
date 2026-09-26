@@ -118,6 +118,9 @@ CREATE TABLE IF NOT EXISTS public.devices (
     last_transmission TEXT DEFAULT 'Just now',
     firmware_version TEXT DEFAULT 'v2.4.1-ESP32',
     mac_address TEXT NOT NULL,
+    -- Cloud Wi-Fi Provisioning Queue (written by website, read & cleared by ESP32 every 10s)
+    pending_wifi_ssid TEXT DEFAULT '',
+    pending_wifi_pass TEXT DEFAULT '',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -246,6 +249,10 @@ ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS last_login TIMESTAMP WITH
 ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS password TEXT;
 ALTER TABLE public.pet_owners ADD COLUMN IF NOT EXISTS address TEXT;
+
+-- Cloud Wi-Fi Provisioning Queue columns (added in v2.5 — required for remote WiFi pairing from website)
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS pending_wifi_ssid TEXT DEFAULT '';
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS pending_wifi_pass TEXT DEFAULT '';
 
 -- ====================================================================
 -- SEED INITIAL DATA

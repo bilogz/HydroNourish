@@ -474,18 +474,21 @@ function getHeartbeatStatus(
   const nowMs = Date.now();
   const ageSec = Math.max(0, Math.round((nowMs - latestParsed) / 1000));
 
-  // The ESP32 pushes telemetry every 3.5s.
-  // Fresh heartbeat within 12s -> Online
-  if (ageSec <= 12) {
+  // ESP32 pushes telemetry every 20 seconds.
+  // Grace window accounts for: WiFi reconnect (~25s), cloud provision switching (~45s), hotspot delay,
+  // and up to 4 password retry attempts × 12s each = ~48s + fallback loops.
+  //
+  // Online:     last packet ≤ 45s ago  (allows 2 missed 20s cycles + network jitter)
+  // Connecting: 46s – 300s (5 min)    (WiFi switching, cloud provision reconnect in progress)
+  // Offline:    > 300s (5 minutes)    (device truly powered off or unreachable)
+  if (ageSec <= 45) {
     return { status: 'Online', ageSec };
   }
 
-  // Signal lost / transitioning (13s - 25s) -> Connecting
-  if (ageSec <= 25) {
+  if (ageSec <= 300) {
     return { status: 'Connecting' as Device['status'], ageSec };
   }
 
-  // Older than 25s without packet -> Offline (Unplugged or powered down)
   return { status: 'Offline', ageSec };
 }
 
@@ -519,6 +522,7 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
       let parsedCamIp = item.camera_ip || '';
       let parsedScaleReady: boolean | undefined = item.scale_ready !== undefined && item.scale_ready !== null ? Boolean(item.scale_ready) : undefined;
       let parsedLastIntakeFoodGrams: number | undefined = item.last_intake_food_grams !== undefined && item.last_intake_food_grams !== null ? Number(item.last_intake_food_grams) : undefined;
+      let parsedGateOpenDeg: number | undefined = undefined;
 
       if (rawFw && rawFw.includes('|')) {
         const parts = rawFw.split('|');
@@ -542,6 +546,10 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
           if (p.startsWith('CAM:')) {
             parsedCamIp = p.replace('CAM:', '').trim();
           }
+          if (p.startsWith('GATE:')) {
+            const val = Number(p.replace('GATE:', '').trim());
+            if (!isNaN(val) && val >= 10 && val <= 180) parsedGateOpenDeg = val;
+          }
         }
       }
 
@@ -550,6 +558,32 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
         if (match && match[1]) {
           parsedCamIp = match[1];
         }
+      }
+
+      if (parsedGateOpenDeg === undefined) {
+        if (item.gate_open_deg !== undefined && item.gate_open_deg !== null) {
+          const g = Number(item.gate_open_deg);
+          if (!isNaN(g) && g >= 10 && g <= 180) parsedGateOpenDeg = g;
+        } else if (item.gateOpenDeg !== undefined && item.gateOpenDeg !== null) {
+          const g = Number(item.gateOpenDeg);
+          if (!isNaN(g) && g >= 10 && g <= 180) parsedGateOpenDeg = g;
+        }
+      }
+
+      if (parsedGateOpenDeg === undefined && typeof window !== 'undefined') {
+        const saved = (item.id ? localStorage.getItem(`hn_gate_angle_${item.id}`) : null) || localStorage.getItem('hn_gate_angle');
+        if (saved) {
+          const val = Number(saved);
+          if (!isNaN(val) && val >= 10 && val <= 180) parsedGateOpenDeg = val;
+        }
+      }
+
+      const finalGateDeg = parsedGateOpenDeg ?? 90;
+      if (typeof window !== 'undefined' && item.id) {
+        try {
+          localStorage.setItem(`hn_gate_angle_${item.id}`, String(finalGateDeg));
+          localStorage.setItem('hn_gate_angle', String(finalGateDeg));
+        } catch {}
       }
 
       const isPumpDeactivated = Boolean(
@@ -570,6 +604,12 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
       } else {
         finalFw = finalFw.replace('AUTO:ON', 'AUTO:OFF');
         if (!finalFw.includes('AUTO:OFF')) finalFw += '|AUTO:OFF';
+      }
+
+      if (finalFw.includes('GATE:')) {
+        finalFw = finalFw.replace(/GATE:\d+/, `GATE:${finalGateDeg}`);
+      } else {
+        finalFw += `|GATE:${finalGateDeg}`;
       }
 
       return {
@@ -596,6 +636,10 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
         isPumping,
         autoRefillEnabled,
         isPumpDeactivated,
+        foodGateOpen: Boolean(rawFw.includes('GATE_STATE:OPEN') || item.food_gate_open),
+        gateOpenDeg: finalGateDeg,
+        gateClosedDeg: 0,
+        currentServoAngle: Number(item.current_servo_angle ?? item.currentServoAngle ?? (Boolean(rawFw.includes('GATE_STATE:OPEN') || item.food_gate_open) ? finalGateDeg : 0)),
       };
     });
   } catch {
@@ -646,9 +690,44 @@ export async function updateDeviceInSupabase(id: string, updated: Partial<Device
         payload.firmware_version = `${payload.firmware_version}|SSID:${updated.wifiSsid}`;
       }
     }
+    if (updated.gateOpenDeg !== undefined) {
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(`hn_gate_angle_${id}`, String(updated.gateOpenDeg));
+          localStorage.setItem('hn_gate_angle', String(updated.gateOpenDeg));
+        } catch {}
+      }
+      let fw = payload.firmware_version || updated.firmwareVersion || '';
+      if (!fw) {
+        fw = 'v2.5.0-ESP32';
+      }
+      if (fw.includes('GATE:')) {
+        fw = fw.replace(/GATE:\d+/, `GATE:${updated.gateOpenDeg}`);
+      } else {
+        fw = `${fw}|GATE:${updated.gateOpenDeg}`;
+      }
+      payload.firmware_version = fw;
+    }
+    if (updated.foodGateOpen !== undefined) {
+      payload.food_gate_open = updated.foodGateOpen;
+      let fw = payload.firmware_version || updated.firmwareVersion || '';
+      if (!fw) fw = 'v2.5.0-ESP32';
+      const gateStateTag = updated.foodGateOpen ? 'GATE_STATE:OPEN' : 'GATE_STATE:CLOSED';
+      if (fw.includes('GATE_STATE:')) {
+        fw = fw.replace(/GATE_STATE:\w+/, gateStateTag);
+      } else {
+        fw = `${fw}|${gateStateTag}`;
+      }
+      payload.firmware_version = fw;
+    }
     if (updated.lastTransmission !== undefined) payload.last_transmission = updated.lastTransmission;
 
-    const { error } = await (supabase.from('devices') as any).update(payload).eq('id', id);
+    let { error } = await (supabase.from('devices') as any).update(payload).eq('id', id);
+    if (error && payload.food_gate_open !== undefined) {
+      delete payload.food_gate_open;
+      const fallback = await (supabase.from('devices') as any).update(payload).eq('id', id);
+      error = fallback.error;
+    }
     return !error;
   } catch {
     return false;
@@ -687,8 +766,22 @@ export async function sendWifiProvisionToSupabase(
     const { error } = await (supabase.from('devices') as any)
       .update({ pending_wifi_ssid: ssid.trim(), pending_wifi_pass: password.trim() })
       .eq('id', deviceId);
-    return !error;
-  } catch {
+    if (error) {
+      if (import.meta.env.DEV) {
+        console.warn('[HydroNourish] sendWifiProvision update error:', error);
+        console.warn('[HydroNourish] Hint: Run the latest supabase_schema.sql to add pending_wifi_ssid & pending_wifi_pass columns to the devices table.');
+      }
+      // Fallback: try upsert in case the row doesn't exist yet
+      const { error: upsertErr } = await (supabase.from('devices') as any)
+        .upsert({ id: deviceId, pending_wifi_ssid: ssid.trim(), pending_wifi_pass: password.trim(), mac_address: '1C:C3:AB:F9:F7:78' });
+      if (upsertErr) {
+        if (import.meta.env.DEV) console.warn('[HydroNourish] sendWifiProvision upsert fallback error:', upsertErr);
+        return false;
+      }
+    }
+    return true;
+  } catch (e) {
+    if (import.meta.env.DEV) console.warn('[HydroNourish] sendWifiProvision exception:', e);
     return false;
   }
 }

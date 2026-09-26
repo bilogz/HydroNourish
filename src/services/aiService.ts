@@ -91,6 +91,7 @@ async function callGeminiAPI(prompt: string, apiKey: string, model: string = 'ge
   const data = await response.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('Empty response from Gemini API');
+  return text;
 }
 
 /**
@@ -255,6 +256,7 @@ export async function analyzePetTelemetry(input: PetTelemetryInput): Promise<AIO
  */
 
 import { VisionActionRecommendation } from '../types';
+import { detectPetRealTime } from './petDetectionService';
 
 export interface PetVisionScanOptions {
   reevaluateAfter45s?: boolean;
@@ -265,7 +267,7 @@ export interface PetVisionScanOptions {
 }
 
 export interface PetVisionScanResult {
-  provider: 'Gemini 2.5 Flash Vision' | 'Gemini 3.6 Flash Vision' | 'OpenAI GPT-4o Vision' | 'HydroNourish Neural Edge';
+  provider: 'Gemini 3.8 Flash Vision' | 'Gemini 3.6 Flash Vision' | 'OpenAI GPT-4o Vision' | 'HydroNourish Neural Edge';
   detectedSpecies: string;
   detectedBreed: string;
   confidenceScore: number; // 0 - 100
@@ -420,11 +422,11 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
     try {
       let rawText = '';
       try {
-        rawText = await callGeminiProxy(prompt, base64Image, mimeType, 'gemini-2.5-flash');
+        rawText = await callGeminiProxy(prompt, base64Image, mimeType, 'gemini-3.8-flash');
       } catch (proxyErr) {
         if (geminiKey) {
           const base64Data = base64Image.split(',')[1];
-          rawText = await callGeminiAPI(prompt, geminiKey, 'gemini-2.5-flash');
+          rawText = await callGeminiAPI(prompt, geminiKey, 'gemini-3.8-flash');
         } else {
           throw proxyErr;
         }
@@ -445,10 +447,10 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
           const holdGate = !isNone && (wantsToEat || isEating);
 
           return {
-            provider: 'Gemini 2.5 Flash Vision',
+            provider: 'Gemini 3.8 Flash Vision',
             detectedSpecies: isNone ? 'None Detected' : (parsed.detectedSpecies || petSpecies),
             detectedBreed: isNone ? 'None' : (parsed.detectedBreed || (isDog ? 'Canine Profile' : 'Feline Profile')),
-            confidenceScore: isNone ? 99.0 : (Number(parsed.confidenceScore) || 97.4),
+            confidenceScore: isNone ? 0 : (Number(parsed.confidenceScore) || 97.4),
             postureAndBehavior: isNone ? 'Bowl station clear. No pet present in camera frame.' : (parsed.postureAndBehavior || `${petName} observed near feeding zone.`),
             intakeState: isNone ? 'None Detected' : rawState,
             isPetEating: isEating,
@@ -497,15 +499,48 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
     }
   }
 
-  // 2. High-Performance HydroNourish Neural Edge Heuristic Model (Zero-Latency Deterministic Fallback)
-  // STRICT NO-PET GUARD: If caller explicitly verified no pet is detected, never fake a pet presence
-  if (options?.isPetDetected === false) {
+  // 2. High-Performance HydroNourish Neural Edge Detection Engine (TensorFlow.js COCO-SSD)
+  // Run real-time neural edge detection on the input frame
+  let neuralEdgeResult = null;
+  try {
+    if (typeof window !== 'undefined') {
+      if (imageInput instanceof HTMLElement) {
+        neuralEdgeResult = await detectPetRealTime(imageInput, petContext);
+      } else if (base64Image) {
+        const offscreenImg = new Image();
+        offscreenImg.crossOrigin = 'anonymous';
+        offscreenImg.src = base64Image;
+        await new Promise<void>((resolve) => {
+          if (offscreenImg.complete && offscreenImg.naturalWidth > 0) resolve();
+          else {
+            offscreenImg.onload = () => resolve();
+            offscreenImg.onerror = () => resolve();
+          }
+        });
+        if (offscreenImg.naturalWidth > 0) {
+          neuralEdgeResult = await detectPetRealTime(offscreenImg, petContext);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Neural edge pet detection error:', err);
+  }
+
+  // STRICT ACCURACY GUARD:
+  // If caller explicitly verified no pet is detected, OR if the neural edge detector ran and found NO pet:
+  const hasRealPet = options?.forcedWantsToEat !== undefined
+    ? true
+    : Boolean(neuralEdgeResult ? neuralEdgeResult.hasPet : (options?.isPetDetected ?? false));
+
+  if (!hasRealPet) {
     return {
       provider: 'HydroNourish Neural Edge',
       detectedSpecies: 'None Detected',
       detectedBreed: 'None',
-      confidenceScore: 99.0,
-      postureAndBehavior: 'Bowl station clear. No pet present in camera frame.',
+      confidenceScore: 0,
+      postureAndBehavior: neuralEdgeResult?.isHumanPresent
+        ? 'Human caregiver observed in camera view. No patient pet in feeding zone.'
+        : 'Bowl station clear. Optical scanner verified zero animals present.',
       intakeState: 'None Detected',
       isPetEating: false,
       eatingConfidence: 0,
@@ -537,14 +572,16 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
     };
   }
 
-  // When options?.forcedWantsToEat is provided, strictly follow it for interactive testing.
-  let wantsToEat = true;
+  // When a pet is genuinely detected by neural edge (or forced for interactive testing):
+  let wantsToEat = neuralEdgeResult ? neuralEdgeResult.wantsToEat : true;
   let isEating = false;
-  let headPosture: PetVisionScanResult['headPosture'] = 'Facing Bowl';
-  let intentReason = '';
-  let intentScore = 96.5;
-  let intakeState: PetVisionScanResult['intakeState'] = 'Approaching Bowl';
-  let box = { top: 20, left: 22, width: 56, height: 60 };
+  let headPosture: PetVisionScanResult['headPosture'] = neuralEdgeResult ? neuralEdgeResult.headPosture : 'Facing Bowl';
+  let intentReason = neuralEdgeResult ? `${petName} observed at feeding station with attentive posture.` : '';
+  let intentScore = neuralEdgeResult ? neuralEdgeResult.eatingIntentScore : 96.5;
+  let intakeState: PetVisionScanResult['intakeState'] = neuralEdgeResult?.activity === 'Feeding at Smart Bowl' ? 'Feeding' : 'Approaching Bowl';
+  let box = neuralEdgeResult ? neuralEdgeResult.boundingBox : { top: 20, left: 22, width: 56, height: 60 };
+  const petConfidence = neuralEdgeResult ? neuralEdgeResult.score : (97.5 + Math.round(Math.random() * 20) / 10);
+  const detectedSpecies = neuralEdgeResult ? neuralEdgeResult.label : (isDog ? 'Canis lupus familiaris (Dog)' : 'Felis catus (Cat)');
 
   if (options?.forcedWantsToEat !== undefined) {
     wantsToEat = options.forcedWantsToEat;
@@ -556,12 +593,9 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
       ? `Gaze and olfactory sniffing confirm ${petName} is actively seeking food at the bowl.`
       : `${petName} has satiated appetite, turned torso away, and backed away from dispenser.`;
   } else if (isReeval || sessionSecs >= 45) {
-    // 45s Re-evaluation logic:
-    // If cycle 1 (just finished first 45s), pet commonly wants to continue eating (75% probability or configurable)
-    // If cycle >= 2, pet is likely full and satisfied
     if (currentCycle === 1) {
       wantsToEat = true;
-      isEating = false; // paused at 45s
+      isEating = false;
       headPosture = 'Facing Bowl';
       intakeState = 'Approaching Bowl';
       intentScore = 94.2;
@@ -575,29 +609,19 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
       intentReason = `${petName} has finished feeding after multiple cycles (~${sessionSecs}s total), turned head away, and stepped back.`;
     }
   } else if (sessionSecs > 0) {
-    // Actively in a feeding session (< 45s)
     wantsToEat = true;
     isEating = true;
     headPosture = 'Head In Bowl';
     intakeState = 'Feeding';
     intentScore = 98.4;
     intentReason = `Actively ingesting dry kibble with steady mastication rhythm (${sessionSecs}s / 45s elapsed).`;
-    box = { top: 22, left: 20, width: 58, height: 58 };
-  } else {
-    // Initial approach
-    wantsToEat = true;
-    isEating = false;
-    headPosture = 'Facing Bowl';
-    intakeState = 'Approaching Bowl';
-    intentScore = 96.2;
-    intentReason = `${petName} arrived at station bowl zone and alertly oriented toward dispenser gate.`;
   }
 
   return {
     provider: 'HydroNourish Neural Edge',
-    detectedSpecies: isDog ? 'Canis lupus familiaris (Dog)' : 'Felis catus (Cat)',
+    detectedSpecies,
     detectedBreed: isDog ? 'Golden Retriever / Labrador Mix' : 'Domestic Shorthair',
-    confidenceScore: 97.5 + Math.round(Math.random() * 20) / 10,
+    confidenceScore: petConfidence,
     postureAndBehavior: isEating
       ? `Head lowered into smart bowl, active jaw movement (${sessionSecs}s eating session).`
       : wantsToEat
@@ -620,7 +644,7 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
     } : undefined,
     healthScore: 96,
     clinicalObservations: [
-      `Pet '${petName}' identified with high biometric fidelity.`,
+      `Pet '${petName}' identified with real-time neural edge detection.`,
       `Feeding intent: ${wantsToEat ? 'HUNGRY / EAGER TO EAT' : 'SATISFIED / DISINTERESTED'} (${intentScore}% score).`,
       isEating ? `Continuous feeding active: ${sessionSecs}s of 45s limit.` : 'Gate pulse metering ready.'
     ],

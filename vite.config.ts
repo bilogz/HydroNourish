@@ -145,7 +145,7 @@ function geminiDevPlugin(): Plugin {
             });
             req.on('end', async () => {
               try {
-                let { prompt, base64Image, mimeType = 'image/jpeg', model = 'gemini-2.5-flash' } = JSON.parse(bodyStr || '{}');
+                let { prompt, base64Image, mimeType = 'image/jpeg', model = 'gemini-3.8-flash' } = JSON.parse(bodyStr || '{}');
                 const parts: any[] = [];
                 if (prompt) parts.push({ text: prompt });
                 if (base64Image) {
@@ -165,9 +165,9 @@ function geminiDevPlugin(): Plugin {
                   body: JSON.stringify({ contents: [{ parts }] }),
                 });
 
-                // Fallback to gemini-3.6-flash or gemini-2.5-flash if requested model failed
-                if (!geminiRes.ok && model !== 'gemini-3.6-flash') {
-                  model = 'gemini-3.6-flash';
+                // Fallback to gemini-3.8-flash or gemini-3.6-flash if requested model failed
+                if (!geminiRes.ok && model !== 'gemini-3.8-flash') {
+                  model = 'gemini-3.8-flash';
                   geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
                   geminiRes = await fetch(geminiUrl, {
                     method: 'POST',

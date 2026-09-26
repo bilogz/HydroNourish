@@ -308,12 +308,12 @@ export const OverviewPage: React.FC = () => {
               </button>
 
               <button
-                onClick={() => dispenseWaterDirect(hardware.id, 250)}
+                onClick={() => dispenseWaterDirect(hardware.id, 10000)}
                 className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
-                title="Pump 250ml water (~2.5s cycle)"
+                title="Refill drinking water (10s pump active)"
               >
                 <Droplets className="w-3.5 h-3.5" />
-                Pump Water (250ml)
+                Refill Drinking Water
               </button>
 
               <button
@@ -332,10 +332,10 @@ export const OverviewPage: React.FC = () => {
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 hover:bg-emerald-500/30'
                     : 'bg-slate-700/50 text-slate-300 border-slate-600 hover:bg-slate-700'
                 }`}
-                title="Toggle automated water refilling when water drops <= 10%"
+                title="Toggle automated water refilling (refills bowl up to 150ml)"
               >
                 <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                Auto-Refill: {isAutoRefillOn ? 'ENABLED (<=10%)' : 'DISABLED'}
+                Auto-Refill: {isAutoRefillOn ? 'ENABLED (150ml)' : 'DISABLED'}
               </button>
 
               <button

@@ -108,8 +108,9 @@ interface AppContextType {
   toggleSchedule: (id: string) => Promise<void>;
   dispenseNow: (scheduleId: string) => void;
   dispenseDirect: (deviceId: string, grams?: number, foodType?: string) => void;
-  openGateDirect: (deviceId: string) => Promise<void>;
+  openGateDirect: (deviceId: string, angle?: number, isManual?: boolean) => Promise<void>;
   closeGateDirect: (deviceId: string) => Promise<void>;
+  setGateAngleDirect: (deviceId: string, angle: number, test?: boolean) => Promise<void>;
   setPetEatingDirect: (deviceId: string, isEating: boolean) => Promise<void>;
   setPetDrinkingDirect: (deviceId: string, isDrinking: boolean) => Promise<void>;
   tareScaleDirect: (deviceId: string) => Promise<void>;
@@ -205,6 +206,8 @@ export const mergeChatThreads = (
 const pendingUserOverrides = new Map<string, {
   pumpDeactivated?: boolean;
   autoRefillEnabled?: boolean;
+  foodGateOpen?: boolean;
+  isManualGateHold?: boolean;
   firmwareVersion?: string;
   time: number;
 }>();
@@ -223,10 +226,11 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
 
       // 1. Check local storage preference for auto-refill
       const savedAuto = typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_refill_${d.id}`) : null;
-      // 2. Check pending user overrides (within 15 seconds)
+      // 2. Check pending user overrides (within 30 seconds for manual gate, 15 seconds for others)
       const override = pendingUserOverrides.get(d.id);
       const hasRecentAutoOverride = override && override.autoRefillEnabled !== undefined && (now - override.time < 15000);
       const hasRecentPumpOverride = override && override.pumpDeactivated !== undefined && (now - override.time < 15000);
+      const hasRecentGateOverride = override && override.foodGateOpen !== undefined && (now - override.time < 30000);
 
       if (hasRecentAutoOverride) {
         merged.autoRefillEnabled = override.autoRefillEnabled;
@@ -238,9 +242,33 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
         merged.isPumpDeactivated = override.pumpDeactivated;
       }
 
-      // Ensure firmwareVersion tag aligns with autoRefillEnabled
+      if (hasRecentGateOverride) {
+        merged.foodGateOpen = override.foodGateOpen;
+        if (override.isManualGateHold !== undefined) {
+          merged.isManualGateHold = override.isManualGateHold;
+        }
+      }
+
+      // Preserve Gate Open Angle (NVS configuration)
+      const savedGate = typeof window !== 'undefined'
+        ? (localStorage.getItem(`hn_gate_angle_${d.id}`) || localStorage.getItem('hn_gate_angle'))
+        : null;
+      const parsedSavedGate = savedGate ? Number(savedGate) : null;
+      const validSavedGate = parsedSavedGate && !isNaN(parsedSavedGate) && parsedSavedGate >= 10 && parsedSavedGate <= 180 ? parsedSavedGate : null;
+
+      if (d.gateOpenDeg !== undefined && d.gateOpenDeg !== null && d.gateOpenDeg !== 90) {
+        merged.gateOpenDeg = d.gateOpenDeg;
+      } else if (validSavedGate !== null) {
+        merged.gateOpenDeg = validSavedGate;
+      } else if (prev.gateOpenDeg !== undefined && prev.gateOpenDeg !== null) {
+        merged.gateOpenDeg = prev.gateOpenDeg;
+      } else {
+        merged.gateOpenDeg = d.gateOpenDeg ?? 90;
+      }
+
+      // Ensure firmwareVersion tag aligns with autoRefillEnabled & gateOpenDeg
+      let fw = merged.firmwareVersion || prev.firmwareVersion || 'v2.5.0-ESP32';
       if (merged.autoRefillEnabled !== undefined) {
-        let fw = merged.firmwareVersion || prev.firmwareVersion || 'v2.5.0-ESP32';
         if (merged.autoRefillEnabled) {
           fw = fw.replace('AUTO:OFF', 'AUTO:ON');
           if (!fw.includes('AUTO:ON')) fw += '|AUTO:ON';
@@ -248,11 +276,25 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
           fw = fw.replace('AUTO:ON', 'AUTO:OFF');
           if (!fw.includes('AUTO:OFF')) fw += '|AUTO:OFF';
         }
-        merged.firmwareVersion = fw;
       }
+      if (merged.gateOpenDeg) {
+        if (fw.includes('GATE:')) {
+          fw = fw.replace(/GATE:\d+/, `GATE:${merged.gateOpenDeg}`);
+        } else {
+          fw += `|GATE:${merged.gateOpenDeg}`;
+        }
+      }
+      merged.firmwareVersion = fw;
 
       map.set(d.id, merged);
     } else {
+      const savedGate = typeof window !== 'undefined'
+        ? (localStorage.getItem(`hn_gate_angle_${d.id}`) || localStorage.getItem('hn_gate_angle'))
+        : null;
+      const parsedSavedGate = savedGate ? Number(savedGate) : null;
+      if (d.gateOpenDeg === undefined && parsedSavedGate && !isNaN(parsedSavedGate) && parsedSavedGate >= 10 && parsedSavedGate <= 180) {
+        d.gateOpenDeg = parsedSavedGate;
+      }
       map.set(d.id, d);
     }
   });
@@ -451,6 +493,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 waterQualityPpm: typeof telemetry.tds === 'number' ? telemetry.tds : d.waterQualityPpm,
                 isPumping: telemetry.isPumping !== undefined ? telemetry.isPumping : d.isPumping,
                 autoRefillEnabled: telemetry.autoRefill !== undefined ? telemetry.autoRefill : d.autoRefillEnabled,
+                gateOpenDeg: typeof telemetry.gateOpenDeg === 'number' ? telemetry.gateOpenDeg : d.gateOpenDeg,
+                foodGateOpen: telemetry.foodGateOpen !== undefined ? telemetry.foodGateOpen : d.foodGateOpen,
+                currentServoAngle: typeof telemetry.currentServoAngle === 'number' ? telemetry.currentServoAngle : d.currentServoAngle,
               };
             }
             return d;
@@ -910,7 +955,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       usbAction?: () => Promise<any> | void;
     }
   ) => {
-    // 1. Instant Direct USB WebSerial Execution (0ms)
+    // 1. Instant Direct USB WebSerial Execution (0ms latency)
     if (options?.usbAction && usbSerialService.getIsConnected()) {
       try {
         const res = options.usbAction();
@@ -920,23 +965,37 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       } catch {}
     }
 
-    // 2. Resolve Candidate LAN IPs (Exclude dead .159, prioritize actual .157)
+    // 2. Resolve live IP from device record (ESP32 reports its current IP on every telemetry push)
     const dev = (devices ?? []).find((d) => d.id === deviceId);
+
+    // Parse IP from firmware_version string: "v2.5.0-ESP32|...|IP:172.20.10.2|..."
+    let liveIp: string | null = null;
+    const fwStr = dev?.firmwareVersion || '';
+    const ipMatch = fwStr.match(/\|IP:([0-9.]+)/);
+    if (ipMatch && ipMatch[1] && ipMatch[1] !== '0.0.0.0') {
+      liveIp = ipMatch[1];
+    }
+
+    // Also check ipAddress field directly
     const devIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+
+    // Build candidate list: live IP first, then stored ipAddress, then mDNS, then SoftAP
     const candidateIps = [
-      devIp && !devIp.includes('192.168.100.159') ? devIp : null,
-      '192.168.100.157', // Active ESP32 node IP (1C:C3:AB:F9:F7:78)
+      liveIp,
+      devIp && devIp !== '0.0.0.0' && devIp !== liveIp ? devIp : null,
+      'hydronourish-feeder.local',
       'hydronourish.local',
+      '192.168.4.1',     // SoftAP fallback (always online on ESP32)
     ].filter(Boolean) as string[];
 
     const uniqueIps = Array.from(new Set(candidateIps));
     const endpointPath = path.startsWith('/') ? path : `/${path}`;
 
-    // 3. Fast LAN fetch with strict 1200ms AbortController (prevents 5-second TCP SYN hangs)
+    // 3. Fast LAN fetch with 1500ms AbortController (prevents thread hangs if on cellular/different network)
     uniqueIps.forEach((ip) => {
       const url = `http://${ip}${endpointPath}`;
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 1200);
+      const timer = setTimeout(() => controller.abort(), 1500);
 
       fetch(url, {
         method: options?.method || 'POST',
@@ -949,14 +1008,14 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     });
   };
 
-  const dispenseDirect = async (deviceId: string, portionGrams: number = 75, foodType: string = '90° Gate Cycle (+90° Open / -90° Close)') => {
+  const dispenseDirect = async (deviceId: string, portionGrams: number = 75, foodType: string = 'Feed Kibble (90° Gate Cycle)') => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
     const targetDeviceId = deviceId || dev?.id || 'HN-NODE-F778';
 
     const newSch: FeedingSchedule = {
-      id: `SCH-DIR-${Date.now().toString().slice(-4)}`,
+      id: `SCH-FEED-${Date.now().toString().slice(-4)}`,
       petId,
       petName,
       foodType,
@@ -982,22 +1041,138 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     insertScheduleToSupabase(newSch).catch(() => {});
   };
 
-  const openGateDirect = async (deviceId: string) => {
+  const openGateDirect = async (deviceId: string, angle?: number, isManual: boolean = true) => {
+    let effectiveAngle = angle;
+    if (effectiveAngle === undefined || isNaN(effectiveAngle)) {
+      if (typeof window !== 'undefined') {
+        const saved = Number(localStorage.getItem(`hn_gate_angle_${deviceId}`) || localStorage.getItem('hn_gate_angle'));
+        if (!isNaN(saved) && saved >= 10 && saved <= 180) {
+          effectiveAngle = saved;
+        }
+      }
+    }
+    const finalAngle = effectiveAngle ?? 90;
+
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const petName = dev?.assignedPetName || 'Max';
+    const petId = dev?.assignedPetId || 'PET-001';
+
+    // Lock gate open state in anti-bounce override so background polling does not revert it
+    pendingUserOverrides.set(deviceId, {
+      ...pendingUserOverrides.get(deviceId),
+      foodGateOpen: true,
+      isManualGateHold: isManual,
+      time: Date.now(),
+    });
+
     setDevices((prev) =>
-      prev.map((d) => (d.id === deviceId ? { ...d, foodGateOpen: true } : d))
+      prev.map((d) => (d.id === deviceId ? { ...d, foodGateOpen: true, gateOpenDeg: finalAngle, isManualGateHold: isManual } : d))
     );
-    dispatchFastDeviceCommand(deviceId, '/api/gate/open', {
-      usbAction: () => usbSerialService.openGate(),
+
+    // Immediately sync to Supabase database & firmware_version string
+    updateDeviceInSupabase(deviceId, { foodGateOpen: true, gateOpenDeg: finalAngle }).catch(() => {});
+
+    // Insert pending schedule to Supabase so cloud-polled nodes receive command immediately
+    const openSch: FeedingSchedule = {
+      id: `SCH-OPEN-${Date.now().toString().slice(-4)}`,
+      petId,
+      petName,
+      foodType: 'Open Gate',
+      portionGrams: finalAngle,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(openSch).catch(() => {});
+
+    showToast('success', 'Food Gate Opened', `Food gate opened to ${finalAngle}° ${isManual ? '(Holding open)' : '(AI auto-opened)'}.`);
+
+    const query = typeof finalAngle === 'number'
+      ? `?angle=${finalAngle}${isManual ? '&manual=1' : ''}`
+      : (isManual ? '?manual=1' : '');
+    dispatchFastDeviceCommand(deviceId, `/api/gate/open${query}`, {
+      usbAction: () => usbSerialService.openGate(finalAngle),
     });
   };
 
   const closeGateDirect = async (deviceId: string) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const petName = dev?.assignedPetName || 'Max';
+    const petId = dev?.assignedPetId || 'PET-001';
+
+    // Lock gate closed state in anti-bounce override
+    pendingUserOverrides.set(deviceId, {
+      ...pendingUserOverrides.get(deviceId),
+      foodGateOpen: false,
+      isManualGateHold: false,
+      time: Date.now(),
+    });
+
     setDevices((prev) =>
-      prev.map((d) => (d.id === deviceId ? { ...d, foodGateOpen: false, petEatingActive: false } : d))
+      prev.map((d) => (d.id === deviceId ? { ...d, foodGateOpen: false, petEatingActive: false, isManualGateHold: false } : d))
     );
-    dispatchFastDeviceCommand(deviceId, '/api/gate/close', {
+
+    // Immediately sync to Supabase database
+    updateDeviceInSupabase(deviceId, { foodGateOpen: false }).catch(() => {});
+
+    // Insert pending schedule to Supabase so cloud-polled nodes receive command immediately
+    const closeSch: FeedingSchedule = {
+      id: `SCH-CLOSE-${Date.now().toString().slice(-4)}`,
+      petId,
+      petName,
+      foodType: 'Close Gate',
+      portionGrams: 0,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(closeSch).catch(() => {});
+
+    showToast('success', 'Food Gate Closed', 'Food gate closed and locked at 0°.');
+
+    dispatchFastDeviceCommand(deviceId, '/api/gate/close?manual=1', {
       usbAction: () => usbSerialService.closeGate(),
     });
+  };
+
+  const setGateAngleDirect = async (deviceId: string, angle: number, test: boolean = false) => {
+    const clamped = Math.max(10, Math.min(180, Math.round(angle)));
+    setDevices((prev) =>
+      prev.map((d) => (d.id === deviceId ? { ...d, gateOpenDeg: clamped } : d))
+    );
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`hn_gate_angle_${deviceId}`, String(clamped));
+        localStorage.setItem('hn_gate_angle', String(clamped));
+      } catch {}
+    }
+
+    // Immediately push to Supabase cloud table & firmware_version string
+    updateDeviceInSupabase(deviceId, { gateOpenDeg: clamped }).catch(() => {});
+
+    // Insert pending schedule for remote/cellular ESP32 units
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const gateSch: FeedingSchedule = {
+      id: `SCH-GATE-${Date.now().toString().slice(-4)}`,
+      petId: dev?.assignedPetId || 'PET-001',
+      petName: dev?.assignedPetName || 'Max',
+      foodType: 'Set Gate Angle',
+      portionGrams: clamped,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(gateSch).catch(() => {});
+
+    dispatchFastDeviceCommand(deviceId, `/api/gate/angle?angle=${clamped}&test=${test ? '1' : '0'}`, {
+      body: JSON.stringify({ angle: clamped, test }),
+      usbAction: () => usbSerialService.setServoAngle(clamped, test),
+    });
+    showToast(
+      'success',
+      test ? 'Servo Angle Tested' : 'Servo Angle Saved',
+      `Feeder servo opening angle configured to ${clamped}°${test ? ' (executing live sweep)' : ''}.`
+    );
   };
 
   const setPetEatingDirect = async (deviceId: string, isEating: boolean) => {
@@ -1018,6 +1193,19 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, waterLiters: 0.0, waterLevelPct: 0 } : d))
     );
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const tareWtrSch: FeedingSchedule = {
+      id: `SCH-TAREWTR-${Date.now().toString().slice(-4)}`,
+      petId: dev?.assignedPetId || 'PET-001',
+      petName: dev?.assignedPetName || 'Max',
+      foodType: 'Tare Water Scale',
+      portionGrams: 0,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(tareWtrSch).catch(() => {});
+
     dispatchFastDeviceCommand(deviceId, '/api/water/tare', {
       usbAction: () => usbSerialService.tareWaterScale(),
     });
@@ -1036,6 +1224,19 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, foodBowlWeightGrams: 0.0, scaleReady: true } : d))
     );
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const tareSch: FeedingSchedule = {
+      id: `SCH-TARE-${Date.now().toString().slice(-4)}`,
+      petId: dev?.assignedPetId || 'PET-001',
+      petName: dev?.assignedPetName || 'Max',
+      foodType: 'Tare Food Scale',
+      portionGrams: 0,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(tareSch).catch(() => {});
+
     dispatchFastDeviceCommand(deviceId, '/api/scale/tare', {
       usbAction: () => usbSerialService.tareScale(),
     });
@@ -1076,17 +1277,19 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     return null;
   };
 
-  const dispenseWaterDirect = async (deviceId: string, amountMl: number = 500) => {
+  const dispenseWaterDirect = async (deviceId: string, durationMs: number = 10000) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
+
+    const activeDuration = 10000; // Exact 10 seconds pump cycle
 
     const newSch: FeedingSchedule = {
       id: `SCH-WTR-${Date.now().toString().slice(-4)}`,
       petId,
       petName,
-      foodType: 'Fresh Filtered Water',
-      portionGrams: amountMl,
+      foodType: 'Fresh Drinking Water',
+      portionGrams: 500,
       scheduledTime: 'Instant Manual',
       dispenseStatus: 'Pending',
       deviceId: deviceId,
@@ -1095,8 +1298,8 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     setSchedules((prev) => [newSch, ...prev]);
 
     // ⚡ Ultra-Fast Parallel Dispatch (<10ms LAN / 0ms USB)
-    dispatchFastDeviceCommand(deviceId, `/api/dispense/water?amount=${amountMl}`, {
-      usbAction: () => usbSerialService.dispenseWater(amountMl <= 500 ? amountMl * 10 : amountMl),
+    dispatchFastDeviceCommand(deviceId, `/api/dispense/water?duration=${activeDuration}`, {
+      usbAction: () => usbSerialService.dispenseWater(activeDuration),
     });
 
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1104,13 +1307,13 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       id: `HL-${Date.now().toString().slice(-4)}`,
       petId,
       petName,
-      amountMl,
+      amountMl: 500,
       timestamp,
       reservoirLevelPct: Math.min(100, Math.max(10, (dev?.waterLevelPct || 80) + 15)),
     };
     setHydrationLogs((prev) => [newLog, ...prev]);
 
-    showToast('success', 'Water Dispense Triggered', `Triggered ${amountMl}ml water pump to ${deviceId}.`);
+    showToast('success', 'Refilling Drinking Water', `Refilling drinking water to ${deviceId} (10s pump active).`);
     insertScheduleToSupabase(newSch).catch(() => {});
     insertHydrationLogToSupabase(newLog).catch(() => {});
   };
@@ -1189,10 +1392,10 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   // ─── Dual-Pump Sanitation & Drainage Handlers (Clean Water & 19W 12V Drain) ─
-  const dispenseCleaningWaterDirect = async (deviceId: string, amountMl: number = 10000) => {
+  const dispenseCleaningWaterDirect = async (deviceId: string, amountMl: number = 8000) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
-    const durationMs = amountMl <= 500 ? (amountMl === 200 || amountMl === 250 ? 10000 : amountMl * 12) : amountMl;
+    const durationMs = amountMl <= 500 ? (amountMl === 200 || amountMl === 250 ? 8000 : amountMl * 12) : amountMl;
 
     // Ensure food gate is closed before spraying rinse water
     if (dev?.foodGateOpen) {
@@ -1207,6 +1410,19 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
+    // Queue cloud command for remote/cellular ESP32
+    const spraySch: FeedingSchedule = {
+      id: `SCH-SPRAY-${Date.now().toString().slice(-4)}`,
+      petId: dev?.assignedPetId || 'PET-001',
+      petName,
+      foodType: 'Spray Rinse',
+      portionGrams: durationMs,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(spraySch).catch(() => {});
+
     dispatchFastDeviceCommand(deviceId, `/api/spray?duration=${durationMs}`, {
       usbAction: () => usbSerialService.dispenseCleaningWater(durationMs),
     });
@@ -1217,12 +1433,15 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       setDevices((prev) =>
         prev.map((d) => (d.id === deviceId ? { ...d, isCleaningRinse: false } : d))
       );
-    }, durationMs > 500 ? durationMs : 10000);
+    }, durationMs > 500 ? durationMs : 8000);
   };
 
   const dispenseSprayWaterDirect = dispenseCleaningWaterDirect;
 
-  const startDrainPumpDirect = async (deviceId: string, durationMs: number = 6000) => {
+  const startDrainPumpDirect = async (deviceId: string, durationMs: number = 15000) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const petName = dev?.assignedPetName || 'Max';
+
     setDevices((prev) =>
       prev.map((d) =>
         d.id === deviceId
@@ -1231,11 +1450,24 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
+    // Queue cloud command for remote/cellular ESP32
+    const drainSch: FeedingSchedule = {
+      id: `SCH-DRAIN-${Date.now().toString().slice(-4)}`,
+      petId: dev?.assignedPetId || 'PET-001',
+      petName,
+      foodType: 'Drain Pump',
+      portionGrams: durationMs,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(drainSch).catch(() => {});
+
     dispatchFastDeviceCommand(deviceId, `/api/drain?duration=${durationMs}`, {
       usbAction: () => usbSerialService.disposeWaste(durationMs),
     });
 
-    showToast('warning', '🌀 Drain Pump Active', `Draining bowl and evacuating wastewater (${Math.round(durationMs / 1000)}s cycle)...`);
+    showToast('warning', '🌀 Flush Pump Active', `Draining bowl and flushing wastewater (${Math.round(durationMs / 1000)}s cycle)...`);
 
     setTimeout(() => {
       setDevices((prev) =>
@@ -1249,6 +1481,9 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   const stopDrainPumpDirect = async (deviceId: string) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const petName = dev?.assignedPetName || 'Max';
+
     setDevices((prev) =>
       prev.map((d) =>
         d.id === deviceId
@@ -1256,6 +1491,19 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
           : d
       )
     );
+
+    // Queue cloud stop command for remote/cellular ESP32
+    const drainOffSch: FeedingSchedule = {
+      id: `SCH-DRAINOFF-${Date.now().toString().slice(-4)}`,
+      petId: dev?.assignedPetId || 'PET-001',
+      petName,
+      foodType: 'Drain Stop',
+      portionGrams: 0,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(drainOffSch).catch(() => {});
 
     dispatchFastDeviceCommand(deviceId, '/api/drain/stop', {
       usbAction: () => usbSerialService.sendRaw('DRAIN OFF'),
@@ -1279,16 +1527,29 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     // Step 0: Ensure Food Gate is CLOSED before any water spray
     await closeGateDirect(deviceId);
 
-    showToast('info', '🔄 20-Second Sanitation Initiated', `Phase 1: Food gate closed & dispensing clean rinse water (GPIO 18 - 10s) for ${petName}...`);
+    // Queue autonomous hardware sanitation for remote ESP32 nodes
+    const cleanSch: FeedingSchedule = {
+      id: `SCH-CLEAN-${Date.now().toString().slice(-4)}`,
+      petId: dev?.assignedPetId || 'PET-001',
+      petName,
+      foodType: 'Full Sanitation',
+      portionGrams: 24000,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(cleanSch).catch(() => {});
 
-    // Stage 1: Dispense Cleaning Rinse Water (10.0s)
-    await dispenseCleaningWaterDirect(deviceId, 10000);
-    await new Promise((res) => setTimeout(res, 10000));
+    showToast('info', '🔄 24-Second Sanitation Initiated', `Phase 1: Food gate closed & dispensing clean rinse water (GPIO 18 - 8s) for ${petName}...`);
 
-    // Stage 2: Evacuate Wastewater via 12V 19W Drain Pump (9.0s)
-    showToast('warning', '⚡ Phase 2: Evacuating Water', '19W 12V water pump engaged to drain wastewater (GPIO 23 - 9s)...');
-    await startDrainPumpDirect(deviceId, 9000);
-    await new Promise((res) => setTimeout(res, 9000));
+    // Stage 1: Dispense Cleaning Rinse Water (8.0s)
+    await dispenseCleaningWaterDirect(deviceId, 8000);
+    await new Promise((res) => setTimeout(res, 8000));
+
+    // Stage 2: Evacuate Wastewater via 12V 19W Flush Pump (15.0s)
+    showToast('warning', '⚡ Phase 2: Evacuating Water', '19W 12V water pump engaged to flush wastewater (GPIO 23 - 15s)...');
+    await startDrainPumpDirect(deviceId, 15000);
+    await new Promise((res) => setTimeout(res, 15000));
 
     // Stage 3: Zero / Tare scales (1.0s)
     await tareScaleDirect(deviceId);
@@ -1301,7 +1562,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
-    showToast('success', '✨ Clean Waste Completed (20s cycle)', 'Food gate confirmed closed, food bowl washed with spray rinse (10s), completely evacuated by 12V drain pump (9s), and scales tared to 0.0g!');
+    showToast('success', '✨ Clean Waste Completed (24s cycle)', 'Food gate confirmed closed, food bowl washed with spray rinse (8s), completely evacuated by 12V flush pump (15s), and scales tared to 0.0g!');
     return true;
   };
 
@@ -1589,9 +1850,9 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
             const targetDev = sch.deviceId || 'HN-NODE-F778';
 
             if (isWater) {
-              await dispenseWaterDirect(targetDev, sch.portionGrams || 250);
+              await dispenseWaterDirect(targetDev, 10000);
               playNotificationChime();
-              showToast('success', '💧 Scheduled Water Refill Executed', `Dispensed ${sch.portionGrams || 250}ml water for ${sch.petName}.`);
+              showToast('success', '💧 Scheduled Water Refill Executed', `Refilling drinking water for ${sch.petName} (10s pump active).`);
             } else {
               await dispenseDirect(targetDev, sch.portionGrams || 75, sch.foodType || 'Scheduled Feeder Dispense');
               playNotificationChime();
@@ -2006,6 +2267,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         dispenseDirect,
         openGateDirect,
         closeGateDirect,
+        setGateAngleDirect,
         setPetEatingDirect,
         setPetDrinkingDirect,
         tareScaleDirect,
