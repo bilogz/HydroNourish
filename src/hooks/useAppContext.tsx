@@ -74,8 +74,32 @@ import {
 
 import { generateTelemetryDelta, processTelemetryPayload } from '../services/telemetryService';
 import { usbSerialService } from '../services/usbSerialService';
+import {
+  AiLearnedBehaviorProfile,
+  getStoredProfile,
+  trainAiModelFromHistory,
+  recordCompletedEatingSession as recordAiEatingSession,
+  recordCompletedDrinkingSession as recordAiDrinkingSession,
+} from '../services/aiLearningService';
 
 interface AppContextType {
+  // AI Pet Behavior Learning Engine
+  aiLearningProfile: AiLearnedBehaviorProfile;
+  trainAiModelNow: () => void;
+  recordCompletedFeedingSession: (sessionData: {
+    petId?: string;
+    petName?: string;
+    portionGrams?: number;
+    durationSeconds?: number;
+    deviceId?: string;
+  }) => Promise<void>;
+  recordCompletedDrinkingSession: (sessionData: {
+    petId?: string;
+    petName?: string;
+    amountMl?: number;
+    durationSeconds?: number;
+    deviceId?: string;
+  }) => Promise<void>;
   pets: Pet[];
   schedules: FeedingSchedule[];
   feedingLogs: FeedingLog[];
@@ -210,8 +234,19 @@ const pendingUserOverrides = new Map<string, {
   foodGateOpen?: boolean;
   isManualGateHold?: boolean;
   firmwareVersion?: string;
+  lastDispenseTime?: number;
   time: number;
 }>();
+
+// Anti-bounce debounce tracking for spray rinse and drain pumps
+const lastSprayActionTimeMap = new Map<string, number>();
+const lastDrainActionTimeMap = new Map<string, number>();
+
+// Tare lock: suppress incoming telemetry for 4s after a tare so the display shows 0
+// Calibration lock: suppress incoming telemetry for 6s after calibration so the scale re-reads correctly
+const pendingTares = new Map<string, { food?: number; water?: number; calFood?: number; calWater?: number }>();
+const TARE_LOCK_MS = 4000;
+const CAL_LOCK_MS = 6000;
 
 // Non-Destructive Device State Merger
 export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Device[] => {
@@ -248,6 +283,44 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
         if (override.isManualGateHold !== undefined) {
           merged.isManualGateHold = override.isManualGateHold;
         }
+      }
+
+      // Sensor Display Stabilization Deadbands (restricts jitter during resting state)
+      const tareLock = pendingTares.get(d.id);
+
+      // --- Food scale tare lock: force 0 for TARE_LOCK_MS after tare ---
+      // --- Calibration lock: suppress stale readings for CAL_LOCK_MS after calibrate ---
+      if (tareLock?.food && (now - tareLock.food) < TARE_LOCK_MS) {
+        merged.foodBowlWeightGrams = 0.0;
+      } else if (tareLock?.calFood && (now - tareLock.calFood) < CAL_LOCK_MS) {
+        // Keep whatever value firmware sends after calibration (pass-through, no deadband lock)
+        merged.foodBowlWeightGrams = d.foodBowlWeightGrams;
+      } else if (
+        prev.foodBowlWeightGrams !== undefined &&
+        d.foodBowlWeightGrams !== undefined &&
+        Math.abs(d.foodBowlWeightGrams - prev.foodBowlWeightGrams) < 0.25 &&
+        d.foodBowlWeightGrams > 0.5 &&
+        prev.foodBowlWeightGrams > 0.5
+      ) {
+        merged.foodBowlWeightGrams = prev.foodBowlWeightGrams;
+      }
+
+      // --- Water scale tare lock: force 0 for TARE_LOCK_MS after tare ---
+      if (tareLock?.water && (now - tareLock.water) < TARE_LOCK_MS) {
+        merged.waterMl = 0;
+        merged.waterLiters = 0;
+        merged.waterLevelPct = 0;
+      } else if (tareLock?.calWater && (now - tareLock.calWater) < CAL_LOCK_MS) {
+        merged.waterMl = d.waterMl;
+        merged.waterLiters = d.waterLiters;
+      } else if (
+        prev.waterMl !== undefined &&
+        d.waterMl !== undefined &&
+        Math.abs(d.waterMl - prev.waterMl) < 2 &&
+        d.waterMl > 5 &&
+        prev.waterMl > 5
+      ) {
+        merged.waterMl = prev.waterMl;
       }
 
       // Preserve Gate Open Angle (NVS configuration)
@@ -411,6 +484,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  // ─── AI Pet Behavior Learning Engine State ───────────────────────────
+  const [aiLearningProfile, setAiLearningProfile] = useState<AiLearnedBehaviorProfile>(() => {
+    return getStoredProfile('PET-001', 'Max', 'Canine (Dog)');
+  });
+
+  // Sync & persist Feeding & Hydration Logs
+  useEffect(() => {
+    try {
+      localStorage.setItem('hn_feeding_logs', JSON.stringify(feedingLogs));
+    } catch {}
+  }, [feedingLogs]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('hn_hydration_logs', JSON.stringify(hydrationLogs));
+    } catch {}
+  }, [hydrationLogs]);
+
+  // Train AI Pet Behavior Model whenever logs or active pet changes
+  useEffect(() => {
+    const activePet = pets[0];
+    if (activePet) {
+      const profile = trainAiModelFromHistory(activePet, feedingLogs, hydrationLogs);
+      setAiLearningProfile(profile);
+    }
+  }, [pets, feedingLogs.length, hydrationLogs.length]);
+
   // ─── Initial Database Synchronization ────────────────────────────────
   useEffect(() => {
     async function syncAllDataFromSupabase() {
@@ -482,29 +582,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (hasMatch) {
           return prev.map((d) => {
             if (d.id === targetId) {
-              return {
-                ...d,
-                status: 'Online',
-                lastTransmission: 'Live — Direct USB',
-                foodBowlWeightGrams: typeof telemetry.foodBowlWeightGrams === 'number' ? telemetry.foodBowlWeightGrams : d.foodBowlWeightGrams,
-                scaleReady: telemetry.scaleReady !== undefined ? telemetry.scaleReady : d.scaleReady,
-                lastIntakeFoodGrams: typeof telemetry.lastIntakeFoodGrams === 'number' ? telemetry.lastIntakeFoodGrams : d.lastIntakeFoodGrams,
-                foodLevelPct: typeof telemetry.foodLevel === 'number' ? telemetry.foodLevel : d.foodLevelPct,
-                waterLevelPct: typeof telemetry.waterLevel === 'number' ? telemetry.waterLevel : d.waterLevelPct,
-                waterMl: typeof telemetry.waterMl === 'number'
+              const usbNow = Date.now();
+              const usbTareLock = pendingTares.get(targetId);
+
+              // Food tare lock
+              let stabilizedWeight: number | undefined;
+              if (usbTareLock?.food && (usbNow - usbTareLock.food) < TARE_LOCK_MS) {
+                stabilizedWeight = 0.0;
+              } else if (usbTareLock?.calFood && (usbNow - usbTareLock.calFood) < CAL_LOCK_MS) {
+                // Calibration lock: pass firmware value through without deadband
+                stabilizedWeight = typeof telemetry.foodBowlWeightGrams === 'number' ? telemetry.foodBowlWeightGrams : d.foodBowlWeightGrams;
+              } else {
+                const incomingWeight = typeof telemetry.foodBowlWeightGrams === 'number' ? telemetry.foodBowlWeightGrams : d.foodBowlWeightGrams;
+                stabilizedWeight = (
+                  d.foodBowlWeightGrams !== undefined &&
+                  incomingWeight !== undefined &&
+                  Math.abs(incomingWeight - d.foodBowlWeightGrams) < 0.25 &&
+                  incomingWeight > 0.5 &&
+                  d.foodBowlWeightGrams > 0.5
+                ) ? d.foodBowlWeightGrams : incomingWeight;
+              }
+
+              // Water tare lock
+              let stabilizedWaterMl: number | undefined;
+              if (usbTareLock?.water && (usbNow - usbTareLock.water) < TARE_LOCK_MS) {
+                stabilizedWaterMl = 0;
+              } else if (usbTareLock?.calWater && (usbNow - usbTareLock.calWater) < CAL_LOCK_MS) {
+                stabilizedWaterMl = typeof telemetry.waterMl === 'number' ? telemetry.waterMl : d.waterMl;
+              } else {
+                const rawWaterMl = typeof telemetry.waterMl === 'number'
                   ? telemetry.waterMl
                   : (typeof telemetry.waterLiters === 'number'
                       ? Math.round(telemetry.waterLiters * 1000)
                       : (typeof telemetry.waterLevel === 'number'
                           ? Math.round((telemetry.waterLevel / 100) * (d.reservoirCapacityMl || 2500))
-                          : d.waterMl)),
-                waterLiters: typeof telemetry.waterLiters === 'number'
-                  ? telemetry.waterLiters
-                  : (typeof telemetry.waterMl === 'number'
-                      ? Number((telemetry.waterMl / 1000).toFixed(2))
-                      : (typeof telemetry.waterLevel === 'number'
-                          ? Number(((telemetry.waterLevel / 100) * (d.reservoirCapacityLiters || 2.5)).toFixed(2))
-                          : d.waterLiters)),
+                          : d.waterMl));
+                stabilizedWaterMl = (
+                  d.waterMl !== undefined &&
+                  rawWaterMl !== undefined &&
+                  Math.abs(rawWaterMl - d.waterMl) < 2 &&
+                  rawWaterMl > 5 &&
+                  d.waterMl > 5
+                ) ? d.waterMl : rawWaterMl;
+              }
+
+              return {
+                ...d,
+                status: 'Online',
+                lastTransmission: 'Live — Direct USB',
+                foodBowlWeightGrams: stabilizedWeight,
+                scaleReady: telemetry.scaleReady !== undefined ? telemetry.scaleReady : d.scaleReady,
+                lastIntakeFoodGrams: typeof telemetry.lastIntakeFoodGrams === 'number' ? telemetry.lastIntakeFoodGrams : d.lastIntakeFoodGrams,
+                foodLevelPct: typeof telemetry.foodLevel === 'number' ? telemetry.foodLevel : d.foodLevelPct,
+                waterLevelPct: typeof telemetry.waterLevel === 'number' ? telemetry.waterLevel : d.waterLevelPct,
+                waterMl: stabilizedWaterMl,
+                waterLiters: stabilizedWaterMl !== undefined
+                  ? Number((stabilizedWaterMl / 1000).toFixed(2))
+                  : (typeof telemetry.waterLiters === 'number' ? telemetry.waterLiters : d.waterLiters),
                 waterScaleReady: telemetry.waterScaleReady !== undefined ? telemetry.waterScaleReady : d.waterScaleReady,
                 waterQualityPpm: typeof telemetry.tds === 'number' ? telemetry.tds : d.waterQualityPpm,
                 isPumping: telemetry.isPumping !== undefined ? telemetry.isPumping : d.isPumping,
@@ -995,14 +1129,12 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     // Also check ipAddress field directly
     const devIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
 
-    // Build candidate list: live IP first, then stored ipAddress, then mDNS, then SoftAP
-    const candidateIps = [
-      liveIp,
-      devIp && devIp !== '0.0.0.0' && devIp !== liveIp ? devIp : null,
-      'hydronourish-feeder.local',
-      'hydronourish.local',
-      '192.168.4.1',     // SoftAP fallback (always online on ESP32)
-    ].filter(Boolean) as string[];
+    // Direct Target Resolution: If a known live IP or devIp exists, ONLY dispatch to that IP!
+    // Prevents blasting duplicate simultaneous requests to mDNS hostnames and SoftAP
+    const targetIp = liveIp || (devIp && devIp !== '0.0.0.0' ? devIp : null);
+    const candidateIps = targetIp
+      ? [targetIp]
+      : ['hydronourish-feeder.local', 'hydronourish.local', '192.168.4.1'];
 
     const uniqueIps = Array.from(new Set(candidateIps));
     const endpointPath = path.startsWith('/') ? path : `/${path}`;
@@ -1029,6 +1161,21 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
     const targetDeviceId = deviceId || dev?.id || 'HN-NODE-F778';
+
+    // 🔒 STRICT SINGLE-ACTUATION LOCK: If dispense already fired within 4 seconds, ignore repeat calls
+    const existingOverride = pendingUserOverrides.get(targetDeviceId);
+    const now = Date.now();
+    if (existingOverride?.lastDispenseTime && (now - existingOverride.lastDispenseTime < 4000)) {
+      console.warn(`[DISPENSE] Ignored duplicate dispense for ${targetDeviceId}: active in 4s cooldown.`);
+      return;
+    }
+
+    pendingUserOverrides.set(targetDeviceId, {
+      ...existingOverride,
+      lastDispenseTime: now,
+      foodGateOpen: true,
+      time: now,
+    });
 
     const newSch: FeedingSchedule = {
       id: `SCH-FEED-${Date.now().toString().slice(-4)}`,
@@ -1216,7 +1363,121 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     dispatchFastDeviceCommand(deviceId, `/api/pet/drinking?drinking=${isDrinking ? '1' : '0'}`);
   };
 
+  const recordCompletedFeedingSession = async (sessionData: {
+    petId?: string;
+    petName?: string;
+    portionGrams?: number;
+    durationSeconds?: number;
+    deviceId?: string;
+  }) => {
+    const dev = (devices ?? []).find((d) => d.id === sessionData.deviceId) || devices[0];
+    const petId = sessionData.petId || dev?.assignedPetId || pets[0]?.id || 'PET-001';
+    const petName = sessionData.petName || dev?.assignedPetName || pets[0]?.name || 'Max';
+    const defaultGrams = pets.find(p => p.id === petId)?.species?.toLowerCase().includes('cat') ? 35 : 75;
+    const portionGrams = Math.max(5, Math.round(sessionData.portionGrams || defaultGrams));
+    const durationSec = Math.max(5, Math.round(sessionData.durationSeconds || 38));
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const targetDevId = sessionData.deviceId || dev?.id || 'HN-NODE-F778';
+
+    const newLog: FeedingLog = {
+      id: `FL-${Date.now().toString().slice(-5)}`,
+      petId,
+      petName,
+      portionGrams,
+      dispensedAt: timestamp,
+      status: 'Success',
+      deviceId: targetDevId,
+      sessionId: `SESSION-EAT-${Date.now()}`
+    };
+
+    setFeedingLogs((prev) => [newLog, ...prev]);
+    insertFeedingLogToSupabase(newLog).catch(() => {});
+
+    // Online AI reinforcement: Learn eating kinetics & pace in real-time
+    const updated = recordAiEatingSession({
+      petId,
+      petName,
+      type: 'eating',
+      amount: portionGrams,
+      durationSeconds: durationSec,
+      timestamp,
+      deviceId: targetDevId
+    }, aiLearningProfile);
+    setAiLearningProfile(updated);
+
+    showToast(
+      'success',
+      `🍽️ Meal Logged (${portionGrams}g in ${durationSec}s)`,
+      `Recorded to eating history. AI reinforced eating pace (${(portionGrams / durationSec).toFixed(1)} g/s) with ${updated.modelConfidenceScore}% confidence.`
+    );
+  };
+
+  const recordCompletedDrinkingSession = async (sessionData: {
+    petId?: string;
+    petName?: string;
+    amountMl?: number;
+    durationSeconds?: number;
+    deviceId?: string;
+  }) => {
+    const dev = (devices ?? []).find((d) => d.id === sessionData.deviceId) || devices[0];
+    const petId = sessionData.petId || dev?.assignedPetId || pets[0]?.id || 'PET-001';
+    const petName = sessionData.petName || dev?.assignedPetName || pets[0]?.name || 'Max';
+    const defaultMl = pets.find(p => p.id === petId)?.species?.toLowerCase().includes('cat') ? 25 : 50;
+    const amountMl = Math.max(5, Math.round(sessionData.amountMl || defaultMl));
+    const durationSec = Math.max(3, Math.round(sessionData.durationSeconds || 14));
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const targetDevId = sessionData.deviceId || dev?.id || 'HN-NODE-F778';
+
+    const newLog: HydrationLog = {
+      id: `HL-${Date.now().toString().slice(-5)}`,
+      petId,
+      petName,
+      amountMl,
+      timestamp,
+      reservoirLevelPct: dev?.waterLevelPct || 85,
+      sessionId: `SESSION-DRINK-${Date.now()}`
+    };
+
+    setHydrationLogs((prev) => [newLog, ...prev]);
+    insertHydrationLogToSupabase(newLog).catch(() => {});
+
+    // Online AI reinforcement: Learn hydration kinetics & rhythm in real-time
+    const updated = recordAiDrinkingSession({
+      petId,
+      petName,
+      type: 'drinking',
+      amount: amountMl,
+      durationSeconds: durationSec,
+      timestamp,
+      deviceId: targetDevId
+    }, aiLearningProfile);
+    setAiLearningProfile(updated);
+
+    showToast(
+      'info',
+      `💧 Hydration Logged (${amountMl} ml in ${durationSec}s)`,
+      `Recorded to drinking history. AI updated hydration patterns (${updated.modelConfidenceScore}% confidence).`
+    );
+  };
+
+  const trainAiModelNow = () => {
+    const activePet = pets[0];
+    if (activePet) {
+      const profile = trainAiModelFromHistory(activePet, feedingLogs, hydrationLogs);
+      setAiLearningProfile(profile);
+      showToast(
+        'success',
+        '🧠 AI Behavioral Model Retrained',
+        `Synthesized ${profile.totalMealsAnalyzed} meals & ${profile.totalHydrationsAnalyzed} hydration sessions. Model confidence: ${profile.modelConfidenceScore}%.`
+      );
+    }
+  };
+
   const tareWaterScaleDirect = async (deviceId: string) => {
+    // Register tare lock BEFORE resetting state so mergeDeviceUpdates blocks incoming readings
+    const existing = pendingTares.get(deviceId) || {};
+    pendingTares.set(deviceId, { ...existing, water: Date.now() });
+
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, waterLiters: 0.0, waterMl: 0, waterLevelPct: 0, waterScaleReady: true } : d))
     );
@@ -1271,6 +1532,10 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   const tareScaleDirect = async (deviceId: string) => {
+    // Register tare lock BEFORE resetting state so mergeDeviceUpdates blocks incoming readings
+    const existingFood = pendingTares.get(deviceId) || {};
+    pendingTares.set(deviceId, { ...existingFood, food: Date.now() });
+
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, foodBowlWeightGrams: 0.0, scaleReady: true } : d))
     );
@@ -1294,6 +1559,10 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   const calibrateScaleDirect = async (deviceId: string, knownGrams?: number, factor?: number) => {
+    // Register calibration lock so deadband is bypassed while firmware re-reads
+    const existingCal = pendingTares.get(deviceId) || {};
+    pendingTares.set(deviceId, { ...existingCal, calFood: Date.now() });
+
     const query = knownGrams ? `known_grams=${knownGrams}` : `factor=${factor || 420.0}`;
     dispatchFastDeviceCommand(deviceId, `/api/scale/calibrate?${query}`, {
       usbAction: () => usbSerialService.calibrateScale(knownGrams, factor),
@@ -1442,10 +1711,18 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   // ─── Dual-Pump Sanitation & Drainage Handlers (Clean Water & 19W 12V Drain) ─
-  const dispenseCleaningWaterDirect = async (deviceId: string, amountMl: number = 8000) => {
+  const dispenseCleaningWaterDirect = async (deviceId: string, amountMl: number = 3000) => {
+    const now = Date.now();
+    const lastSpray = lastSprayActionTimeMap.get(deviceId) || 0;
+    if (now - lastSpray < 4000) {
+      console.warn(`[SPRAY] Spray debounce active for ${deviceId} (${now - lastSpray}ms ago). Duplicate trigger ignored.`);
+      return;
+    }
+    lastSprayActionTimeMap.set(deviceId, now);
+
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
-    const durationMs = amountMl <= 500 ? (amountMl === 200 || amountMl === 250 ? 8000 : amountMl * 12) : amountMl;
+    const durationMs = amountMl <= 500 ? (amountMl === 200 || amountMl === 250 ? 3000 : amountMl * 12) : amountMl;
 
     // Ensure food gate is closed before spraying rinse water
     if (dev?.foodGateOpen) {
@@ -1460,18 +1737,25 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
-    // Queue cloud command for remote/cellular ESP32
-    const spraySch: FeedingSchedule = {
-      id: `SCH-SPRAY-${Date.now().toString().slice(-4)}`,
-      petId: dev?.assignedPetId || 'PET-001',
-      petName,
-      foodType: 'Spray Rinse',
-      portionGrams: durationMs,
-      scheduledTime: 'Instant Manual',
-      dispenseStatus: 'Pending',
-      deviceId,
-    };
-    insertScheduleToSupabase(spraySch).catch(() => {});
+    // Queue cloud command ONLY if device is not currently reachable via LAN or USB
+    // To prevent double execution (direct HTTP/USB + Supabase schedule polling)
+    const isUsb = usbSerialService.getIsConnected();
+    const devIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    const isDirectLan = Boolean(devIp && devIp !== '0.0.0.0');
+
+    if (!isUsb && !isDirectLan) {
+      const spraySch: FeedingSchedule = {
+        id: `SCH-SPRAY-${Date.now().toString().slice(-4)}`,
+        petId: dev?.assignedPetId || 'PET-001',
+        petName,
+        foodType: 'Spray Rinse',
+        portionGrams: durationMs,
+        scheduledTime: 'Instant Manual',
+        dispenseStatus: 'Pending',
+        deviceId,
+      };
+      insertScheduleToSupabase(spraySch).catch(() => {});
+    }
 
     dispatchFastDeviceCommand(deviceId, `/api/spray?duration=${durationMs}`, {
       usbAction: () => usbSerialService.dispenseCleaningWater(durationMs),
@@ -1483,12 +1767,20 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       setDevices((prev) =>
         prev.map((d) => (d.id === deviceId ? { ...d, isCleaningRinse: false } : d))
       );
-    }, durationMs > 500 ? durationMs : 8000);
+    }, durationMs > 500 ? durationMs : 3000);
   };
 
   const dispenseSprayWaterDirect = dispenseCleaningWaterDirect;
 
   const startDrainPumpDirect = async (deviceId: string, durationMs: number = 15000) => {
+    const now = Date.now();
+    const lastDrain = lastDrainActionTimeMap.get(deviceId) || 0;
+    if (now - lastDrain < 16000) {
+      console.warn(`[DRAIN] Drain debounce active for ${deviceId} (${now - lastDrain}ms ago). Duplicate trigger ignored.`);
+      return;
+    }
+    lastDrainActionTimeMap.set(deviceId, now);
+
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     const petName = dev?.assignedPetName || 'Max';
 
@@ -1500,18 +1792,24 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
-    // Queue cloud command for remote/cellular ESP32
-    const drainSch: FeedingSchedule = {
-      id: `SCH-DRAIN-${Date.now().toString().slice(-4)}`,
-      petId: dev?.assignedPetId || 'PET-001',
-      petName,
-      foodType: 'Drain Pump',
-      portionGrams: durationMs,
-      scheduledTime: 'Instant Manual',
-      dispenseStatus: 'Pending',
-      deviceId,
-    };
-    insertScheduleToSupabase(drainSch).catch(() => {});
+    // Queue cloud command ONLY if device is not currently reachable via LAN or USB
+    const isUsb = usbSerialService.getIsConnected();
+    const devIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    const isDirectLan = Boolean(devIp && devIp !== '0.0.0.0');
+
+    if (!isUsb && !isDirectLan) {
+      const drainSch: FeedingSchedule = {
+        id: `SCH-DRAIN-${Date.now().toString().slice(-4)}`,
+        petId: dev?.assignedPetId || 'PET-001',
+        petName,
+        foodType: 'Drain Pump',
+        portionGrams: durationMs,
+        scheduledTime: 'Instant Manual',
+        dispenseStatus: 'Pending',
+        deviceId,
+      };
+      insertScheduleToSupabase(drainSch).catch(() => {});
+    }
 
     dispatchFastDeviceCommand(deviceId, `/api/drain?duration=${durationMs}`, {
       usbAction: () => usbSerialService.disposeWaste(durationMs),
@@ -1577,24 +1875,30 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     // Step 0: Ensure Food Gate is CLOSED before any water spray
     await closeGateDirect(deviceId);
 
-    // Queue autonomous hardware sanitation for remote ESP32 nodes
-    const cleanSch: FeedingSchedule = {
-      id: `SCH-CLEAN-${Date.now().toString().slice(-4)}`,
-      petId: dev?.assignedPetId || 'PET-001',
-      petName,
-      foodType: 'Full Sanitation',
-      portionGrams: 24000,
-      scheduledTime: 'Instant Manual',
-      dispenseStatus: 'Pending',
-      deviceId,
-    };
-    insertScheduleToSupabase(cleanSch).catch(() => {});
+    // Queue autonomous hardware sanitation for remote ESP32 nodes ONLY if offline
+    const isUsb = usbSerialService.getIsConnected();
+    const devIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    const isDirectLan = Boolean(devIp && devIp !== '0.0.0.0');
 
-    showToast('info', '🔄 24-Second Sanitation Initiated', `Phase 1: Food gate closed & dispensing clean rinse water (GPIO 18 - 8s) for ${petName}...`);
+    if (!isUsb && !isDirectLan) {
+      const cleanSch: FeedingSchedule = {
+        id: `SCH-CLEAN-${Date.now().toString().slice(-4)}`,
+        petId: dev?.assignedPetId || 'PET-001',
+        petName,
+        foodType: 'Full Sanitation',
+        portionGrams: 24000,
+        scheduledTime: 'Instant Manual',
+        dispenseStatus: 'Pending',
+        deviceId,
+      };
+      insertScheduleToSupabase(cleanSch).catch(() => {});
+    }
 
-    // Stage 1: Dispense Cleaning Rinse Water (8.0s)
-    await dispenseCleaningWaterDirect(deviceId, 8000);
-    await new Promise((res) => setTimeout(res, 8000));
+    showToast('info', '🔄 19-Second Sanitation Initiated', `Phase 1: Food gate closed & dispensing clean rinse water (GPIO 18 - 3s) for ${petName}...`);
+
+    // Stage 1: Dispense Cleaning Rinse Water (3.0s)
+    await dispenseCleaningWaterDirect(deviceId, 3000);
+    await new Promise((res) => setTimeout(res, 3000));
 
     // Stage 2: Evacuate Wastewater via 12V 19W Flush Pump (15.0s)
     showToast('warning', '⚡ Phase 2: Evacuating Water', '19W 12V water pump engaged to flush wastewater (GPIO 23 - 15s)...');
@@ -1612,7 +1916,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
-    showToast('success', '✨ Clean Waste Completed (24s cycle)', 'Food gate confirmed closed, food bowl washed with spray rinse (8s), completely evacuated by 12V flush pump (15s), and scales tared to 0.0g!');
+    showToast('success', '✨ Clean Waste Completed (19s cycle)', 'Food gate confirmed closed, food bowl washed with spray rinse (3s), completely evacuated by 12V flush pump (15s), and scales tared to 0.0g!');
     return true;
   };
 
@@ -2320,6 +2624,10 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         setGateAngleDirect,
         setPetEatingDirect,
         setPetDrinkingDirect,
+        aiLearningProfile,
+        trainAiModelNow,
+        recordCompletedFeedingSession,
+        recordCompletedDrinkingSession,
         tareScaleDirect,
         tareWaterScaleDirect,
         calibrateWaterScaleDirect,

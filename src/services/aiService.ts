@@ -61,15 +61,97 @@ async function callGeminiProxy(prompt: string, base64Image?: string, mimeType?: 
 }
 
 /**
+ * ── Gemini API Key Rotation Pool ─────────────────────────────────────────────
+ * Reads up to 3 keys from the env, persists the active key index in localStorage
+ * so the selection survives page reloads. Rotates to the next key on failure.
+ */
+const LS_KEY_IDX = 'hn_gemini_key_idx';
+
+function getGeminiKeys(): string[] {
+  const k1 = (import.meta.env.VITE_GEMINI_API_KEY  || '').trim();
+  const k2 = (import.meta.env.VITE_GEMINI_API_KEY_2 || '').trim();
+  const k3 = (import.meta.env.VITE_GEMINI_API_KEY_3 || '').trim();
+  return [k1, k2, k3].filter(Boolean);
+}
+
+/** Returns the currently persisted key (or first key if none saved). Saves to localStorage. */
+function getActiveGeminiKey(): string | null {
+  const keys = getGeminiKeys();
+  if (keys.length === 0) return null;
+  let idx = Number(localStorage.getItem(LS_KEY_IDX) || '0');
+  if (idx < 0 || idx >= keys.length) idx = 0;
+  localStorage.setItem(LS_KEY_IDX, String(idx));
+  return keys[idx];
+}
+
+/** Advance to the next key in the pool and persist the new index. Returns the next key. */
+function rotateToNextGeminiKey(): string | null {
+  const keys = getGeminiKeys();
+  if (keys.length === 0) return null;
+  let idx = Number(localStorage.getItem(LS_KEY_IDX) || '0');
+  idx = (idx + 1) % keys.length;
+  localStorage.setItem(LS_KEY_IDX, String(idx));
+  console.info(`[GeminiKeys] Rotated to key index ${idx}`);
+  return keys[idx];
+}
+
+/**
+ * Calls Gemini API with automatic key rotation on quota/auth errors.
+ * Tries all available keys before giving up.
+ */
+async function callGeminiAPIWithRotation(prompt: string, model: string = 'gemini-2.5-flash', base64?: string, mime?: string): Promise<string> {
+  const keys = getGeminiKeys();
+  if (keys.length === 0) throw new Error('No Gemini API keys configured');
+
+  const startIdx = Number(localStorage.getItem(LS_KEY_IDX) || '0');
+  let lastErr: Error | null = null;
+
+  for (let attempt = 0; attempt < keys.length; attempt++) {
+    const idx = (startIdx + attempt) % keys.length;
+    const key = keys[idx];
+    try {
+      let text: string;
+      if (base64 && mime) {
+        text = await callGeminiAPI(prompt, key, model, base64, mime);
+      } else {
+        text = await callGeminiAPI(prompt, key, model);
+      }
+      // Success — persist this working key index
+      localStorage.setItem(LS_KEY_IDX, String(idx));
+      return text;
+    } catch (err: any) {
+      lastErr = err;
+      const status = err?.message || '';
+      // Only rotate on quota (429) or auth (400/403) errors
+      if (status.includes('429') || status.includes('400') || status.includes('403') || status.includes('401')) {
+        console.warn(`[GeminiKeys] Key index ${idx} failed (${status}), rotating...`);
+        localStorage.setItem(LS_KEY_IDX, String((idx + 1) % keys.length));
+      } else {
+        throw err; // Non-quota errors bubble up immediately
+      }
+    }
+  }
+  throw lastErr || new Error('All Gemini API keys exhausted');
+}
+
+/**
  * Direct AI Call fallback: Google Gemini REST API (gemini-2.5-flash with fallback to gemini-3.6-flash)
  */
-async function callGeminiAPI(prompt: string, apiKey: string, model: string = 'gemini-2.5-flash'): Promise<string> {
+async function callGeminiAPI(prompt: string, apiKey: string, model: string = 'gemini-2.5-flash', base64Image?: string, mimeType?: string): Promise<string> {
   let url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  // Build request parts (text + optional image)
+  const parts: any[] = [{ text: prompt }];
+  if (base64Image && mimeType) {
+    const b64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
+    parts.push({ inline_data: { mime_type: mimeType, data: b64 } });
+  }
+
   let response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }]
+      contents: [{ parts }]
     })
   });
 
@@ -79,7 +161,7 @@ async function callGeminiAPI(prompt: string, apiKey: string, model: string = 'ge
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
+        contents: [{ parts }]
       })
     });
   }
@@ -170,7 +252,6 @@ function generateLocalClinicalObservation(input: PetTelemetryInput): AIObservati
  * Main AI Analysis Dispatcher with Failover Chain
  */
 export async function analyzePetTelemetry(input: PetTelemetryInput): Promise<AIObservationResult> {
-  const geminiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
   const openAIKey = import.meta.env.VITE_OPENAI_API_KEY?.trim();
 
   const prompt = `
@@ -203,9 +284,11 @@ export async function analyzePetTelemetry(input: PetTelemetryInput): Promise<AIO
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
   } catch (proxyError) {
-    if (geminiKey) {
+    // 2. Try all 3 client-side Gemini keys with automatic rotation
+    const activeKey = getActiveGeminiKey();
+    if (activeKey) {
       try {
-        const responseText = await callGeminiAPI(prompt, geminiKey);
+        const responseText = await callGeminiAPIWithRotation(prompt);
         let severity: 'Info' | 'Warning' | 'Critical' = 'Info';
         if (responseText.toLowerCase().includes('critical') || input.temperatureC > 39.5) severity = 'Critical';
         else if (responseText.toLowerCase().includes('warning') || input.temperatureC > 39.0 || input.waterConsumedMl < input.waterTargetMl * 0.5) severity = 'Warning';
@@ -218,10 +301,10 @@ export async function analyzePetTelemetry(input: PetTelemetryInput): Promise<AIO
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
       } catch (geminiError) {
-        console.warn('Direct Gemini API call failed, attempting OpenAI backup key...', geminiError);
+        console.warn('All Gemini API keys failed, attempting OpenAI backup key...', geminiError);
       }
     } else {
-      console.warn('Gemini proxy error, attempting OpenAI backup key...', proxyError);
+      console.warn('No Gemini client keys configured, attempting OpenAI backup key...', proxyError);
     }
   }
 
@@ -358,8 +441,8 @@ export async function analyzePetVisionScan(
   petContext?: { name?: string; species?: string; weightKg?: number },
   options?: PetVisionScanOptions
 ): Promise<PetVisionScanResult> {
-  const geminiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
   const openAIKey = import.meta.env.VITE_OPENAI_API_KEY?.trim();
+  const activeGeminiKey = getActiveGeminiKey();
   const petName = petContext?.name || 'Pet';
   const petSpecies = petContext?.species || 'Canine / Feline';
   const isDog = petSpecies.toLowerCase().includes('cat') ? false : true;
@@ -424,9 +507,8 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
       try {
         rawText = await callGeminiProxy(prompt, base64Image, mimeType, 'gemini-3.8-flash');
       } catch (proxyErr) {
-        if (geminiKey) {
-          const base64Data = base64Image.split(',')[1];
-          rawText = await callGeminiAPI(prompt, geminiKey, 'gemini-3.8-flash');
+        if (activeGeminiKey) {
+          rawText = await callGeminiAPIWithRotation(prompt, 'gemini-3.8-flash', base64Image, mimeType);
         } else {
           throw proxyErr;
         }

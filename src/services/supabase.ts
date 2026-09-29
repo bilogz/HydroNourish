@@ -795,18 +795,52 @@ export async function sendWifiProvisionToSupabase(
   password: string
 ): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
+  const ssidClean = ssid.trim();
+  const passClean = password.trim();
+  const camToken = `CAM_PAIR:${ssidClean},${passClean}`;
+
   try {
+    // 1. Fetch current firmware_version to preserve existing telemetry while injecting CAM_PAIR token
+    const { data: devRow } = await (supabase.from('devices') as any)
+      .select('firmware_version')
+      .eq('id', deviceId)
+      .maybeSingle();
+
+    let newFw = devRow?.firmware_version || '';
+    if (newFw.includes('CAM_PAIR:')) {
+      newFw = newFw.replace(/CAM_PAIR:[^|]+/g, camToken);
+    } else if (newFw.length > 0) {
+      newFw = `${newFw}|${camToken}`;
+    } else {
+      newFw = `ESP32|${camToken}`;
+    }
+
     const { error } = await (supabase.from('devices') as any)
-      .update({ pending_wifi_ssid: ssid.trim(), pending_wifi_pass: password.trim() })
+      .update({
+        pending_wifi_ssid: ssidClean,
+        pending_wifi_pass: passClean,
+        firmware_version: newFw,
+      })
       .eq('id', deviceId);
+
     if (error) {
       if (import.meta.env.DEV) {
         console.warn('[HydroNourish] sendWifiProvision update error:', error);
-        console.warn('[HydroNourish] Hint: Run the latest supabase_schema.sql to add pending_wifi_ssid & pending_wifi_pass columns to the devices table.');
       }
-      // Fallback: try upsert in case the row doesn't exist yet
+      // Fallback: update firmware_version alone if pending_wifi columns don't exist yet
+      await (supabase.from('devices') as any)
+        .update({ firmware_version: newFw })
+        .eq('id', deviceId);
+
+      // Fallback: try upsert
       const { error: upsertErr } = await (supabase.from('devices') as any)
-        .upsert({ id: deviceId, pending_wifi_ssid: ssid.trim(), pending_wifi_pass: password.trim(), mac_address: '1C:C3:AB:F9:F7:78' });
+        .upsert({
+          id: deviceId,
+          pending_wifi_ssid: ssidClean,
+          pending_wifi_pass: passClean,
+          firmware_version: newFw,
+          mac_address: '1C:C3:AB:F9:F7:78'
+        });
       if (upsertErr) {
         if (import.meta.env.DEV) console.warn('[HydroNourish] sendWifiProvision upsert fallback error:', upsertErr);
         return false;

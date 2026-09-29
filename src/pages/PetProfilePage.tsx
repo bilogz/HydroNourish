@@ -456,7 +456,7 @@ export const PetProfilePage: React.FC = () => {
                   <span className="text-slate-500">Connected Wi-Fi:</span>
                   <span className="font-semibold text-indigo-700 flex items-center gap-1 bg-indigo-50 px-1.5 py-0.5 rounded text-[11px]">
                     <Wifi className="w-3 h-3 text-indigo-600" />
-                    {assignedDevice.wifiSsid || 'brrt rrt'}
+                    {assignedDevice.wifiSsid || 'GlobeAtHome_F83DB'}
                   </span>
                 </div>
                 <div className="flex justify-between">

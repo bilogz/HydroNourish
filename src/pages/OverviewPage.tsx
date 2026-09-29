@@ -15,6 +15,7 @@ import { ChartCard } from '../components/ChartCard';
 import { StatusBadge } from '../components/StatusBadge';
 import { Modal } from '../components/Modal';
 import { LiveCameraWidget } from '../components/LiveCameraWidget';
+import { AiLearningCenterWidget } from '../components/ai/AiLearningCenterWidget';
 import { HardwareAssignmentCard } from '../components/session/HardwareAssignmentCard';
 import { AssignPetOwnerModal } from '../components/session/AssignPetOwnerModal';
 import { CompleteSessionModal } from '../components/session/CompleteSessionModal';
@@ -350,6 +351,9 @@ export const OverviewPage: React.FC = () => {
           </div>
         )}
 
+        {/* ================= AI PET BEHAVIOR LEARNING CENTER ================= */}
+        <AiLearningCenterWidget pet={assignedPet || pets[0]} />
+
         {/* ================= LIVE PET WARD CAMERA FEED ================= */}
         <LiveCameraWidget
           title="Live Clinic Ward & Bowl Camera Feed"
@@ -444,7 +448,7 @@ export const OverviewPage: React.FC = () => {
                     <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                       <span className="inline-flex items-center gap-1 text-indigo-700 font-semibold bg-indigo-50 px-1.5 py-0.2 rounded text-[10px]">
                         <Wifi className="w-3 h-3 text-indigo-600" />
-                        {hardware.wifiSsid || 'brrt rrt'}
+                        {hardware.wifiSsid || 'GlobeAtHome_F83DB'}
                       </span>
                       <span>({hardware.wifiSignalDbm} dBm)</span>
                       <span>•</span>

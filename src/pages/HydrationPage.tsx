@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { StatCard } from '../components/StatCard';
 import { ChartCard } from '../components/ChartCard';
 import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Modal } from '../components/Modal';
+import { AiLearningCenterWidget } from '../components/ai/AiLearningCenterWidget';
 import { useAppContext } from '../hooks/useAppContext';
 import { Link } from 'react-router-dom';
 import {
@@ -69,6 +70,54 @@ export const HydrationPage: React.FC = () => {
   const [customWaterLevelPct, setCustomWaterLevelPct] = useState(75);
   const [logPage, setLogPage] = useState(1);
   const [waterSchedulePage, setWaterSchedulePage] = useState(1);
+
+  // Taring state for water scale
+  const [isTaringWater, setIsTaringWater] = useState(false);
+  const [waterTareStage, setWaterTareStage] = useState<'idle' | 'init' | 'sampling' | 'zeroing' | 'done'>('idle');
+  const [waterTareProgress, setWaterTareProgress] = useState(0);
+  const waterTareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleTareWaterScale = async () => {
+    if (!selectedDevice || isTaringWater) return;
+    setIsTaringWater(true);
+    setWaterTareStage('init');
+    setWaterTareProgress(0);
+
+    const ramp = (from: number, to: number, ms: number) =>
+      new Promise<void>((resolve) => {
+        const steps = 20;
+        const stepMs = ms / steps;
+        const stepVal = (to - from) / steps;
+        let current = from;
+        let i = 0;
+        const tick = () => {
+          i++;
+          current += stepVal;
+          setWaterTareProgress(Math.min(to, Math.round(current)));
+          if (i < steps) waterTareTimerRef.current = setTimeout(tick, stepMs);
+          else resolve();
+        };
+        waterTareTimerRef.current = setTimeout(tick, stepMs);
+      });
+
+    await ramp(0, 25, 400);
+    setWaterTareStage('sampling');
+
+    const cmdPromise = tareWaterScaleDirect(selectedDevice.id);
+    await ramp(25, 70, 800);
+    setWaterTareStage('zeroing');
+
+    await ramp(70, 95, 600);
+    await cmdPromise.catch(() => {});
+
+    setWaterTareProgress(100);
+    setWaterTareStage('done');
+    setTimeout(() => {
+      setIsTaringWater(false);
+      setWaterTareStage('idle');
+      setWaterTareProgress(0);
+    }, 600);
+  };
 
   // Add Water Schedule Form State
   const [waterFormData, setWaterFormData] = useState({
@@ -447,16 +496,25 @@ export const HydrationPage: React.FC = () => {
                   Target
                 </button>
                 <button
-                  onClick={() => {
-                    if (selectedDevice) {
-                      tareWaterScaleDirect(selectedDevice.id);
-                    }
-                  }}
-                  className="py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-xs border border-sky-200 transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
+                  onClick={handleTareWaterScale}
+                  disabled={!selectedDevice || isTaringWater}
+                  className="relative overflow-hidden py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-xs border border-sky-200 transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
                   title="Zero / Tare Water Reservoir Load Cell (0 ml)"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 text-sky-600" />
-                  Tare (0ml)
+                  {isTaringWater && (
+                    <span
+                      className="absolute inset-y-0 left-0 bg-sky-200/60 transition-all duration-150 ease-out rounded-xl"
+                      style={{ width: `${waterTareProgress}%` }}
+                    />
+                  )}
+                  <RefreshCw className={`relative w-3.5 h-3.5 text-sky-600 ${isTaringWater ? 'animate-spin' : ''}`} />
+                  <span className="relative">
+                    {waterTareStage === 'init' ? 'Initializing...' :
+                     waterTareStage === 'sampling' ? 'Sampling...' :
+                     waterTareStage === 'zeroing' ? 'Zeroing...' :
+                     waterTareStage === 'done' ? '✓ Tared!' :
+                     'Tare (0ml)'}
+                  </span>
                 </button>
                 <button
                   onClick={handleOpenRefillModal}
@@ -691,6 +749,9 @@ export const HydrationPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* ================= AI PET BEHAVIOR & HABIT LEARNING ================= */}
+      <AiLearningCenterWidget pet={pets[0]} />
 
       {/* ================= LOW-WATER ALERTS & REFILL HISTORY ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

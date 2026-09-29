@@ -49,8 +49,8 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
   const [autoScroll, setAutoScroll] = useState(true);
   const [activeTab, setActiveTab] = useState<'controls' | 'terminal' | 'telemetry'>('controls');
   const [isActing, setIsActing] = useState(false);
-  const [wifiSsidInput, setWifiSsidInput] = useState('Garcia Wifi 4G Wifi');
-  const [wifiPassInput, setWifiPassInput] = useState('GaRCi4F4m');
+  const [wifiSsidInput, setWifiSsidInput] = useState('GlobeAtHome_F83DB');
+  const [wifiPassInput, setWifiPassInput] = useState('RDGNNL7M46T');
   const [scannedUsbNetworks, setScannedUsbNetworks] = useState<ScannedWifiNetwork[]>(usbSerialService.getLastScannedNetworks());
   const [isScanningWifi, setIsScanningWifi] = useState(false);
   const [usbGateAngle, setUsbGateAngle] = useState(() => {

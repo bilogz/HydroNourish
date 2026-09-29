@@ -90,11 +90,27 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     closeGateDirect,
     setPetEatingDirect,
     setPetDrinkingDirect,
-    addAlert
+    addAlert,
+    aiLearningProfile,
+    trainAiModelNow,
+    recordCompletedFeedingSession,
+    recordCompletedDrinkingSession,
+    runBowlSanitationCycle,
   } = useAppContext();
 
   const lastEatingTimestampRef = React.useRef<number>(0);
   const lastDrinkingTimestampRef = React.useRef<number>(0);
+  const eatingSessionStartRef = React.useRef<number>(0);
+  const drinkingSessionStartRef = React.useRef<number>(0);
+  const preMealBowlWeightRef = React.useRef<number>(0);
+  const preDrinkWaterMlRef = React.useRef<number>(0);
+
+  // 5-Minute Auto-Flush Watchdog (Dual Camera + Food Bowl Scale)
+  const foodSittingSinceRef = React.useRef<number>(0);
+  const [autoFlushCountdown, setAutoFlushCountdown] = useState<number | null>(null);
+  const [isFoodDetectedInBowl, setIsFoodDetectedInBowl] = useState<boolean>(false);
+  const lastCameraFoodReportTimeRef = React.useRef<number>(0);
+  const isAutoFlushingRef = React.useRef<boolean>(false);
 
   // Auto-discover camera IP from passed device prop or Supabase device telemetry
   const discoveredIp = React.useMemo(() => {
@@ -202,16 +218,16 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const detectedSsid = useMemo(() => {
     const rawFw = device?.firmwareVersion || '';
     const m = rawFw.match(/SSID:([^|]+)/i);
-    return m && m[1] ? m[1].trim() : 'Garcia Wifi 4G Wifi';
+    return m && m[1] ? m[1].trim() : 'GlobeAtHome_F83DB';
   }, [device]);
   const [wifiSsid, setWifiSsid] = useState(() => detectedSsid);
-  const [wifiPassword, setWifiPassword] = useState('GaRCi4F4m');
+  const [wifiPassword, setWifiPassword] = useState('RDGNNL7M46T');
   const [showPassword, setShowPassword] = useState(false);
   const [isPairingWifi, setIsPairingWifi] = useState(false);
   const [wifiPairResult, setWifiPairResult] = useState<{ success: boolean; msg: string } | null>(null);
 
   useEffect(() => {
-    if (detectedSsid && (!wifiSsid || wifiSsid === 'Garcia Wifi 4G Wifi')) {
+    if (detectedSsid && (!wifiSsid || wifiSsid === 'GlobeAtHome_F83DB')) {
       setWifiSsid(detectedSsid);
     }
   }, [detectedSsid]);
@@ -230,31 +246,24 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     const targetClean = (cameraIp || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
 
     try {
-      // 1. Cloud Dispatch via Supabase (Write CAM_PAIR token to device)
-      const token = `CAM_PAIR:${ssidClean},${passClean}`;
-      const existingFw = device?.firmwareVersion || '';
-      let newFw = existingFw;
-      if (newFw.includes('CAM_PAIR:')) {
-        newFw = newFw.replace(/CAM_PAIR:[^|]+/g, token);
-      } else {
-        newFw = `${newFw}|${token}`;
-      }
-      
-      const { supabase } = await import('../services/supabase');
+      // 1. Cloud Dispatch via Supabase (Provisions both ESP32 feeder and ESP32-CAM)
+      const { sendWifiProvisionToSupabase } = await import('../services/supabase');
       if (device?.id) {
-        await supabase
-          .from('devices')
-          .update({ firmware_version: newFw })
-          .eq('id', device.id);
+        await sendWifiProvisionToSupabase(device.id, ssidClean, passClean);
       }
 
-      // 2. Wireless LAN Dispatch (Direct HTTP beacon to camera)
+      // 2. Wireless LAN Dispatch (Direct HTTP beacons to camera and feeder nodes)
+      const mainEspIp = (device?.ipAddress || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
       const lanEndpoints = [
-        `http://${targetClean}/api/wifi/pair?ssid=${encodeURIComponent(ssidClean)}&password=${encodeURIComponent(passClean)}`,
-        `http://${targetClean}:81/api/wifi/pair?ssid=${encodeURIComponent(ssidClean)}&password=${encodeURIComponent(passClean)}`,
+        targetClean ? `http://${targetClean}/api/wifi/pair?ssid=${encodeURIComponent(ssidClean)}&password=${encodeURIComponent(passClean)}` : null,
+        targetClean ? `http://${targetClean}:81/api/wifi/pair?ssid=${encodeURIComponent(ssidClean)}&password=${encodeURIComponent(passClean)}` : null,
         `http://hydronourish-cam.local/api/wifi/pair?ssid=${encodeURIComponent(ssidClean)}&password=${encodeURIComponent(passClean)}`,
+        `http://hydronourish-feeder.local/api/wifi/pair?ssid=${encodeURIComponent(ssidClean)}&password=${encodeURIComponent(passClean)}`,
+        `http://hydronourish.local/api/wifi/pair?ssid=${encodeURIComponent(ssidClean)}&password=${encodeURIComponent(passClean)}`,
         `http://192.168.4.1/api/wifi/pair?ssid=${encodeURIComponent(ssidClean)}&password=${encodeURIComponent(passClean)}`,
-      ];
+        `http://192.168.4.1:81/api/wifi/pair?ssid=${encodeURIComponent(ssidClean)}&password=${encodeURIComponent(passClean)}`,
+        mainEspIp ? `http://${mainEspIp}/api/wifi/pair?ssid=${encodeURIComponent(ssidClean)}&password=${encodeURIComponent(passClean)}` : null,
+      ].filter(Boolean) as string[];
 
       for (const ep of lanEndpoints) {
         try {
@@ -264,16 +273,17 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       }
 
       // 3. Main ESP32 Node Proxy Dispatch
-      const mainEspIp = device?.ipAddress || '192.168.100.157';
-      try {
-        fetch(`http://${mainEspIp}/api/cam-announce?ip=${targetClean}`, { mode: 'no-cors' }).catch(() => {});
-      } catch {}
+      if (mainEspIp && targetClean) {
+        try {
+          fetch(`http://${mainEspIp}/api/cam-announce?ip=${targetClean}`, { mode: 'no-cors' }).catch(() => {});
+        } catch {}
+      }
 
       setWifiPairResult({
         success: true,
-        msg: `✅ Wireless Wi-Fi dispatched! Camera is connecting to "${ssidClean}"...`
+        msg: `✅ Wireless Wi-Fi dispatched! Camera and Feeder are connecting to "${ssidClean}"...`
       });
-      showToast('success', 'Wi-Fi Dispatched Wirelessly', `Camera commanded to connect to "${ssidClean}". Stream will auto-reconnect.`);
+      showToast('success', 'Wi-Fi Dispatched Wirelessly', `Camera and Feeder commanded to connect to "${ssidClean}". Stream will auto-reconnect.`);
 
       // Retry stream after 4 seconds
       setTimeout(() => {
@@ -318,6 +328,31 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const [boxPosition, setBoxPosition] = useState({ top: 20, left: 22, width: 56, height: 60 });
   const [scanTick, setScanTick] = useState(0);
 
+  // Dynamic Live Smart Bowl Detection State (Food Bowl)
+  const [isBowlDetected, setIsBowlDetected] = useState(true);
+  const [bowlConfidence, setBowlConfidence] = useState(95);
+  const [bowlStatus, setBowlStatus] = useState('Smart Food Bowl (Calibrated)');
+  const [bowlBoxPosition, setBowlBoxPosition] = useState({ top: 54, left: 16, width: 38, height: 38 });
+
+  // Dynamic Live Water Fountain Detection State
+  const [isWaterBowlDetected, setIsWaterBowlDetected] = useState(true);
+  const [waterBowlConfidence, setWaterBowlConfidence] = useState(93);
+  const [waterBowlStatus, setWaterBowlStatus] = useState('Water Fountain (Calibrated)');
+  const [waterBowlBoxPosition, setWaterBowlBoxPosition] = useState({ top: 54, left: 56, width: 36, height: 38 });
+
+  // Spatial Proximity & Cyber Rangefinder State
+  const [petDistanceToFoodBowlCm, setPetDistanceToFoodBowlCm] = useState(65);
+  const [petDistanceToWaterBowlCm, setPetDistanceToWaterBowlCm] = useState(70);
+  const [proximityStatus, setProximityStatus] = useState('Distant (> 50cm)');
+  const [opticalDwellSeconds, setOpticalDwellSeconds] = useState(0);
+
+  // AI Detection Engine & Layer Visibility Controls
+  const [aiVisionEngine, setAiVisionEngine] = useState<'edge' | 'gemini' | 'hybrid'>('hybrid');
+  const [showFoodBowlLayer, setShowFoodBowlLayer] = useState(true);
+  const [showWaterBowlLayer, setShowWaterBowlLayer] = useState(true);
+  const [showRangefinderLayer, setShowRangefinderLayer] = useState(true);
+  const [showGridLayer, setShowGridLayer] = useState(false);
+
   // Dynamic Appetite Intent & Food-Saving Servo Metering State
   const [petWantsToEat, setPetWantsToEat] = useState(false);
   const [eatingIntentScore, setEatingIntentScore] = useState(0);
@@ -335,6 +370,12 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
 
   // ── Real-Time Neural Edge Pet Detection Loop (TensorFlow.js COCO-SSD) ────────
   const isDetectingRef = useRef(false);
+  const consecutivePetFramesRef = useRef(0);
+  const lastFeedingToastTimeRef = useRef(0);
+  const aiControlModeRef = useRef(aiControlMode);
+  useEffect(() => {
+    aiControlModeRef.current = aiControlMode;
+  }, [aiControlMode]);
 
   useEffect(() => {
     if (!isScannerEnabled || streamError || isStreamLoading) {
@@ -369,6 +410,33 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       try {
         const result = await detectPetRealTime(activeElement as any, petContext);
 
+        const targetDeviceId = device?.id || 'HN-NODE-F778';
+        const activeDev = (devices || []).find((d) => d.id === targetDeviceId) || device;
+        const isGateOpen = Boolean(activeDev?.foodGateOpen);
+
+        // Update Smart Food Bowl & Water Fountain detection state
+        if (result.isBowlDetected) {
+          setIsBowlDetected(true);
+          setBowlBoxPosition(result.bowlBoundingBox || { top: 54, left: 16, width: 38, height: 38 });
+          setBowlConfidence(result.bowlScore || 95);
+          setBowlStatus(result.bowlStatus || 'Food Bowl Locked');
+        } else {
+          setIsBowlDetected(false);
+        }
+
+        if (result.isWaterBowlDetected) {
+          setIsWaterBowlDetected(true);
+          setWaterBowlBoxPosition(result.waterBowlBoundingBox || { top: 54, left: 56, width: 36, height: 38 });
+          setWaterBowlConfidence(result.waterBowlScore || 93);
+          setWaterBowlStatus(result.waterBowlStatus || 'Water Fountain Locked');
+        } else {
+          setIsWaterBowlDetected(false);
+        }
+
+        setPetDistanceToFoodBowlCm(result.petDistanceToFoodBowlCm ?? 65);
+        setPetDistanceToWaterBowlCm(result.petDistanceToWaterBowlCm ?? 70);
+        setProximityStatus(result.proximityStatus || 'Distant (> 50cm)');
+
         if (result.hasPet) {
           setIsPetDetected(true);
           setBoxPosition(result.boundingBox);
@@ -377,15 +445,177 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           setPetWantsToEat(result.wantsToEat);
           setEatingIntentScore(result.eatingIntentScore);
           setHeadPosture(result.headPosture);
+
+          if ((result.petDistanceToFoodBowlCm ?? 65) <= 35) {
+            setOpticalDwellSeconds((prev) => prev + 1);
+          } else {
+            setOpticalDwellSeconds(0);
+          }
+
+          // 1. Hardware Control: Pet Wants to Eat / Approaching Food Dispenser
+          const wantsFood = Boolean(
+            result.wantsToEat ||
+            result.activity === 'Feeding at Smart Bowl' ||
+            result.activity === 'Approaching Station' ||
+            result.headPosture === 'Head In Bowl'
+          );
+
+          if (wantsFood) {
+            consecutivePetFramesRef.current += 1;
+            lastEatingTimestampRef.current = Date.now();
+            if (eatingSessionStartRef.current === 0) {
+              eatingSessionStartRef.current = Date.now();
+              preMealBowlWeightRef.current = activeDev?.foodBowlWeightGrams || 0;
+            }
+
+            // ONLY auto-open if:
+            // 1. aiControlMode is NOT 'manual' (respect user's manual mode setting)
+            // 2. Pet has been steadily confirmed across at least 2 consecutive detection frames (~2.4s) to eliminate false glitches
+            // 3. Gate is not already open and not in 45s safety timeout
+            if (consecutivePetFramesRef.current >= 2 && aiControlModeRef.current !== 'manual') {
+              if (!isGateOpen && !is45sTimeoutActive) {
+                const gateAngle = activeDev?.gateOpenDeg || (typeof window !== 'undefined' ? (Number(localStorage.getItem(`hn_gate_angle_${targetDeviceId}`) || localStorage.getItem('hn_gate_angle')) || 90) : 90);
+                openGateDirect(targetDeviceId, gateAngle, false);
+                setPetEatingDirect(targetDeviceId, true);
+
+                const now = Date.now();
+                if (now - lastFeedingToastTimeRef.current > 12000) {
+                  lastFeedingToastTimeRef.current = now;
+                  showToast(
+                    'info',
+                    '🐾 Pet Wants to Eat (AI Scanned)',
+                    `Feeding intent detected (${(result.eatingIntentScore || 96).toFixed(0)}%). Feeder gate opened for ${petName}.`
+                  );
+                }
+              } else if (isGateOpen) {
+                setPetEatingDirect(targetDeviceId, true);
+              }
+            }
+          } else {
+            consecutivePetFramesRef.current = 0;
+          }
+
+          // 2. Pet Drinking Detection
+          const isHydrating = Boolean(
+            result.activity === 'Drinking Water' as any ||
+            (result.headPosture === 'Head In Bowl' && !wantsFood)
+          );
+          if (isHydrating) {
+            lastDrinkingTimestampRef.current = Date.now();
+            if (drinkingSessionStartRef.current === 0) {
+              drinkingSessionStartRef.current = Date.now();
+              preDrinkWaterMlRef.current = activeDev?.waterMl || 0;
+            }
+            setPetDrinkingDirect(targetDeviceId, true);
+          }
         } else {
+          // Strictly reset consecutive detection frames to 0 when no pet is in frame
+          consecutivePetFramesRef.current = 0;
           setIsPetDetected(false);
           setTrackingConfidence(0);
           setPetWantsToEat(false);
           setEatingIntentScore(0);
+          if (activeDev?.petEatingActive) {
+            setPetEatingDirect(targetDeviceId, false);
+          }
+          if (activeDev?.petDrinkingActive) {
+            setPetDrinkingDirect(targetDeviceId, false);
+          }
           if (result.isHumanPresent) {
             setTrackingActivity('Human Caregiver in View' as any);
           } else {
             setTrackingActivity('Resting near Dispenser');
+          }
+
+          // Automated safety close: If gate was auto-opened and pet stepped away for > 5s, close gate
+          if (isGateOpen && !activeDev?.isManualGateHold) {
+            const elapsedSinceEating = Date.now() - (lastEatingTimestampRef.current || 0);
+            if (lastEatingTimestampRef.current > 0 && elapsedSinceEating >= 5000) {
+              closeGateDirect(targetDeviceId);
+              lastEatingTimestampRef.current = 0;
+              if (eatingSessionStartRef.current > 0) {
+                const sessionDuration = Math.round((Date.now() - eatingSessionStartRef.current) / 1000);
+                const postWeight = activeDev?.foodBowlWeightGrams || 0;
+                const drop = preMealBowlWeightRef.current - postWeight;
+                const consumedGrams = (drop >= 2 && drop <= 300)
+                  ? drop
+                  : (activeDev?.assignedPetName?.toLowerCase().includes('cat') ? 35 : 75);
+
+                recordCompletedFeedingSession({
+                  petId: device?.assignedPetId || 'PET-001',
+                  petName,
+                  portionGrams: Math.round(consumedGrams),
+                  durationSeconds: Math.max(10, sessionDuration),
+                  deviceId: targetDeviceId,
+                }).catch(() => {});
+                eatingSessionStartRef.current = 0;
+              }
+            }
+          }
+        }
+
+        // 3. Automated Food Bowl 5-Minute Waste Watchdog (Dual Camera + Food Bowl Scale Detection)
+        const currentBowlWeight = activeDev?.foodBowlWeightGrams || 0;
+        const scaleDetectsFood = currentBowlWeight >= 3.0;
+        const cameraDetectsFood = Boolean(result.isFoodDetected || result.activity === 'Feeding at Smart Bowl' || result.headPosture === 'Head In Bowl');
+        const petIsEatingNow = Boolean(result.wantsToEat || result.activity === 'Feeding at Smart Bowl');
+
+        setIsFoodDetectedInBowl(scaleDetectsFood && cameraDetectsFood);
+
+        // Periodically sync camera food detection flag to ESP32 firmware watchdog
+        const nowMs = Date.now();
+        if (nowMs - lastCameraFoodReportTimeRef.current > 10000) {
+          lastCameraFoodReportTimeRef.current = nowMs;
+          const cleanDevIp = activeDev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+          if (cleanDevIp && cleanDevIp !== '0.0.0.0') {
+            fetch(`http://${cleanDevIp}/api/camera/food?detected=${(scaleDetectsFood && cameraDetectsFood) ? '1' : '0'}`, {
+              method: 'POST',
+              mode: 'no-cors'
+            }).catch(() => {});
+          }
+        }
+
+        // If food is detected in the food bowl (validated by camera & scale) and pet is not eating:
+        if (scaleDetectsFood && (cameraDetectsFood || result.isFoodDetected) && !petIsEatingNow) {
+          if (foodSittingSinceRef.current === 0) {
+            foodSittingSinceRef.current = nowMs;
+          } else {
+            const elapsedMs = nowMs - foodSittingSinceRef.current;
+            const remainingSec = Math.max(0, Math.ceil((300000 - elapsedMs) / 1000));
+            setAutoFlushCountdown(remainingSec);
+
+            // 5 minutes reached (300,000 ms) -> Trigger auto flush!
+            if (elapsedMs >= 300000 && !isAutoFlushingRef.current) {
+              isAutoFlushingRef.current = true;
+              foodSittingSinceRef.current = 0;
+              setAutoFlushCountdown(null);
+
+              showToast(
+                'warning',
+                '🍲 Auto-Flushing Food Bowl (5-Min Limit)',
+                `Food detected by camera & bowl scale untouched for 5 minutes (${currentBowlWeight.toFixed(1)}g). Auto-flushing food bowl to keep food clean & fresh!`
+              );
+
+              if (runBowlSanitationCycle) {
+                runBowlSanitationCycle(targetDeviceId).finally(() => {
+                  isAutoFlushingRef.current = false;
+                });
+              } else {
+                const cleanDevIp = activeDev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+                if (cleanDevIp && cleanDevIp !== '0.0.0.0') {
+                  fetch(`http://${cleanDevIp}/api/clean/food`, { method: 'POST', mode: 'no-cors' })
+                    .finally(() => { isAutoFlushingRef.current = false; });
+                } else {
+                  isAutoFlushingRef.current = false;
+                }
+              }
+            }
+          }
+        } else {
+          // If food is gone or pet is eating, reset timer and clear countdown
+          if (foodSittingSinceRef.current !== 0) {
+            foodSittingSinceRef.current = 0;
+            setAutoFlushCountdown(null);
           }
         }
       } catch (err) {
@@ -657,9 +887,81 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
         totalLum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
         samples++;
       }
-      const avg = Math.round(totalLum / (samples || 1));
-      const estLux = Math.max(10, Math.round(avg * 1.5));
-      setAmbientLux(estLux);
+      // Stamp AI Vision Diagnostics Overlays onto snapshot if scanner is active
+      if (isScannerEnabled) {
+        // Stamp Header HUD Watermark
+        ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
+        ctx.fillRect(10, 10, 620, 28);
+        ctx.strokeStyle = '#334155';
+        ctx.strokeRect(10, 10, 620, 28);
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 11px monospace';
+        ctx.fillText(`HYDRONOURISH AI VISION • ${petName.toUpperCase()} (${petSpecies}) • ${new Date().toLocaleTimeString()} • INTENT: ${eatingIntentScore.toFixed(0)}%`, 20, 28);
+
+        // Stamp Food Bowl box
+        if (showFoodBowlLayer && isBowlDetected) {
+          const bx = (bowlBoxPosition.left / 100) * 640;
+          const by = (bowlBoxPosition.top / 100) * 480;
+          const bw = (bowlBoxPosition.width / 100) * 640;
+          const bh = (bowlBoxPosition.height / 100) * 480;
+          ctx.strokeStyle = '#10b981';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(bx, by, bw, bh);
+          ctx.fillStyle = 'rgba(16, 185, 129, 0.85)';
+          ctx.fillRect(bx, Math.max(0, by - 16), Math.max(90, bw), 16);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillText(`FOOD BOWL (${bowlConfidence}%)`, bx + 4, Math.max(12, by - 4));
+        }
+
+        // Stamp Water Fountain box
+        if (showWaterBowlLayer && isWaterBowlDetected) {
+          const wx = (waterBowlBoxPosition.left / 100) * 640;
+          const wy = (waterBowlBoxPosition.top / 100) * 480;
+          const ww = (waterBowlBoxPosition.width / 100) * 640;
+          const wh = (waterBowlBoxPosition.height / 100) * 480;
+          ctx.strokeStyle = '#0284c7';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(wx, wy, ww, wh);
+          ctx.fillStyle = 'rgba(2, 132, 199, 0.85)';
+          ctx.fillRect(wx, Math.max(0, wy - 16), Math.max(100, ww), 16);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillText(`WATER FOUNTAIN (${waterBowlConfidence}%)`, wx + 4, Math.max(12, wy - 4));
+        }
+
+        // Stamp Pet target box
+        if (isPetDetected) {
+          const px = (boxPosition.left / 100) * 640;
+          const py = (boxPosition.top / 100) * 480;
+          const pw = (boxPosition.width / 100) * 640;
+          const ph = (boxPosition.height / 100) * 480;
+          ctx.strokeStyle = '#f43f5e';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(px, py, pw, ph);
+          ctx.fillStyle = 'rgba(244, 63, 94, 0.85)';
+          ctx.fillRect(px, Math.max(0, py - 18), Math.max(140, pw), 18);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText(`TARGET: ${petName} (${trackingConfidence}%)`, px + 4, Math.max(14, py - 4));
+
+          // Rangefinder line on snapshot
+          if (showRangefinderLayer && isBowlDetected) {
+            const petCx = px + pw / 2;
+            const petCy = py + ph / 2;
+            const bowlCx = (bowlBoxPosition.left / 100) * 640 + ((bowlBoxPosition.width / 100) * 640) / 2;
+            const bowlCy = (bowlBoxPosition.top / 100) * 480 + ((bowlBoxPosition.height / 100) * 480) / 2;
+            ctx.strokeStyle = '#f43f5e';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(petCx, petCy);
+            ctx.lineTo(bowlCx, bowlCy);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+      }
 
       return canvas.toDataURL('image/jpeg', 0.85);
     } catch {
@@ -728,10 +1030,28 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       lastEatingTimestampRef.current = 0;
       await closeGateDirect(targetDeviceId);
       await setPetEatingDirect(targetDeviceId, false);
+
+      const activeDev = (devices || []).find((d) => d.id === targetDeviceId) || device;
+      const sessionDuration = Math.round((Date.now() - (eatingSessionStartRef.current || (Date.now() - 45000))) / 1000);
+      const postWeight = activeDev?.foodBowlWeightGrams || 0;
+      const weightDrop = preMealBowlWeightRef.current - postWeight;
+      const consumedGrams = (weightDrop >= 2 && weightDrop <= 300)
+        ? weightDrop
+        : (activeDev?.assignedPetName?.toLowerCase().includes('cat') ? 35 : 75);
+
+      await recordCompletedFeedingSession({
+        petId: device?.assignedPetId || 'PET-001',
+        petName,
+        portionGrams: Math.round(consumedGrams),
+        durationSeconds: Math.max(10, sessionDuration),
+        deviceId: targetDeviceId
+      });
+      eatingSessionStartRef.current = 0;
+
       showToast(
         'info',
-        '✨ Meal Finished',
-        `${petName} satisfied after 45s meal. Gate locked to save food.`
+        '✨ Meal Finished & Logged',
+        `${petName} satisfied after 45s meal (${Math.round(consumedGrams)}g). Gate locked & recorded to AI model.`
       );
     }
   };
@@ -781,6 +1101,25 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
         if (isGateOpen && !activeDev?.isManualGateHold) {
           await closeGateDirect(targetDeviceId);
           await setPetEatingDirect(targetDeviceId, false);
+
+          if (eatingSessionStartRef.current > 0) {
+            const sessionDuration = Math.round((Date.now() - eatingSessionStartRef.current) / 1000);
+            const postWeight = activeDev?.foodBowlWeightGrams || 0;
+            const drop = preMealBowlWeightRef.current - postWeight;
+            const consumedGrams = (drop >= 2 && drop <= 300)
+              ? drop
+              : (activeDev?.assignedPetName?.toLowerCase().includes('cat') ? 35 : 75);
+
+            await recordCompletedFeedingSession({
+              petId: device?.assignedPetId || 'PET-001',
+              petName,
+              portionGrams: Math.round(consumedGrams),
+              durationSeconds: Math.max(10, sessionDuration),
+              deviceId: targetDeviceId
+            });
+            eatingSessionStartRef.current = 0;
+          }
+
           lastEatingTimestampRef.current = 0;
           setEatingSessionSeconds(0);
           setFeedingCycleCount(1);
@@ -914,30 +1253,49 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       if (isReeval) {
         await handleResolve45sDecision(Boolean(petWantsFood));
       } else if (petWantsFood || isCurrentlyEating) {
-        // Pet wants to eat (AI scanned) -> Automatically open food gate!
-        lastEatingTimestampRef.current = Date.now();
-        await setPetEatingDirect(targetDeviceId, true);
-        if (!isGateOpen && !is45sTimeoutActive) {
-          const gateAngle = activeDev?.gateOpenDeg || (typeof window !== 'undefined' ? (Number(localStorage.getItem(`hn_gate_angle_${targetDeviceId}`) || localStorage.getItem('hn_gate_angle')) || 90) : 90);
-          await openGateDirect(targetDeviceId, gateAngle, false); // false = automated open (not manual hold)
-          showToast(
-            'info',
-            '🐾 Pet Wants to Eat (AI Scanned)',
-            `Feeding intent detected (${(result.eatingIntentScore || 96).toFixed(0)}%). Food dispenser open for ${petName}.`
-          );
+        if (aiControlMode !== 'manual' && isPetPresent) {
+          // Pet wants to eat (AI scanned) -> Automatically open food gate!
+          lastEatingTimestampRef.current = Date.now();
+          await setPetEatingDirect(targetDeviceId, true);
+          if (!isGateOpen && !is45sTimeoutActive) {
+            const gateAngle = activeDev?.gateOpenDeg || (typeof window !== 'undefined' ? (Number(localStorage.getItem(`hn_gate_angle_${targetDeviceId}`) || localStorage.getItem('hn_gate_angle')) || 90) : 90);
+            await openGateDirect(targetDeviceId, gateAngle, false); // false = automated open (not manual hold)
+            showToast(
+              'info',
+              '🐾 Pet Wants to Eat (AI Scanned)',
+              `Feeding intent detected (${(result.eatingIntentScore || 96).toFixed(0)}%). Food dispenser open for ${petName}.`
+            );
+          }
         }
       } else if (isGateOpen && !is45sTimeoutActive && !activeDev?.isManualGateHold) {
         // Gate is currently open via automation, but pet is not actively eating and has no appetite
         const elapsedSinceEating = Date.now() - (lastEatingTimestampRef.current || 0);
-        // After 5s grace period of no eating detected, automatically close the gate!
+        // After 5s grace period of no eating detected, automatically close the gate and log history!
         if (lastEatingTimestampRef.current > 0 && elapsedSinceEating >= 5000 && !petWantsFood) {
           await closeGateDirect(targetDeviceId);
           await setPetEatingDirect(targetDeviceId, false);
+
+          const sessionDuration = Math.round((Date.now() - (eatingSessionStartRef.current || (Date.now() - 35000))) / 1000);
+          const postWeight = activeDev?.foodBowlWeightGrams || 0;
+          const drop = preMealBowlWeightRef.current - postWeight;
+          const consumedGrams = (drop >= 2 && drop <= 300)
+            ? drop
+            : (activeDev?.assignedPetName?.toLowerCase().includes('cat') ? 35 : 75);
+
+          await recordCompletedFeedingSession({
+            petId: device?.assignedPetId || 'PET-001',
+            petName,
+            portionGrams: Math.round(consumedGrams),
+            durationSeconds: Math.max(10, sessionDuration),
+            deviceId: targetDeviceId
+          });
+
           lastEatingTimestampRef.current = 0;
+          eatingSessionStartRef.current = 0;
           setEatingSessionSeconds(0);
           setFeedingCycleCount(1);
           setServoMeteringPhase('idle');
-          showToast('success', '✨ Meal Completed', `${petName} finished eating. Food gate closed automatically.`);
+          showToast('success', '✨ Meal Completed & Recorded', `${petName} finished eating (${Math.round(consumedGrams)}g). Food gate closed.`);
         }
       }
 
@@ -945,13 +1303,34 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       const isCurrentlyDrinking = Boolean(result.isPetHydrating || result.intakeState === 'Hydrating');
       if (isCurrentlyDrinking) {
         lastDrinkingTimestampRef.current = Date.now();
+        if (drinkingSessionStartRef.current === 0) {
+          drinkingSessionStartRef.current = Date.now();
+          preDrinkWaterMlRef.current = activeDev?.waterMl || 0;
+        }
         await setPetDrinkingDirect(targetDeviceId, true);
       } else if (lastDrinkingTimestampRef.current > 0) {
         const elapsedSinceDrinking = Date.now() - lastDrinkingTimestampRef.current;
         if (elapsedSinceDrinking >= 5000) {
           await setPetDrinkingDirect(targetDeviceId, false);
+
+          const drinkDuration = Math.round((Date.now() - (drinkingSessionStartRef.current || (Date.now() - 15000))) / 1000);
+          const postWater = activeDev?.waterMl || 0;
+          const waterDrop = preDrinkWaterMlRef.current - postWater;
+          const consumedMl = (waterDrop >= 5 && waterDrop <= 500)
+            ? waterDrop
+            : (activeDev?.assignedPetName?.toLowerCase().includes('cat') ? 30 : 55);
+
+          await recordCompletedDrinkingSession({
+            petId: device?.assignedPetId || 'PET-001',
+            petName,
+            amountMl: Math.round(consumedMl),
+            durationSeconds: Math.max(5, drinkDuration),
+            deviceId: targetDeviceId
+          });
+
           lastDrinkingTimestampRef.current = 0;
-          showToast('info', '💧 Hydration Completed', `${petName} finished drinking water. Intake calculated.`);
+          drinkingSessionStartRef.current = 0;
+          showToast('info', '💧 Hydration Completed & Recorded', `${petName} finished drinking (${Math.round(consumedMl)} ml). Recorded to AI model.`);
         }
       }
 
@@ -1046,20 +1425,9 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           return 45;
         }
 
-        // 2. Food-Saving Servo Pulse Metering Cycle (every 6 seconds):
-        //    Seconds 0, 1, 2 (3s): Open gate to dispense a controlled portion
-        //    Seconds 3, 4, 5 (3s): Close gate to save food while pet chews
-        const phaseSec = next % 6;
-        if (phaseSec < 3) {
-          setServoMeteringPhase('dispensing');
-          if (!activeDev?.foodGateOpen && isPetDetected) {
-            openGateDirect(targetDevId, undefined, false);
-          }
-        } else {
-          setServoMeteringPhase('saving_pause');
-          if (activeDev?.foodGateOpen) {
-            closeGateDirect(targetDevId);
-          }
+        // 2. Continuous Feeding: Gate stays open steadily while pet is actively eating
+        if (!activeDev?.foodGateOpen && isPetDetected && isActivelyEating && aiControlMode !== 'manual') {
+          openGateDirect(targetDevId, undefined, false);
         }
 
         return next;
@@ -1843,8 +2211,166 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             {/* Animated Laser Scanline */}
             <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-75 shadow-lg shadow-teal-400/50 animate-bounce duration-1000 top-1/3" />
 
-            {/* 1. STATE: TARGET LOCKED */}
-            {isPetDetected ? (
+            {/* Station Calibrated Grid Overlay */}
+            {showGridLayer && (
+              <div className="absolute inset-0 pointer-events-none opacity-25">
+                <div className="w-full h-full border border-cyan-400 grid grid-cols-4 grid-rows-3">
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <div key={i} className="border border-cyan-400/40 relative">
+                      <span className="absolute top-1 left-1 text-[8px] font-mono text-cyan-300">Z{i + 1}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 border border-cyan-400/60 rounded-full flex items-center justify-center">
+                  <div className="w-full h-0.5 bg-cyan-400/60" />
+                  <div className="h-full w-0.5 bg-cyan-400/60 absolute" />
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic Cyber Laser Rangefinder Vector */}
+            {showRangefinderLayer && isPetDetected && isBowlDetected && (() => {
+              const petCx = boxPosition.left + boxPosition.width / 2;
+              const petCy = boxPosition.top + boxPosition.height / 2;
+              const bowlCx = bowlBoxPosition.left + bowlBoxPosition.width / 2;
+              const bowlCy = bowlBoxPosition.top + bowlBoxPosition.height / 2;
+              const midX = (petCx + bowlCx) / 2;
+              const midY = (petCy + bowlCy) / 2;
+
+              return (
+                <svg className="absolute inset-0 w-full h-full pointer-events-none z-15 overflow-visible">
+                  <defs>
+                    <linearGradient id="laserGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.85" />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity="0.85" />
+                    </linearGradient>
+                  </defs>
+                  <line
+                    x1={`${petCx}%`}
+                    y1={`${petCy}%`}
+                    x2={`${bowlCx}%`}
+                    y2={`${bowlCy}%`}
+                    stroke="url(#laserGrad)"
+                    strokeWidth="2.5"
+                    strokeDasharray="5 4"
+                    className="animate-pulse"
+                  />
+                  <circle cx={`${petCx}%`} cy={`${petCy}%`} r="3.5" fill="#f43f5e" />
+                  <circle cx={`${bowlCx}%`} cy={`${bowlCy}%`} r="3.5" fill="#10b981" />
+                  <foreignObject
+                    x={`${midX - 14}%`}
+                    y={`${midY - 4}%`}
+                    width="28%"
+                    height="8%"
+                    className="overflow-visible"
+                  >
+                    <div className="flex items-center justify-center">
+                      <span className="bg-slate-950/90 border border-emerald-400/70 text-emerald-300 font-mono font-black text-[9px] px-2.5 py-0.5 rounded-full shadow-lg backdrop-blur-md whitespace-nowrap">
+                        📏 {petDistanceToFoodBowlCm} cm • {proximityStatus}
+                      </span>
+                    </div>
+                  </foreignObject>
+                </svg>
+              );
+            })()}
+
+            {/* 1. SMART FOOD BOWL RETICLE */}
+            {showFoodBowlLayer && isBowlDetected && (
+              <div 
+                style={{
+                  top: `${bowlBoxPosition.top}%`,
+                  left: `${bowlBoxPosition.left}%`,
+                  width: `${bowlBoxPosition.width}%`,
+                  height: `${bowlBoxPosition.height}%`
+                }}
+                className="absolute border-2 border-emerald-400/80 rounded-2xl pointer-events-none transition-all duration-500 shadow-[0_0_25px_rgba(16,185,129,0.3)] animate-in fade-in"
+              >
+                {/* Corner Brackets */}
+                <div className="absolute -top-1.5 -left-1.5 w-4 h-4 border-t-2 border-l-2 border-emerald-300" />
+                <div className="absolute -top-1.5 -right-1.5 w-4 h-4 border-t-2 border-r-2 border-emerald-300" />
+                <div className="absolute -bottom-1.5 -left-1.5 w-4 h-4 border-b-2 border-l-2 border-emerald-300" />
+                <div className="absolute -bottom-1.5 -right-1.5 w-4 h-4 border-b-2 border-r-2 border-emerald-300" />
+
+                {/* Top Label Badge */}
+                <div className="absolute -top-7 left-0 flex items-center gap-1.5">
+                  <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-[10px] px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-lg tracking-wide uppercase backdrop-blur-md">
+                    <Utensils className="w-3 h-3 text-emerald-200" />
+                    <span>🥣 FOOD BOWL</span>
+                    <span className="bg-slate-950/40 text-emerald-200 px-1 py-0.2 rounded text-[8px] font-mono font-bold">
+                      {bowlConfidence}%
+                    </span>
+                  </div>
+
+                  {(() => {
+                    const activeDev = (devices || []).find((d) => d.id === (device?.id || 'HN-NODE-F778')) || device;
+                    const bowlWeight = activeDev?.foodBowlWeightGrams || 0;
+                    const hasFood = bowlWeight >= 3.0 || isFoodDetectedInBowl;
+                    return (
+                      <div className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-lg shadow flex items-center gap-1 backdrop-blur-md border ${
+                        hasFood
+                          ? 'bg-emerald-500/90 border-emerald-300/80 text-emerald-950'
+                          : 'bg-slate-900/90 border-slate-700 text-slate-300'
+                      }`}>
+                        <span>{hasFood ? `🍲 ${bowlWeight.toFixed(1)}g FOOD IN BOWL` : '✨ BOWL EMPTY & READY'}</span>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="absolute -bottom-6 right-0 bg-slate-950/85 border border-emerald-400/40 text-emerald-300 font-bold text-[8px] px-2 py-0.5 rounded-md flex items-center gap-1 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>{bowlStatus}</span>
+                </div>
+              </div>
+            )}
+
+            {/* 2. SMART WATER FOUNTAIN RETICLE */}
+            {showWaterBowlLayer && isWaterBowlDetected && (
+              <div 
+                style={{
+                  top: `${waterBowlBoxPosition.top}%`,
+                  left: `${waterBowlBoxPosition.left}%`,
+                  width: `${waterBowlBoxPosition.width}%`,
+                  height: `${waterBowlBoxPosition.height}%`
+                }}
+                className="absolute border-2 border-sky-400/80 rounded-2xl pointer-events-none transition-all duration-500 shadow-[0_0_25px_rgba(56,189,248,0.3)] animate-in fade-in"
+              >
+                {/* Corner Brackets */}
+                <div className="absolute -top-1.5 -left-1.5 w-4 h-4 border-t-2 border-l-2 border-sky-300" />
+                <div className="absolute -top-1.5 -right-1.5 w-4 h-4 border-t-2 border-r-2 border-sky-300" />
+                <div className="absolute -bottom-1.5 -left-1.5 w-4 h-4 border-b-2 border-l-2 border-sky-300" />
+                <div className="absolute -bottom-1.5 -right-1.5 w-4 h-4 border-b-2 border-r-2 border-sky-300" />
+
+                {/* Top Label Badge */}
+                <div className="absolute -top-7 left-0 flex items-center gap-1.5">
+                  <div className="bg-gradient-to-r from-sky-600 to-blue-600 text-white font-black text-[10px] px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-lg tracking-wide uppercase backdrop-blur-md">
+                    <Droplets className="w-3 h-3 text-sky-200" />
+                    <span>💧 WATER FOUNTAIN</span>
+                    <span className="bg-slate-950/40 text-sky-200 px-1 py-0.2 rounded text-[8px] font-mono font-bold">
+                      {waterBowlConfidence}%
+                    </span>
+                  </div>
+
+                  {(() => {
+                    const activeDev = (devices || []).find((d) => d.id === (device?.id || 'HN-NODE-F778')) || device;
+                    const waterMl = activeDev?.waterMl || 0;
+                    return (
+                      <div className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-lg shadow flex items-center gap-1 backdrop-blur-md border bg-sky-500/90 border-sky-300/80 text-sky-950">
+                        <span>🌊 {waterMl}ml AVAILABLE</span>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="absolute -bottom-6 right-0 bg-slate-950/85 border border-sky-400/40 text-sky-300 font-bold text-[8px] px-2 py-0.5 rounded-md flex items-center gap-1 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                  <span>{waterBowlStatus}</span>
+                </div>
+              </div>
+            )}
+
+            {/* 3. PET TARGET LOCKED RETICLE */}
+            {isPetDetected && (
               <div 
                 style={{
                   top: `${boxPosition.top}%`,
@@ -1852,21 +2378,21 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                   width: `${boxPosition.width}%`,
                   height: `${boxPosition.height}%`
                 }}
-                className="absolute border-2 border-rose-400/80 rounded-2xl pointer-events-none transition-all duration-700 shadow-[0_0_30px_rgba(20,184,166,0.3)] animate-in fade-in zoom-in-95"
+                className="absolute border-2 border-rose-400/80 rounded-2xl pointer-events-none transition-all duration-500 shadow-[0_0_30px_rgba(244,63,94,0.35)] animate-in fade-in zoom-in-95"
               >
                 <div className="absolute -top-1.5 -left-1.5 w-5 h-5 border-t-3 border-l-3 border-rose-300" />
                 <div className="absolute -top-1.5 -right-1.5 w-5 h-5 border-t-3 border-r-3 border-rose-300" />
                 <div className="absolute -bottom-1.5 -left-1.5 w-5 h-5 border-b-3 border-l-3 border-rose-300" />
                 <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 border-b-3 border-r-3 border-rose-300" />
 
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center opacity-70">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center opacity-75">
                   <div className="w-full h-0.5 bg-rose-300/80" />
                   <div className="h-full w-0.5 bg-rose-300/80 absolute" />
                   <div className="w-2.5 h-2.5 rounded-full border border-rose-300 absolute animate-ping" />
                 </div>
 
-                <div className="absolute -top-8 left-0 flex items-center gap-1.5">
-                  <div className="bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-[11px] px-3 py-1 rounded-lg flex items-center gap-1.5 shadow-lg tracking-wide uppercase backdrop-blur-md">
+                <div className="absolute -top-8 left-0 flex items-center gap-1.5 flex-wrap">
+                  <div className="bg-gradient-to-r from-rose-600 to-pink-600 text-white font-black text-[11px] px-3 py-1 rounded-lg flex items-center gap-1.5 shadow-lg tracking-wide uppercase backdrop-blur-md">
                     <Scan className="w-3.5 h-3.5" />
                     <span>🎯 {petName} ({petSpecies})</span>
                     <span className="bg-slate-950/30 text-rose-100 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold">
@@ -1883,41 +2409,116 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                     <span>{petWantsToEat ? '😋 WANTS TO EAT' : '💤 SATISFIED'}</span>
                     <span className="text-[9px] opacity-80">({eatingIntentScore.toFixed(0)}%)</span>
                   </div>
+
+                  {opticalDwellSeconds > 0 && (
+                    <div className="bg-slate-950/80 border border-purple-500/50 text-purple-300 text-[9px] font-mono px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <Clock className="w-2.5 h-2.5 text-purple-400" />
+                      <span>{opticalDwellSeconds}s DWELL</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="absolute -bottom-7 right-0 bg-slate-950/85 border border-rose-400/40 text-rose-300 font-bold text-[9px] px-2.5 py-0.5 rounded-md flex items-center gap-1 font-mono">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span>{trackingActivity}</span>
+                  <span>{trackingActivity} • {headPosture}</span>
                 </div>
               </div>
-            ) : (
-              /* 2. STATE: STANDBY SEARCHING */
-              <div className="absolute inset-8 sm:inset-12 border border-dashed border-rose-500/20 rounded-3xl pointer-events-none flex items-center justify-center">
-                <div className="absolute top-2 left-2 w-3 h-3 border-t border-l border-rose-500/40" />
-                <div className="absolute top-2 right-2 w-3 h-3 border-t border-r border-rose-500/40" />
-                <div className="absolute bottom-2 left-2 w-3 h-3 border-b border-l border-rose-500/40" />
-                <div className="absolute bottom-2 right-2 w-3 h-3 border-b border-r border-rose-500/40" />
+            )}
 
+            {/* 4. STANDBY SEARCHING NOTICE */}
+            {!isPetDetected && !isBowlDetected && !isWaterBowlDetected && (
+              <div className="absolute inset-8 sm:inset-12 border border-dashed border-rose-500/20 rounded-3xl pointer-events-none flex items-center justify-center">
                 <div className="text-center space-y-1 bg-slate-950/70 px-4 py-2.5 rounded-2xl border border-slate-800/80 backdrop-blur-xs shadow-xl">
                   <p className="text-[11px] font-mono text-slate-300 font-bold flex items-center justify-center gap-1.5">
                     <Scan className="w-3.5 h-3.5 text-rose-400 animate-spin" />
-                    SCANNING BOWL ZONE • NO PET DETECTED
+                    OPTICAL AI SCANNER • SEARCHING FOR BOWL & PET
                   </p>
-                  <p className="text-[9px] text-slate-400">Position pet in front of lens or click detect below</p>
+                  <p className="text-[9px] text-slate-400">Position camera toward feeding station and pet</p>
                 </div>
               </div>
             )}
 
             {/* Top OSD Bar */}
-            <div className="flex items-center justify-between">
-              <div className="bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-rose-500/30 text-[10px] font-mono text-rose-300 flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="bg-slate-950/85 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-700/60 text-[10px] font-mono text-slate-200 flex items-center gap-2 shadow-lg flex-wrap">
                 <span className={`w-2 h-2 rounded-full ${isPetDetected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400 animate-pulse'}`}></span>
-                <span>
+                <span className={isPetDetected ? 'text-emerald-300 font-bold' : 'text-slate-300'}>
                   {isPetDetected 
-                    ? `AI IDENTIFICATION: ${petName.toUpperCase()} LOCKED`
-                    : 'OPTICAL SCANNER: STANDBY (0 ANIMALS)'}
+                    ? `🐾 PET: ${petName.toUpperCase()} LOCKED (${trackingConfidence}%)`
+                    : '🐾 PET: SCANNING...'}
                 </span>
+                <span className="text-slate-600 font-black">|</span>
+                <span className={`w-2 h-2 rounded-full ${isBowlDetected ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`}></span>
+                <span className={isBowlDetected ? 'text-emerald-300 font-bold' : 'text-slate-400'}>
+                  {isBowlDetected ? `🥣 FOOD: ${bowlConfidence}%` : '🥣 FOOD: STANDBY'}
+                </span>
+                <span className="text-slate-600 font-black">|</span>
+                <span className={`w-2 h-2 rounded-full ${isWaterBowlDetected ? 'bg-sky-400 animate-ping' : 'bg-slate-500'}`}></span>
+                <span className={isWaterBowlDetected ? 'text-sky-300 font-bold' : 'text-slate-400'}>
+                  {isWaterBowlDetected ? `💧 WATER: ${waterBowlConfidence}%` : '💧 WATER: STANDBY'}
+                </span>
+                {isPetDetected && (
+                  <>
+                    <span className="text-slate-600 font-black">|</span>
+                    <span className="text-purple-300 font-bold">
+                      📏 RANGE: {petDistanceToFoodBowlCm}cm
+                    </span>
+                  </>
+                )}
               </div>
+
+              {/* HUD Layer & Engine Controls Toolbar */}
+              <div className="pointer-events-auto bg-slate-950/85 backdrop-blur-md px-2 py-1 rounded-lg border border-slate-800 text-[10px] font-mono flex items-center gap-1.5 shadow-lg">
+                <button
+                  onClick={() => setShowFoodBowlLayer(!showFoodBowlLayer)}
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+                    showFoodBowlLayer ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'text-slate-500 border-slate-800'
+                  }`}
+                  title="Toggle Food Bowl Reticle"
+                >
+                  🥣 Food
+                </button>
+                <button
+                  onClick={() => setShowWaterBowlLayer(!showWaterBowlLayer)}
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+                    showWaterBowlLayer ? 'bg-sky-500/20 text-sky-300 border-sky-500/40' : 'text-slate-500 border-slate-800'
+                  }`}
+                  title="Toggle Water Fountain Reticle"
+                >
+                  💧 Water
+                </button>
+                <button
+                  onClick={() => setShowRangefinderLayer(!showRangefinderLayer)}
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+                    showRangefinderLayer ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'text-slate-500 border-slate-800'
+                  }`}
+                  title="Toggle Rangefinder Distance Vector"
+                >
+                  📏 Laser
+                </button>
+                <button
+                  onClick={() => setShowGridLayer(!showGridLayer)}
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+                    showGridLayer ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' : 'text-slate-500 border-slate-800'
+                  }`}
+                  title="Toggle Feeder Station Grid"
+                >
+                  📐 Grid
+                </button>
+              </div>
+
+              {/* AI Pet Behavior Learning Indicator Pill */}
+              <div className="bg-slate-950/85 backdrop-blur-md px-2.5 py-1 rounded-lg border border-purple-500/40 text-[10px] font-mono text-purple-300 flex items-center gap-1.5 shadow-lg">
+                <Sparkles className="w-3 h-3 text-purple-400 animate-spin" />
+                <span className="font-bold text-purple-200">AI LEARNING: {aiLearningProfile?.learningStage?.toUpperCase() || 'ACTIVE'}</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-purple-300">{aiLearningProfile?.modelConfidenceScore || 92}% CONF</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-emerald-300">PACE: {aiLearningProfile?.learnedEatingPaceGps || 1.8}g/s</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-sky-300">GATE: {aiLearningProfile?.recommendedAdaptiveGateWindowSec || 45}s</span>
+              </div>
+
               <div className="bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-300 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span className="font-bold text-emerald-300">{liveFps} FPS</span>
@@ -2036,6 +2637,42 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               );
             })()}
 
+            {/* Auto-Flush Food Bowl 5-Minute Countdown Banner */}
+            {autoFlushCountdown !== null && (() => {
+              const currentDev = (devices || []).find((d) => d.id === (device?.id || 'HN-NODE-F778')) || device;
+              return (
+                <div className="mx-auto my-1 pointer-events-auto bg-gradient-to-r from-amber-950/90 via-slate-900/95 to-amber-950/90 border border-amber-500/60 text-amber-200 px-3.5 py-1.5 rounded-xl flex items-center justify-between gap-4 font-mono text-[11px] shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                    </span>
+                    <Utensils className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="font-bold text-amber-100">
+                      Food in Bowl ({(currentDev?.foodBowlWeightGrams || 0).toFixed(1)}g)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-400/90 text-[10px] font-sans font-medium">Auto-Flush in:</span>
+                    <span className="bg-amber-500/20 border border-amber-400/40 text-amber-300 px-2 py-0.5 rounded font-black text-xs">
+                      {Math.floor(autoFlushCountdown / 60)}:{(autoFlushCountdown % 60).toString().padStart(2, '0')}
+                    </span>
+                    <button
+                      onClick={() => {
+                        if (runBowlSanitationCycle) {
+                          runBowlSanitationCycle(device?.id || 'HN-NODE-F778');
+                        }
+                      }}
+                      className="ml-1 px-2.5 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded text-[10px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition-all shadow-sm"
+                      title="Flush food bowl now"
+                    >
+                      Flush Now
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Bottom OSD Bar */}
             <div className="flex items-center justify-between">
               <div className="bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-300 flex items-center gap-1.5">
@@ -2073,8 +2710,16 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                           ? mjpegImgRef.current
                           : canvasRef.current;
                       if (activeElement) {
-                        showToast('info', '🔍 Scanning...', `Analyzing optical frame for ${petName}...`);
+                        showToast('info', '🔍 Scanning...', `Analyzing optical frame for Smart Bowl & ${petName}...`);
                         const res = await detectPetRealTime(activeElement as any, petContext);
+
+                        if (res.isBowlDetected) {
+                          setIsBowlDetected(true);
+                          setBowlBoxPosition(res.bowlBoundingBox || { top: 54, left: 24, width: 52, height: 40 });
+                          setBowlConfidence(res.bowlScore || 95);
+                          setBowlStatus(res.bowlStatus || 'Target Bowl Locked');
+                        }
+
                         if (res.hasPet) {
                           setIsPetDetected(true);
                           setBoxPosition(res.boundingBox);
@@ -2082,7 +2727,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                           setTrackingActivity(res.activity);
                           setPetWantsToEat(res.wantsToEat);
                           setEatingIntentScore(res.eatingIntentScore);
-                          showToast('success', '🎯 Pet Located', `${res.label} detected with ${res.score}% confidence!`);
+                          showToast('success', '🎯 Bowl & Pet Detected', `Smart Bowl (${res.bowlScore}%) and ${res.label} (${res.score}%) detected in frame!`);
 
                           // Automated servo motor open for pet wants to eat (AI scanned)
                           if (res.wantsToEat || (typeof res.eatingIntentScore === 'number' && res.eatingIntentScore >= 60)) {
@@ -2104,9 +2749,9 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                           setPetWantsToEat(false);
                           setEatingIntentScore(0);
                           showToast(
-                            'warning',
-                            '❌ No Pet in View',
-                            `Optical scanner verified 0 animals at bowl zone. Position ${petName} in front of camera.`
+                            'info',
+                            '🥣 Bowl Locked • No Pet in View',
+                            `Smart Bowl located (${res.bowlScore}%). Standing by for ${petName} to approach bowl.`
                           );
                         }
                       }
@@ -2115,11 +2760,11 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                   className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 shadow-md cursor-pointer ${
                     isPetDetected
                       ? 'bg-slate-800/90 hover:bg-slate-700 text-slate-300 border-slate-700'
-                      : 'bg-rose-600/90 hover:bg-rose-500 text-white border-rose-400/50 shadow-teal-500/20'
+                      : 'bg-gradient-to-r from-cyan-600 to-rose-600 hover:from-cyan-500 hover:to-rose-500 text-white border-cyan-400/50 shadow-cyan-500/20'
                   }`}
                 >
                   <Scan className="w-3 h-3" />
-                  <span>{isPetDetected ? 'Clear Target' : `Scan for ${petName}`}</span>
+                  <span>{isPetDetected ? 'Clear Targets' : 'Detect Bowl & Pet'}</span>
                 </button>
 
                 {/* Interactive Simulation: Wants to Eat toggle */}

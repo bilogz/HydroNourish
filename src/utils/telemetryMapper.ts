@@ -242,7 +242,7 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
 
   // Fallback for online device if SSID wasn't explicitly tagged
   if (!parsedSsid && (computedStatus === 'Online' || item.status === 'Online')) {
-    parsedSsid = 'brrt rrt';
+    parsedSsid = 'GlobeAtHome_F83DB';
   }
 
   // Regex fallback for CAM:<ip> anywhere in firmware string

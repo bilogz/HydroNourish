@@ -93,11 +93,11 @@ export const DevicesPage: React.FC = () => {
   // Wi-Fi Pairing & Scanning State
   const [wifiSsid, setWifiSsid] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('hydronourish_paired_ssid') || 'brrt rrt';
+      return localStorage.getItem('hydronourish_paired_ssid') || 'GlobeAtHome_F83DB';
     }
-    return 'brrt rrt';
+    return 'GlobeAtHome_F83DB';
   });
-  const [wifiPassword, setWifiPassword] = useState('12345678');
+  const [wifiPassword, setWifiPassword] = useState('RDGNNL7M46T');
   const [showWifiPass, setShowWifiPass] = useState(false);
   const [isPairingWifi, setIsPairingWifi] = useState(false);
   const [isSerialFlashing, setIsSerialFlashing] = useState(false);
@@ -126,6 +126,7 @@ export const DevicesPage: React.FC = () => {
   const [calServoAngle, setCalServoAngle] = useState(90);
   const [isTestingServo, setIsTestingServo] = useState(false);
   const [isSavingServo, setIsSavingServo] = useState(false);
+  const [isDispensingMeal, setIsDispensingMeal] = useState(false);
 
   const handleCalibrateFood = async (deviceId: string) => {
     if (!foodCalWeight || foodCalWeight <= 0) return;
@@ -167,18 +168,20 @@ export const DevicesPage: React.FC = () => {
   const [isSprayingWater, setIsSprayingWater] = useState(false);
 
   const handleSprayWater = async (deviceId: string) => {
+    if (isSprayingWater) return;
     setIsSprayingWater(true);
-    showToast('info', 'Spraying Clean Water', 'Closing food gate & activating rinse sprayer pump (GPIO 18 - 8s) to wash food bowl...');
+    showToast('info', 'Spraying Clean Water', 'Closing food gate & activating rinse sprayer pump (GPIO 18 - 3s) to wash food bowl...');
     try {
       if (closeGateDirect) {
         await closeGateDirect(deviceId);
       }
       if (dispenseSprayWaterDirect) {
-        await dispenseSprayWaterDirect(deviceId, 8000);
+        await dispenseSprayWaterDirect(deviceId, 3000);
       } else if (dispenseCleaningWaterDirect) {
-        await dispenseCleaningWaterDirect(deviceId, 8000);
+        await dispenseCleaningWaterDirect(deviceId, 3000);
       }
-      showToast('success', 'Spray Completed', 'Rinse sprayer wash cycle (8s) finished.');
+      await new Promise((res) => setTimeout(res, 3500));
+      showToast('success', 'Spray Completed', 'Rinse sprayer wash cycle (3s) finished.');
     } catch {
       showToast('error', 'Spray Error', 'Failed to activate spray pump.');
     } finally {
@@ -234,13 +237,13 @@ export const DevicesPage: React.FC = () => {
     if (isCleaningWaste) return;
     setIsCleaningWaste(true);
     setCleanWastePhase('spraying');
-    setCleanWasteCountdown(24);
+    setCleanWasteCountdown(19);
 
     const timerInterval = setInterval(() => {
       setCleanWasteCountdown((prev) => (prev > 1 ? prev - 1 : 1));
     }, 1000);
 
-    showToast('info', '🧼 Clean Waste (1/3)', 'Step 1: Food gate closed & spraying clean rinse water (GPIO 18 - 8s) to wash food bowl...');
+    showToast('info', '🧼 Clean Waste (1/3)', 'Step 1: Food gate closed & spraying clean rinse water (GPIO 18 - 3s) to wash food bowl...');
 
     try {
       // Step 0: Ensure Food Gate is CLOSED before any water spray
@@ -248,16 +251,16 @@ export const DevicesPage: React.FC = () => {
         await closeGateDirect(deviceId);
       }
 
-      // Phase 1: Spray Clean Rinse Water (GPIO 18) - exactly 8.0 seconds
+      // Phase 1: Spray Clean Rinse Water (GPIO 18) - exactly 3.0 seconds
       if (dispenseSprayWaterDirect) {
-        await dispenseSprayWaterDirect(deviceId, 8000);
+        await dispenseSprayWaterDirect(deviceId, 3000);
       } else {
         const dev = devices.find((d) => d.id === deviceId);
         const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '192.168.100.157';
-        fetch(`http://${cleanIp}/api/spray?duration=8000`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+        fetch(`http://${cleanIp}/api/spray?duration=3000`, { method: 'POST', mode: 'no-cors' }).catch(() => {});
       }
 
-      await new Promise((res) => setTimeout(res, 8000));
+      await new Promise((res) => setTimeout(res, 3000));
 
       // Phase 2: Wastewater Flush / Drain Pump (GPIO 23) - exactly 15.0 seconds
       setCleanWastePhase('draining');
@@ -273,7 +276,7 @@ export const DevicesPage: React.FC = () => {
 
       await new Promise((res) => setTimeout(res, 15000));
 
-      // Phase 3: Zero / Tare scales - exactly 1.0 second (Total = 24.0 seconds)
+      // Phase 3: Zero / Tare scales - exactly 1.0 second (Total = 19.0 seconds)
       setCleanWastePhase('taring');
       if (tareScaleDirect) await tareScaleDirect(deviceId);
       if (tareWaterScaleDirect) await tareWaterScaleDirect(deviceId);
@@ -282,7 +285,7 @@ export const DevicesPage: React.FC = () => {
 
       clearInterval(timerInterval);
       setCleanWasteCountdown(0);
-      showToast('success', '✨ Clean Waste Completed (24s cycle)', 'Food gate confirmed closed, bowl washed with 8s spray, evacuated with 15s flush into waste tank, and scales tared to 0.0g!');
+      showToast('success', '✨ Clean Waste Completed (19s cycle)', 'Food gate confirmed closed, bowl washed with 3s spray, evacuated with 15s flush into waste tank, and scales tared to 0.0g!');
     } catch {
       clearInterval(timerInterval);
       setCleanWasteCountdown(0);
@@ -503,7 +506,7 @@ export const DevicesPage: React.FC = () => {
       assignedPetName: pet ? pet.name : 'Standby / Vacant',
       hardwareStatus: pet ? 'occupied' : 'available',
       wifiSignalDbm: formData.wifiSignalDbm,
-      wifiSsid: 'brrt rrt',
+      wifiSsid: 'GlobeAtHome_F83DB',
       foodLevelPct: formData.foodLevelPct,
       waterLevelPct: formData.waterLevelPct,
       batteryPct: formData.batteryPct,
@@ -636,52 +639,61 @@ export const DevicesPage: React.FC = () => {
 
     const queryStr = `ssid=${encodeURIComponent(wifiSsid.trim())}&password=${encodeURIComponent(wifiPassword.trim())}&_t=${Date.now()}`;
 
+    // Extract dynamic Camera IP if known
+    const autoCamIp = selectedDevice?.cameraIp || 
+      selectedDevice?.firmwareVersion?.match(/CAM:([0-9.]+)/)?.[1] || 
+      (typeof window !== 'undefined' ? localStorage.getItem('hydronourish_camera_ip') : '') || '';
+    const cleanCamIp = autoCamIp ? autoCamIp.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() : '';
+    const cleanDevIp = selectedDevice?.ipAddress ? selectedDevice.ipAddress.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() : '';
+
     // Image Beacon Pings (Immune to HTTPS mixed-content blocks)
-    const targets = ['192.168.4.1', 'hydronourish-cam.local', 'hydronourish-feeder.local', selectedDevice?.ipAddress || ''];
+    const targets = [
+      '192.168.4.1',
+      '192.168.4.1:81',
+      'hydronourish-cam.local',
+      'hydronourish-feeder.local',
+      'hydronourish.local',
+      cleanDevIp,
+      cleanCamIp,
+      cleanCamIp ? `${cleanCamIp}:81` : ''
+    ].filter(Boolean) as string[];
+
     for (const t of targets) {
-      if (t) {
-        try {
-          const ping = new Image();
-          ping.src = `http://${t}/api/wifi/pair?${queryStr}`;
-        } catch {}
-      }
+      try {
+        const ping = new Image();
+        ping.src = `http://${t}/api/wifi/pair?${queryStr}`;
+      } catch {}
     }
 
     try {
-      // Broadcast Wi-Fi Provisioning across all candidates
+      // 1. Broadcast Wi-Fi Provisioning across all local candidates in parallel
+      const fetchPromises = targets.map((t) =>
+        fetch(`http://${t}/api/wifi/pair`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          mode: 'no-cors'
+        }).catch(() => {})
+      );
+
+      // 2. Also queue in Supabase Cloud so ESP32 & ESP32-CAM pick it up regardless of local subnet
+      const targetDev = (devices || []).find(d => d.id === 'HN-NODE-F778' || d.status === 'Online') || (devices || [])[0];
+      if (targetDev?.id) {
+        sendWifiProvisionToSupabase(targetDev.id, wifiSsid.trim(), wifiPassword.trim()).catch(() => {});
+      }
+
       await Promise.race([
-        fetch('http://192.168.4.1/api/wifi/pair', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          mode: 'no-cors'
-        }).catch(() => {}),
-        fetch('http://hydronourish-cam.local/api/wifi/pair', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          mode: 'no-cors'
-        }).catch(() => {}),
-        fetch('http://hydronourish-feeder.local/api/wifi/pair', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          mode: 'no-cors'
-        }).catch(() => {}),
-        fetch(`http://${selectedDevice?.ipAddress || '192.168.100.150'}/api/wifi/pair`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          mode: 'no-cors'
-        }).catch(() => {}),
+        Promise.allSettled(fetchPromises),
         new Promise(resolve => setTimeout(resolve, 2200))
       ]);
 
-      const msg = `Wi-Fi credentials for '${wifiSsid}' successfully written to ESP32 / ESP32-CAM NVS memory! Device is connecting to '${wifiSsid}'.`;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('hydronourish_paired_ssid', wifiSsid.trim());
+      }
+
+      const msg = `Wi-Fi credentials for '${wifiSsid}' successfully dispatched to ESP32 & ESP32-CAM! Devices are connecting to '${wifiSsid}'.`;
       setPairingSuccessMsg(msg);
       showToast('success', 'Wi-Fi Dispatched', msg);
-
-      const targetDev = (devices || []).find(d => d.id === 'HN-NODE-F778' || d.status === 'Online') || (devices || [])[0];
       if (targetDev) {
         await updateDevice(targetDev.id, {
           wifiSsid: wifiSsid.trim(),
@@ -1033,7 +1045,7 @@ export const DevicesPage: React.FC = () => {
                           <div className="flex items-center justify-end gap-1.5 mt-0.5">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200/80 text-[10px] font-bold text-indigo-700">
                               <Wifi className="w-3 h-3 text-indigo-600 shrink-0" />
-                              {featuredDevice.wifiSsid || 'brrt rrt'}
+                              {featuredDevice.wifiSsid || 'GlobeAtHome_F83DB'}
                             </span>
                           </div>
                         </div>
@@ -1154,7 +1166,7 @@ export const DevicesPage: React.FC = () => {
                           <span className="text-slate-500 font-medium">Connected Wi-Fi:</span>
                           <span className="font-bold text-indigo-700 flex items-center gap-1 bg-indigo-50/90 border border-indigo-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
                             <Wifi className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            {featuredDevice.wifiSsid || 'brrt rrt'}
+                            {featuredDevice.wifiSsid || 'GlobeAtHome_F83DB'}
                           </span>
                         </div>
 
@@ -1283,9 +1295,9 @@ export const DevicesPage: React.FC = () => {
                                   if (tds <= 300) return <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Pure</span>;
                                   if (tds < 500) return <span className="text-[9px] font-bold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded">Good Tap</span>;
                                   return (
-                                    <span className="text-[9px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded flex items-center gap-1 animate-pulse" title="TDS >= 500 PPM: Automated dirty water drain & refill active">
+                                    <span className="text-[9px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded flex items-center gap-1 animate-pulse" title="TDS >= 500 PPM: Contaminated water detected. Staff/Doctor alert active - manual inspection required.">
                                       <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
-                                      Dirty • Auto-Flush
+                                      Dirty • Doctor Alert
                                     </span>
                                   );
                                 })()}
@@ -1361,8 +1373,10 @@ export const DevicesPage: React.FC = () => {
 
                           const handleFeed = (e: React.MouseEvent) => {
                             e.stopPropagation();
-                            if (!isOnline) return;
+                            if (!isOnline || isGateOpen || isDispensingMeal) return;
+                            setIsDispensingMeal(true);
                             dispenseDirect(featuredDevice.id, idealMealPortion, `Ideal Meal (${idealMealPortion}g)`);
+                            setTimeout(() => setIsDispensingMeal(false), 3800);
                           };
 
                           const handleStopFeeding = (e: React.MouseEvent) => {
@@ -1380,24 +1394,24 @@ export const DevicesPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={handleFeed}
-                                disabled={!isOnline}
+                                disabled={!isOnline || isGateOpen || isDispensingMeal}
                                 className={`flex-1 py-2.5 px-2 font-bold transition-all flex items-center justify-center gap-1.5 ${
-                                  !isOnline
-                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                    : isGateOpen
-                                    ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-500/50 cursor-pointer active:scale-95'
+                                  !isOnline || isGateOpen || isDispensingMeal
+                                    ? isGateOpen || isDispensingMeal
+                                      ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-500/50 cursor-not-allowed opacity-90'
+                                      : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                     : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white cursor-pointer active:scale-95'
                                 }`}
                                 title={
                                   !isOnline
                                     ? 'Node is offline'
-                                    : isGateOpen
-                                    ? `Dispensing ideal meal (${idealMealPortion}g) — Gate will close automatically`
+                                    : isGateOpen || isDispensingMeal
+                                    ? `Dispensing meal (${idealMealPortion}g) — Gate opens once and will close automatically`
                                     : `Feed Ideal Meal (${idealMealPortion}g for ${assignedPet?.name || 'Pet'}) — Dispenses and closes gate`
                                 }
                               >
                                 <Utensils className="w-3.5 h-3.5 shrink-0" />
-                                <span>{isGateOpen ? 'Feeding...' : `Feed (${idealMealPortion}g)`}</span>
+                                <span>{isGateOpen || isDispensingMeal ? 'Feeding (Once)...' : `Feed (${idealMealPortion}g)`}</span>
                               </button>
                               <button
                                 type="button"
@@ -1564,7 +1578,7 @@ export const DevicesPage: React.FC = () => {
                           </span>
                           <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200/80 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                            Auto-Flush: Dirty Water & 15m Waste
+                            Auto-Sanitation: Food Waste & Doctor Alerts
                           </span>
                         </div>
                         <div>
@@ -1583,7 +1597,7 @@ export const DevicesPage: React.FC = () => {
                                 ? 'bg-rose-50 border-rose-300 text-rose-700 animate-pulse'
                                 : 'bg-gradient-to-r from-purple-50 via-indigo-50 to-sky-50 border-purple-200/80 text-purple-900 hover:from-purple-100 hover:to-indigo-100'
                             }`}
-                            title="3-in-1 Sanitation Cycle: 1. Spray Rinse (GPIO 18 - 8s) ➔ 2. Flush Wastewater (GPIO 23 - 15s) ➔ 3. Tare Scales (1s) = 24s Total"
+                            title="3-in-1 Sanitation Cycle: 1. Spray Rinse (GPIO 18 - 3s) ➔ 2. Flush Wastewater (GPIO 23 - 15s) ➔ 3. Tare Scales (1s) = 19s Total"
                           >
                             {isCleaningWaste ? (
                               <>
@@ -1619,10 +1633,10 @@ export const DevicesPage: React.FC = () => {
                                   ? 'bg-sky-100 border-sky-300 text-sky-800'
                                   : 'bg-sky-50/80 border-sky-200 text-sky-700 hover:bg-sky-100'
                               }`}
-                              title="Manually spray clean rinse water (GPIO 18 - 8s)"
+                              title="Manually spray clean rinse water (GPIO 18 - 3s)"
                             >
                               <Droplets className={`w-3 h-3 ${isSprayingWater ? 'animate-bounce text-sky-600' : 'text-sky-600'}`} />
-                              <span>{isSprayingWater ? 'Spraying...' : 'Spray Water (8s)'}</span>
+                              <span>{isSprayingWater ? 'Spraying...' : 'Spray Water (3s)'}</span>
                             </button>
 
                             <button
@@ -2557,7 +2571,7 @@ export const DevicesPage: React.FC = () => {
                 <span className="text-slate-400 font-bold uppercase text-[10px]">Connected Wi-Fi:</span>
                 <p className="font-bold text-indigo-700 flex items-center gap-1 mt-0.5">
                   <Wifi className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                  {selectedDevice.wifiSsid || 'brrt rrt'}
+                  {selectedDevice.wifiSsid || 'GlobeAtHome_F83DB'}
                 </p>
               </div>
               <div>

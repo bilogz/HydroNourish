@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { StatCard } from '../components/StatCard';
 import { StatusBadge } from '../components/StatusBadge';
 import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { AiLearningCenterWidget } from '../components/ai/AiLearningCenterWidget';
 import { useAppContext } from '../hooks/useAppContext';
 import { FeedingSchedule } from '../types';
 import {
@@ -198,15 +199,55 @@ export const FeedingPage: React.FC = () => {
   };
 
   const [isTaring, setIsTaring] = useState(false);
+  const [tareStage, setTareStage] = useState<'idle' | 'init' | 'sampling' | 'zeroing' | 'done'>('idle');
+  const [tareProgress, setTareProgress] = useState(0);
+  const tareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleTareScale = async () => {
-    if (!selectedDevice) return;
+    if (!selectedDevice || isTaring) return;
     setIsTaring(true);
-    try {
-      await tareScaleDirect(selectedDevice.id);
-    } finally {
-      setTimeout(() => setIsTaring(false), 700);
-    }
+    setTareStage('init');
+    setTareProgress(0);
+
+    // Phase 1: Initializing (0% → 25%)
+    const ramp = (from: number, to: number, ms: number) =>
+      new Promise<void>((resolve) => {
+        const steps = 20;
+        const stepMs = ms / steps;
+        const stepVal = (to - from) / steps;
+        let current = from;
+        let i = 0;
+        const tick = () => {
+          i++;
+          current += stepVal;
+          setTareProgress(Math.min(to, Math.round(current)));
+          if (i < steps) tareTimerRef.current = setTimeout(tick, stepMs);
+          else resolve();
+        };
+        tareTimerRef.current = setTimeout(tick, stepMs);
+      });
+
+    await ramp(0, 25, 400);
+    setTareStage('sampling');
+
+    // Send tare command during sampling phase
+    const cmdPromise = tareScaleDirect(selectedDevice.id);
+    await ramp(25, 70, 800);
+    setTareStage('zeroing');
+
+    // Phase 3: Zeroing (70% → 95%)
+    await ramp(70, 95, 600);
+    await cmdPromise.catch(() => {});
+
+    // Phase 4: Done
+    setTareProgress(100);
+    setTareStage('done');
+
+    setTimeout(() => {
+      setIsTaring(false);
+      setTareStage('idle');
+      setTareProgress(0);
+    }, 600);
   };
 
   const [scaleCalibrateModalOpen, setScaleCalibrateModalOpen] = useState(false);
@@ -214,21 +255,60 @@ export const FeedingPage: React.FC = () => {
   const [calKnownGrams, setCalKnownGrams] = useState<number>(100);
   const [calFactor, setCalFactor] = useState<number>(420.0);
   const [isCalibrating, setIsCalibrating] = useState(false);
+  const [calStage, setCalStage] = useState<'idle' | 'sending' | 'computing' | 'saving' | 'done'>('idle');
+  const [calProgress, setCalProgress] = useState(0);
+  const calTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCalibrateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDevice) return;
+    if (!selectedDevice || isCalibrating) return;
     setIsCalibrating(true);
-    try {
-      if (calMode === 'known') {
-        await calibrateScaleDirect(selectedDevice.id, calKnownGrams);
-      } else {
-        await calibrateScaleDirect(selectedDevice.id, undefined, calFactor);
-      }
-      setScaleCalibrateModalOpen(false);
-    } finally {
+    setCalStage('sending');
+    setCalProgress(0);
+
+    const rampCal = (from: number, to: number, ms: number) =>
+      new Promise<void>((resolve) => {
+        const steps = 20;
+        const stepMs = ms / steps;
+        const stepVal = (to - from) / steps;
+        let current = from;
+        let i = 0;
+        const tick = () => {
+          i++;
+          current += stepVal;
+          setCalProgress(Math.min(to, Math.round(current)));
+          if (i < steps) calTimerRef.current = setTimeout(tick, stepMs);
+          else resolve();
+        };
+        calTimerRef.current = setTimeout(tick, stepMs);
+      });
+
+    // Phase 1: Sending command (0 → 30%)
+    await rampCal(0, 30, 500);
+    setCalStage('computing');
+
+    // Send the actual calibration command
+    const cmdPromise = calMode === 'known'
+      ? calibrateScaleDirect(selectedDevice.id, calKnownGrams)
+      : calibrateScaleDirect(selectedDevice.id, undefined, calFactor);
+
+    // Phase 2: Computing factor (30 → 70%)
+    await rampCal(30, 70, 900);
+    setCalStage('saving');
+
+    // Phase 3: Saving to NVS (70 → 95%)
+    await rampCal(70, 95, 700);
+    await cmdPromise.catch(() => {});
+
+    setCalProgress(100);
+    setCalStage('done');
+
+    setTimeout(() => {
       setIsCalibrating(false);
-    }
+      setCalStage('idle');
+      setCalProgress(0);
+      setScaleCalibrateModalOpen(false);
+    }, 800);
   };
 
   return (
@@ -340,15 +420,30 @@ export const FeedingPage: React.FC = () => {
             <button
               onClick={handleTareScale}
               disabled={!isDeviceConnected || isTaring}
-              className={`px-3.5 py-2 rounded-xl font-bold text-xs border flex items-center gap-1.5 shadow-xs transition-all ${
+              className={`relative overflow-hidden px-3.5 py-2 rounded-xl font-bold text-xs border flex items-center gap-1.5 shadow-xs transition-all ${
                 isDeviceConnected && !isTaring
                   ? 'bg-white hover:bg-emerald-50 text-emerald-700 border-emerald-300 hover:border-emerald-400 cursor-pointer active:scale-95'
+                  : isTaring
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 cursor-wait'
                   : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
               }`}
               title="Zero out the bowl weight (tare to 0.0g)"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isTaring ? 'animate-spin' : ''}`} />
-              <span>{isTaring ? 'Taring Scale...' : 'Zero / Tare (0.0g)'}</span>
+              {/* Progress bar fill */}
+              {isTaring && (
+                <span
+                  className="absolute inset-y-0 left-0 bg-emerald-100 transition-all duration-150 ease-out"
+                  style={{ width: `${tareProgress}%` }}
+                />
+              )}
+              <RefreshCw className={`relative w-3.5 h-3.5 text-emerald-600 ${isTaring ? 'animate-spin' : ''}`} />
+              <span className="relative">
+                {tareStage === 'init' ? 'Initializing...' :
+                 tareStage === 'sampling' ? 'Sampling Sensors...' :
+                 tareStage === 'zeroing' ? 'Zeroing Weight...' :
+                 tareStage === 'done' ? '✓ Tared!' :
+                 'Zero / Tare (0.0g)'}
+              </span>
             </button>
             <button
               onClick={() => setScaleCalibrateModalOpen(true)}
@@ -567,10 +662,22 @@ export const FeedingPage: React.FC = () => {
                 type="button"
                 onClick={handleTareScale}
                 disabled={!isDeviceConnected || isTaring}
-                className="w-full py-1.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                className="relative overflow-hidden w-full py-1.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
               >
-                <Scale className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Execute Zero-Point Tare Now</span>
+                {isTaring && (
+                  <span
+                    className="absolute inset-y-0 left-0 bg-emerald-600/30 transition-all duration-150 ease-out rounded-xl"
+                    style={{ width: `${tareProgress}%` }}
+                  />
+                )}
+                <Scale className={`relative w-3.5 h-3.5 text-emerald-400 ${isTaring ? 'animate-pulse' : ''}`} />
+                <span className="relative">
+                  {tareStage === 'init' ? 'Initializing...' :
+                   tareStage === 'sampling' ? 'Sampling Sensors...' :
+                   tareStage === 'zeroing' ? 'Zeroing Weight...' :
+                   tareStage === 'done' ? '✓ Done!' :
+                   'Execute Zero-Point Tare Now'}
+                </span>
               </button>
             </div>
           </div>
@@ -983,6 +1090,9 @@ export const FeedingPage: React.FC = () => {
         </div>
       </div>
 
+      {/* ================= AI PET BEHAVIOR & HABIT LEARNING ================= */}
+      <AiLearningCenterWidget pet={pets[0]} />
+
       {/* ================= HISTORICAL FEEDING LOGS ================= */}
       <div className="space-y-4 pt-4">
         <div className="flex items-center justify-between">
@@ -1126,11 +1236,22 @@ export const FeedingPage: React.FC = () => {
               type="button"
               onClick={handleTareScale}
               disabled={isTaring}
-              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs active:scale-95"
+              className="relative overflow-hidden px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs active:scale-95"
               title="Zero out bowl weight before dispensing"
             >
-              <RefreshCw className={`w-3 h-3 ${isTaring ? 'animate-spin' : ''}`} />
-              <span>{isTaring ? 'Taring...' : 'Tare Bowl (0.0g)'}</span>
+              {isTaring && (
+                <span
+                  className="absolute inset-y-0 left-0 bg-white/20 transition-all duration-150 ease-out"
+                  style={{ width: `${tareProgress}%` }}
+                />
+              )}
+              <RefreshCw className={`relative w-3 h-3 ${isTaring ? 'animate-spin' : ''}`} />
+              <span className="relative">
+                {tareStage === 'sampling' ? 'Sampling...' :
+                 tareStage === 'zeroing' ? 'Zeroing...' :
+                 tareStage === 'done' ? '✓ Done!' :
+                 isTaring ? 'Init...' : 'Tare Bowl (0.0g)'}
+              </span>
             </button>
           </div>
 
@@ -1333,10 +1454,22 @@ export const FeedingPage: React.FC = () => {
               type="button"
               onClick={handleTareScale}
               disabled={isTaring}
-              className="px-3 py-1.5 rounded-xl bg-slate-700/80 hover:bg-slate-700 border border-slate-600 text-xs font-bold text-slate-200 flex items-center gap-1.5 cursor-pointer active:scale-95"
+              className="relative overflow-hidden px-3 py-1.5 rounded-xl bg-slate-700/80 hover:bg-slate-700 border border-slate-600 text-xs font-bold text-slate-200 flex items-center gap-1.5 cursor-pointer active:scale-95"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isTaring ? 'animate-spin' : ''}`} />
-              <span>{isTaring ? 'Taring...' : 'Quick Zero / Tare'}</span>
+              {isTaring && (
+                <span
+                  className="absolute inset-y-0 left-0 bg-emerald-500/20 transition-all duration-150 ease-out rounded-xl"
+                  style={{ width: `${tareProgress}%` }}
+                />
+              )}
+              <RefreshCw className={`relative w-3.5 h-3.5 text-emerald-400 ${isTaring ? 'animate-spin' : ''}`} />
+              <span className="relative">
+                {tareStage === 'init' ? 'Initializing...' :
+                 tareStage === 'sampling' ? 'Sampling...' :
+                 tareStage === 'zeroing' ? 'Zeroing...' :
+                 tareStage === 'done' ? '✓ Tared!' :
+                 'Quick Zero / Tare'}
+              </span>
             </button>
           </div>
 
@@ -1456,9 +1589,27 @@ export const FeedingPage: React.FC = () => {
             <button
               type="submit"
               disabled={isCalibrating}
-              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm cursor-pointer active:scale-95 disabled:opacity-50"
+              className="relative overflow-hidden px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm cursor-pointer active:scale-95 disabled:opacity-50 transition-all"
             >
-              {isCalibrating ? 'Calibrating...' : 'Apply & Save Calibration'}
+              {isCalibrating && (
+                <span
+                  className="absolute inset-y-0 left-0 bg-white/20 transition-all duration-150 ease-out rounded-xl"
+                  style={{ width: `${calProgress}%` }}
+                />
+              )}
+              <span className="relative flex items-center gap-1.5">
+                {calStage === 'sending' ? (
+                  <><Settings2 className="w-3.5 h-3.5 animate-spin" /> Sending Command...</>
+                ) : calStage === 'computing' ? (
+                  <><Settings2 className="w-3.5 h-3.5 animate-spin" /> Computing Factor...</>
+                ) : calStage === 'saving' ? (
+                  <><Settings2 className="w-3.5 h-3.5 animate-pulse" /> Saving to NVS...</>
+                ) : calStage === 'done' ? (
+                  <>✓ Calibrated!</>
+                ) : (
+                  <>Apply &amp; Save Calibration</>
+                )}
+              </span>
             </button>
           </div>
         </form>
