@@ -28,13 +28,12 @@ export function generateTelemetryDelta(currentDevice: Device): TelemetryReading 
 
   // Calculate new reservoir percentage
   const newWaterPct = Math.max(0, currentDevice.waterLevelPct - (waterConsumedMl > 0 ? 2 : 0));
-  const newFoodPct = Math.max(0, currentDevice.foodLevelPct - (Math.random() < 0.1 ? 1 : 0));
 
   return {
     waterConsumedMl,
     foodConsumedGrams: 0,
     waterLevelPct: newWaterPct,
-    foodLevelPct: newFoodPct,
+    foodLevelPct: currentDevice.foodLevelPct,
   };
 }
 

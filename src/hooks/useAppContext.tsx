@@ -1556,12 +1556,47 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         }
         return s;
       }));
+
+      // Exact Bowl Weight Drop Hopper Deduction: Deduct consumed grams from 1kg food container
+      setDevices((prev) => (prev ?? []).map((d) => {
+        if (d.id === targetDevId || (!sessionData.deviceId && d.id === dev?.id)) {
+          const cap = d.foodHopperCapacityGrams || 1000;
+          const currentGrams = Math.round(((d.foodLevelPct ?? 85) / 100) * cap);
+          const nextGrams = Math.max(0, currentGrams - portionGrams);
+          const nextPct = Math.round((nextGrams / cap) * 100);
+
+          updateDeviceInSupabase(d.id, {
+            foodLevelPct: nextPct,
+            lastIntakeFoodGrams: portionGrams
+          }).catch(() => {});
+
+          return {
+            ...d,
+            foodLevelPct: nextPct,
+            lastIntakeFoodGrams: portionGrams
+          };
+        }
+        return d;
+      }));
+
+      // Sync deduction with ESP32 via Direct USB and HTTP
+      if (usbSerialService.isConnected()) {
+        usbSerialService.deductFood(portionGrams).catch(() => {});
+      }
+      const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+      if (cleanIp && cleanIp !== 'Direct USB' && cleanIp !== '0.0.0.0') {
+        fetch(`http://${cleanIp}/api/command`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'deduct_food_level', grams: portionGrams })
+        }).catch(() => {});
+      }
     }
 
     showToast(
       'success',
       `🤖 AI Adaptive Feeding: ${portionGrams}g Tomorrow & Onwards`,
-      `AI learned ${petName} consumed ${portionGrams}g. Updated feeding plan and future schedules to dispense ${portionGrams}g tomorrow and onwards.`
+      `AI learned ${petName} consumed ${portionGrams}g (bowl weight drop). Hopper deducted and updated future schedules.`
     );
   };
 

@@ -459,6 +459,14 @@ class USBSerialService {
     return this.sendCommand({ action: 'refill' });
   }
 
+  public async deductFood(grams: number): Promise<boolean> {
+    return this.sendCommand({ action: 'deduct_food_level', grams: Math.round(grams) });
+  }
+
+  public async setFoodLevel(levelPct: number): Promise<boolean> {
+    return this.sendCommand({ action: 'set_food_level', percent: Math.round(levelPct) });
+  }
+
   public async runDiagnostics(): Promise<boolean> {
     return this.sendCommand({ action: 'diagnostics' });
   }

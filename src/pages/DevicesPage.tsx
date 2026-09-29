@@ -1357,24 +1357,12 @@ export const DevicesPage: React.FC = () => {
 
                           {/* TDS Dry Doctor / Vet Refill Notice */}
                           {((featuredDevice.waterQualityPpm ?? 0) === 0) && (
-                            <div className="p-3 bg-amber-50/90 border border-amber-300 rounded-xl text-xs text-amber-950 flex items-center justify-between gap-3 animate-in fade-in">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
-                                <div className="min-w-0">
-                                  <p className="font-extrabold text-amber-950 text-[11px] truncate">⚠️ Doctor / Staff Alert: Water Tank is Dry (0 PPM)</p>
-                                  <p className="text-[10px] text-amber-700 truncate">TDS probe detected no water in reservoir. Please refill clean water tank immediately.</p>
-                                </div>
+                            <div className="p-3 bg-amber-50/90 border border-amber-300 rounded-xl text-xs text-amber-950 flex items-center gap-2.5 animate-in fade-in">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
+                              <div className="min-w-0">
+                                <p className="font-extrabold text-amber-950 text-[11px]">⚠️ Doctor / Staff Alert: Water Tank is Dry (0 PPM)</p>
+                                <p className="text-[10px] text-amber-700">TDS probe detected no water in reservoir. Please refill clean water tank.</p>
                               </div>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSprayWater(featuredDevice.id);
-                                }}
-                                className="px-2.5 py-1 text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors shrink-0 shadow-2xs active:scale-95"
-                              >
-                                Refill Water Tank
-                              </button>
                             </div>
                           )}
 
