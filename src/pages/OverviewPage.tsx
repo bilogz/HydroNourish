@@ -6,7 +6,7 @@
  * hardware control, feeding & hydration tracking, and direct patient management.
  */
 
-import { PetSession, getDeviceWaterMl } from '../types';
+import { PetSession, getDeviceWaterMl, getDeviceFoodGrams } from '../types';
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { DashboardLayout } from '../layouts/DashboardLayout';
@@ -239,9 +239,9 @@ export const OverviewPage: React.FC = () => {
             }
           />
           <StatCard
-            title="Feeder Hopper"
-            value={hasDeviceConnected ? hardware.foodLevelPct + '%' : 'N/A'}
-            subtitle={hasDeviceConnected ? 'Dispense container level' : 'No device active'}
+            title="Feeder Hopper (1kg)"
+            value={hasDeviceConnected ? `${getDeviceFoodGrams(hardware)}g / 1kg` : 'N/A'}
+            subtitle={hasDeviceConnected ? `Dispenser container (${hardware.foodLevelPct}% of 1kg)` : 'No device active'}
             icon={Utensils}
             iconBgColor="bg-orange-50"
             iconTextColor="text-orange-600"
@@ -461,7 +461,7 @@ export const OverviewPage: React.FC = () => {
                 </div>
               </div>
               <div className="p-4 bg-slate-50 border-t border-slate-100 grid grid-cols-3 gap-2 text-xs text-center">
-                <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Food Level</span><span className="font-bold text-slate-800">{hardware.foodLevelPct}%</span></div>
+                <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Food Hopper (1kg)</span><span className="font-bold text-slate-800 font-mono">{getDeviceFoodGrams(hardware)}g ({hardware.foodLevelPct}%)</span></div>
                 <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Water Volume</span><span className="font-bold text-slate-800">{getDeviceWaterMl(hardware)} ml</span></div>
                 <div><span className="text-slate-400 block text-[10px] uppercase font-bold">Assignment</span><span className="font-bold text-rose-700">{hardware.assignedPetName || 'Vacant'}</span></div>
               </div>

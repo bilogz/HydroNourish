@@ -7,7 +7,7 @@ import { AlertCard } from '../components/AlertCard';
 import { Modal } from '../components/Modal';
 import { useAppContext } from '../hooks/useAppContext';
 import { useSession } from '../contexts/SessionContext';
-import { PetSession } from '../types';
+import { PetSession, getDeviceFoodGrams } from '../types';
 import {
   Dog,
   Cat,
@@ -240,12 +240,14 @@ export const PetProfilePage: React.FC = () => {
           <div className="clinic-card p-5 space-y-1 bg-white">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
               <Utensils className="w-3.5 h-3.5 text-emerald-600" />
-              Food Hopper Level
+              Food Hopper Level (1kg)
             </span>
-            <div className="text-xl font-extrabold text-slate-900">
-              {assignedDevice ? `${assignedDevice.foodLevelPct}%` : '80%'}
+            <div className="text-xl font-extrabold text-slate-900 font-mono">
+              {assignedDevice ? `${getDeviceFoodGrams(assignedDevice)}g / 1kg` : '850g / 1kg'}
             </div>
-            <p className="text-[11px] text-slate-500">Automated timed kibble dispenser</p>
+            <p className="text-[11px] text-slate-500">
+              {assignedDevice ? `${assignedDevice.foodLevelPct}% capacity` : '85% capacity'} • 1kg container
+            </p>
           </div>
 
           <div className="clinic-card p-5 space-y-1 bg-white">

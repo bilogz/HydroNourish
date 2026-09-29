@@ -116,6 +116,7 @@ export interface Device {
   wifiSignalDbm: number;
   wifiSsid?: string;
   foodLevelPct: number;
+  foodHopperCapacityGrams?: number;
   waterLevelPct: number;
   waterLiters?: number;
   waterMl?: number;
@@ -458,3 +459,16 @@ export function getDeviceWaterLiters(device?: Partial<Device> | null): number {
   const ml = getDeviceWaterMl(device);
   return Number((ml / 1000).toFixed(2));
 }
+
+export function getDeviceFoodGrams(device?: Partial<Device> | null, defaultCapacityGrams: number = 1000): number {
+  if (!device) return 0;
+  const capacity = device.foodHopperCapacityGrams || defaultCapacityGrams;
+  const pct = typeof device.foodLevelPct === 'number' ? Math.max(0, Math.min(100, device.foodLevelPct)) : 85;
+  return Math.round((pct / 100) * capacity);
+}
+
+export function getDeviceFoodKg(device?: Partial<Device> | null, defaultCapacityGrams: number = 1000): number {
+  const grams = getDeviceFoodGrams(device, defaultCapacityGrams);
+  return Number((grams / 1000).toFixed(2));
+}
+

@@ -9,6 +9,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSession } from '../contexts/SessionContext';
 import { useAppContext } from '../hooks/useAppContext';
+import { getDeviceFoodGrams } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { Logo } from '../components/Logo';
 import { Modal } from '../components/Modal';
@@ -978,8 +979,10 @@ export const OwnerDashboardPage: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Food Reservoir</span>
-                      <span className="text-lg font-black text-slate-900">{hardware.foodLevelPct}%</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Food Hopper (1kg)</span>
+                      <span className="text-lg font-black text-slate-900 font-mono">
+                        {getDeviceFoodGrams(hardware)}g <span className="text-xs font-semibold text-slate-400 font-sans">({hardware.foodLevelPct}%)</span>
+                      </span>
                     </div>
                     <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                       <span className="text-[10px] text-slate-400 font-bold uppercase block">Water Reservoir</span>

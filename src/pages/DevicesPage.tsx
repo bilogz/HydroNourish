@@ -9,7 +9,7 @@ import { DirectUSBConsoleWidget } from '../components/DirectUSBConsoleWidget';
 import { usbSerialService, ScannedWifiNetwork } from '../services/usbSerialService';
 import { sendWifiProvisionToSupabase, clearWifiProvisionInSupabase } from '../services/supabase';
 import { useAppContext } from '../hooks/useAppContext';
-import { Device, Pet, getDeviceWaterMl } from '../types';
+import { Device, Pet, getDeviceWaterMl, getDeviceFoodGrams } from '../types';
 import {
   Cpu,
   Wifi,
@@ -329,6 +329,20 @@ export const DevicesPage: React.FC = () => {
       await tareScaleDirect(deviceId);
     } finally {
       setTimeout(() => setTaringDevId(null), 800);
+    }
+  };
+
+  const handleRefillHopperClick = async (deviceId: string) => {
+    try {
+      if (usbSerialService.isConnected()) {
+        await usbSerialService.refillHopper();
+      }
+      await updateDevice(deviceId, {
+        foodLevelPct: 100
+      });
+      showToast('success', 'Food Hopper Refilled', 'Container level reset to 1000g (1.0 kg full / 100%).');
+    } catch {
+      showToast('error', 'Refill Error', 'Could not update food hopper status.');
     }
   };
 
@@ -1307,9 +1321,30 @@ export const DevicesPage: React.FC = () => {
 
                           {/* Level Progress Bars */}
                           <div>
-                            <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
-                              <span className="flex items-center gap-1.5"><Utensils className="w-3.5 h-3.5 text-emerald-600" /> Food Hopper Level</span>
-                              <span className="font-mono text-emerald-600">{featuredDevice.foodLevelPct}%</span>
+                            <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1">
+                              <span className="flex items-center gap-1.5">
+                                <Utensils className="w-3.5 h-3.5 text-emerald-600" /> Food Hopper Level
+                                <span className="text-[10px] font-semibold text-slate-400 font-sans">(1kg Container)</span>
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-emerald-600 font-extrabold">
+                                  {getDeviceFoodGrams(featuredDevice)}g / 1kg
+                                </span>
+                                <span className="font-mono text-slate-400 text-[10px]">
+                                  ({featuredDevice.foodLevelPct}%)
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRefillHopperClick(featuredDevice.id);
+                                  }}
+                                  title="Mark Food Hopper Refilled (100% / 1000g)"
+                                  className="text-[9px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded cursor-pointer transition-colors flex items-center gap-1 shadow-2xs active:scale-95"
+                                >
+                                  Refill 1kg
+                                </button>
+                              </div>
                             </div>
                             <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
                               <div style={{ width: `${featuredDevice.foodLevelPct}%` }} className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500" />
@@ -2612,8 +2647,10 @@ export const DevicesPage: React.FC = () => {
                 })()}
               </div>
               <div>
-                <span className="text-slate-400 font-bold uppercase text-[10px]">Food Hopper:</span>
-                <p className="font-bold text-emerald-600">{selectedDevice.foodLevelPct}% Level</p>
+                <span className="text-slate-400 font-bold uppercase text-[10px]">Food Hopper (1kg Container):</span>
+                <p className="font-bold text-emerald-600 font-mono">
+                  {getDeviceFoodGrams(selectedDevice)}g / 1kg ({selectedDevice.foodLevelPct}%)
+                </p>
               </div>
               <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200/70">
                 <div className="flex items-center justify-between">

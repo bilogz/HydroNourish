@@ -743,14 +743,14 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
             {/* Food Hopper */}
             <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800">
               <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-                <span className="font-semibold">Food Hopper</span>
+                <span className="font-semibold">Food Hopper (1kg)</span>
                 <Utensils className="w-4 h-4 text-amber-400" />
               </div>
-              <div className="text-2xl font-black text-white">
-                {telemetry ? `${telemetry.foodLevel}%` : '--'}
+              <div className="text-xl font-black text-white font-mono">
+                {telemetry ? `${Math.round(((telemetry.foodLevel ?? 85) / 100) * 1000)}g / 1kg` : '--'}
               </div>
-              <p className="text-[10px] text-slate-500 mt-1">
-                Step Delay: {telemetry?.stepDelay ? `${telemetry.stepDelay} µs` : 'Standard'}
+              <p className="text-[10px] text-slate-400 mt-1">
+                Level: {telemetry ? `${telemetry.foodLevel}%` : '--'} • Step: {telemetry?.stepDelay ? `${telemetry.stepDelay} µs` : 'Standard'}
               </p>
             </div>
 

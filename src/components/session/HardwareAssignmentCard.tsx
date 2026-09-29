@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { StatusBadge } from '../StatusBadge';
 import { useSession } from '../../contexts/SessionContext';
 import { useAppContext } from '../../hooks/useAppContext';
-import { PetSession } from '../../types';
+import { PetSession, getDeviceFoodGrams } from '../../types';
 import {
   Cpu,
   Dog,
@@ -310,9 +310,11 @@ export const HardwareAssignmentCard: React.FC<HardwareAssignmentCardProps> = ({
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="flex items-center gap-1.5 text-slate-500">
-                    <Utensils className="w-3.5 h-3.5 text-orange-500" /> Food Container
+                    <Utensils className="w-3.5 h-3.5 text-orange-500" /> Food Hopper (1kg)
                   </span>
-                  <span className="font-bold text-slate-800">{hardware.foodLevelPct}%</span>
+                  <span className="font-bold text-slate-800 font-mono">
+                    {getDeviceFoodGrams(hardware)}g / 1kg ({hardware.foodLevelPct}%)
+                  </span>
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2">
                   <div

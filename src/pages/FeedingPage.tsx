@@ -6,7 +6,7 @@ import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AiLearningCenterWidget } from '../components/ai/AiLearningCenterWidget';
 import { useAppContext } from '../hooks/useAppContext';
-import { FeedingSchedule } from '../types';
+import { FeedingSchedule, getDeviceFoodGrams } from '../types';
 import {
   Utensils,
   Plus,
@@ -364,9 +364,9 @@ export const FeedingPage: React.FC = () => {
           }
         />
         <StatCard
-          title="Feeder Hopper Level"
-          value={isDeviceConnected && selectedDevice ? `${selectedDevice.foodLevelPct}%` : 'N/A'}
-          subtitle={isDeviceConnected ? "Dispenser Container Capacity" : "No device connected"}
+          title="Feeder Hopper Level (1kg)"
+          value={isDeviceConnected && selectedDevice ? `${getDeviceFoodGrams(selectedDevice)}g / 1kg` : 'N/A'}
+          subtitle={isDeviceConnected ? `${selectedDevice?.foodLevelPct}% remaining of 1kg container` : "No device connected"}
           icon={Cpu}
           iconBgColor={isDeviceConnected ? "bg-amber-50" : "bg-slate-100"}
           iconTextColor={isDeviceConnected ? "text-amber-600" : "text-slate-400"}
