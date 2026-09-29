@@ -7,7 +7,7 @@
  */
 
 import { PetSession, getDeviceWaterMl, getDeviceFoodGrams } from '../types';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { StatCard } from '../components/StatCard';
@@ -20,6 +20,7 @@ import { HardwareAssignmentCard } from '../components/session/HardwareAssignment
 import { AssignPetOwnerModal } from '../components/session/AssignPetOwnerModal';
 import { CompleteSessionModal } from '../components/session/CompleteSessionModal';
 import { CancelSessionModal } from '../components/session/CancelSessionModal';
+import { usbSerialService } from '../services/usbSerialService';
 import { useAppContext } from '../hooks/useAppContext';
 import { useSession } from '../contexts/SessionContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,6 +34,7 @@ import {
   ChevronRight,
   Cpu,
   Zap,
+  Usb,
   Calendar,
   Heart,
   Sparkles,
@@ -43,6 +45,10 @@ import {
   Play,
   Wifi,
   Scale,
+  AlertTriangle,
+  AlertCircle,
+  Bot,
+  PowerOff,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -61,12 +67,14 @@ export const OverviewPage: React.FC = () => {
   const {
     pets,
     devices,
+    alerts,
     feedingLogs,
     hydrationLogs,
     dispenseDirect,
     dispenseWaterDirect,
     stopPumpDirect,
     toggleAutoRefillDirect,
+    toggleAutoFlushDirect,
     tareScaleDirect,
     showToast,
   } = useAppContext();
@@ -76,6 +84,15 @@ export const OverviewPage: React.FC = () => {
     owners,
     getCompletedSessionCount,
   } = useSession();
+
+  const [isUsbConnected, setIsUsbConnected] = useState<boolean>(() => usbSerialService.getIsConnected());
+
+  useEffect(() => {
+    const unsubStatus = usbSerialService.onStatus((connected) => {
+      setIsUsbConnected(connected);
+    });
+    return unsubStatus;
+  }, []);
 
   const hardware = devices.find(d => d.id === sessionHardware.id || d.status === 'Online') || devices[0] || sessionHardware;
 
@@ -118,6 +135,21 @@ export const OverviewPage: React.FC = () => {
   const activeSessionCount = activeSession ? 1 : 0;
   const petOwnersCount = (owners || []).length;
 
+  // Active Malnutrition & Food Refusal Clinical Alerts
+  const activeMalnutritionAlerts = (alerts || []).filter(a => {
+    if (a.reviewStatus === 'Resolved') return false;
+    const typeStr = (a.alertType || '').toLowerCase();
+    const obsStr = (a.aiObservation || a.message || '').toLowerCase();
+    return (
+      typeStr.includes('malnutrition') ||
+      typeStr.includes('anorexia') ||
+      typeStr.includes('refusal') ||
+      obsStr.includes('refus') ||
+      obsStr.includes('malnourish') ||
+      obsStr.includes('not eating')
+    );
+  });
+
   // Feeding consumption trend (7-day)
   const feedingTrendData = [
     { day: 'Mon', actual: 180, target: 200 },
@@ -140,11 +172,18 @@ export const OverviewPage: React.FC = () => {
     { day: 'Sun', intake: 500, target: 500 },
   ];
 
-  const hasDeviceConnected = Boolean(hardware && hardware.status === 'Online');
+  const hasDeviceConnected = Boolean(hardware && (hardware.status === 'Online' || isUsbConnected));
   const isAutoRefillOn = Boolean(
     hardware?.autoRefillEnabled ?? (
       hardware?.firmwareVersion?.includes('AUTO:ON') &&
       !hardware?.firmwareVersion?.includes('AUTO:OFF')
+    )
+  );
+  const isAutoFlushOn = Boolean(
+    hardware?.autoFlushEnabled ?? (
+      typeof window !== 'undefined'
+        ? localStorage.getItem(`hn_auto_flush_${hardware?.id}`) !== '0'
+        : true
     )
   );
 
@@ -194,6 +233,54 @@ export const OverviewPage: React.FC = () => {
             badgeType="success"
           />
         </div>
+
+        {/* ================= CLINICAL MALNUTRITION & ANOREXIA WATCHDOG BANNER ================= */}
+        {activeMalnutritionAlerts.length > 0 && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-2 border-red-300 animate-pulse">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-white/20 rounded-xl shrink-0 backdrop-blur-xs">
+                <AlertTriangle className="w-6 h-6 text-white" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full bg-white text-rose-900 text-[10px] font-black uppercase tracking-wider">
+                    🚨 Urgent Doctor / Veterinary Notice
+                  </span>
+                  <span className="text-xs font-bold text-rose-100">
+                    Patient Malnutrition &amp; Food Refusal Detected by AI
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-white leading-snug">
+                  Active Food Refusal Alert: {activeMalnutritionAlerts[0].petName}
+                </h3>
+                <p className="text-xs sm:text-sm text-rose-100/90 leading-relaxed max-w-3xl">
+                  {activeMalnutritionAlerts[0].aiObservation || 'AI Vision Scan detected that this patient is refusing offered food and exhibiting clinical signs of anorexia or malnutrition. Attending veterinarians and the pet owner have both been notified.'}
+                </p>
+                <p className="text-[11px] font-bold text-amber-200 mt-1">
+                  💡 Recommended Clinical Action: {activeMalnutritionAlerts[0].recommendedAction || 'Immediate examination by veterinarian. Evaluate metabolic, dental, or gastrointestinal etiology and monitor fluid balance.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="shrink-0 flex items-center gap-2 w-full md:w-auto">
+              <Link
+                to="/app/alerts"
+                className="w-full md:w-auto px-4 py-2.5 rounded-xl bg-white hover:bg-rose-50 active:bg-rose-100 text-rose-900 font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Bot className="w-4 h-4 text-rose-600" />
+                Review AI Alerts
+              </Link>
+              {activeMalnutritionAlerts[0].petId && (
+                <Link
+                  to={`/app/pets/${activeMalnutritionAlerts[0].petId}`}
+                  className="w-full md:w-auto px-4 py-2.5 rounded-xl bg-rose-900/60 hover:bg-rose-900/80 text-white font-bold text-xs border border-rose-400/40 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  Patient Profile
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ================= HARDWARE ASSIGNMENT CARD ================= */}
         <HardwareAssignmentCard
@@ -260,13 +347,13 @@ export const OverviewPage: React.FC = () => {
           />
           <StatCard
             title="Device Connection"
-            value={hasDeviceConnected ? hardware.status : 'Offline'}
-            subtitle={hasDeviceConnected ? 'Signal: ' + hardware.wifiSignalDbm + ' dBm' : 'No telemetry'}
-            icon={Zap}
-            iconBgColor="bg-emerald-50"
-            iconTextColor="text-emerald-600"
-            badgeText={hasDeviceConnected && hardware.status === 'Online' ? 'Active Stream' : 'Disconnected'}
-            badgeType={hasDeviceConnected && hardware.status === 'Online' ? 'success' : 'alert'}
+            value={hasDeviceConnected ? (isUsbConnected ? 'Online (USB)' : hardware.status) : 'Offline'}
+            subtitle={hasDeviceConnected ? (isUsbConnected ? 'Direct USB Plug & Play' : 'Signal: ' + hardware.wifiSignalDbm + ' dBm') : 'No telemetry'}
+            icon={isUsbConnected ? Usb : Zap}
+            iconBgColor={isUsbConnected ? 'bg-teal-50' : 'bg-emerald-50'}
+            iconTextColor={isUsbConnected ? 'text-teal-600' : 'text-emerald-600'}
+            badgeText={hasDeviceConnected ? (isUsbConnected ? 'Direct USB' : 'Active Stream') : 'Disconnected'}
+            badgeType={hasDeviceConnected ? 'success' : 'alert'}
           />
           <StatCard
             title="Station Status"
@@ -279,6 +366,29 @@ export const OverviewPage: React.FC = () => {
             badgeType={activeSession ? 'warning' : 'success'}
           />
         </div>
+
+        {/* ================= DOCTOR TDS DRY ALERT BANNER ================= */}
+        {hasDeviceConnected && (hardware.waterQualityPpm ?? 0) === 0 && (
+          <div className="p-3.5 bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-orange-500/10 border-2 border-amber-300 rounded-2xl text-xs text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-800 shrink-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping inline-block" />
+              </div>
+              <div>
+                <p className="font-black text-amber-950 text-xs sm:text-sm">🚨 Attending Doctor / Staff Alert: Water Tank is Dry (0 PPM)</p>
+                <p className="text-[11px] text-amber-800 mt-0.5">TDS sensor detects 0 PPM. Clean water tank reservoir is empty or dry. Attending doctor / veterinary staff please refill clean water tank.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => dispenseWaterDirect(hardware.id, 10000)}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-black text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <Droplets className="w-3.5 h-3.5" />
+              Refill Water Tank
+            </button>
+          </div>
+        )}
 
         {/* ================= QUICK HARDWARE ACTIONS BAR ================= */}
         {hasDeviceConnected && (
@@ -337,6 +447,23 @@ export const OverviewPage: React.FC = () => {
               >
                 <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                 Auto-Refill: {isAutoRefillOn ? 'ENABLED (150ml)' : 'DISABLED'}
+              </button>
+
+              <button
+                onClick={() => toggleAutoFlushDirect(hardware.id, !isAutoFlushOn)}
+                className={`px-3.5 py-2 rounded-xl font-bold text-xs border flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                  isAutoFlushOn
+                    ? 'bg-purple-500/20 text-purple-300 border-purple-400/40 hover:bg-purple-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-400/40 hover:bg-amber-500/30'
+                }`}
+                title="Toggle 5-minute automated food bowl flush watchdog (Turn Auto-Flush ON or AUTO OFF)"
+              >
+                {isAutoFlushOn ? (
+                  <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                ) : (
+                  <PowerOff className="w-3.5 h-3.5 text-amber-300" />
+                )}
+                Auto-Flush: {isAutoFlushOn ? 'ENABLED (5m)' : 'AUTO OFF'}
               </button>
 
               <button

@@ -252,6 +252,24 @@ export const OwnerDashboardPage: React.FC = () => {
     );
   }, [sessions, ownerEmail, currentOwner, myPetIds]);
 
+  // Scoped Malnutrition & Food Refusal Alerts for this Owner's Pets
+  const myMalnutritionAlerts = useMemo(() => {
+    return (alerts || []).filter((a) => {
+      const isMyPet = myPetIds.includes(a.petId) || myPets.some((p) => p.name?.toLowerCase() === a.petName?.toLowerCase());
+      if (!isMyPet) return false;
+      const typeStr = (a.alertType || '').toLowerCase();
+      const obsStr = (a.aiObservation || a.message || '').toLowerCase();
+      return (
+        typeStr.includes('malnutrition') ||
+        typeStr.includes('anorexia') ||
+        typeStr.includes('refusal') ||
+        obsStr.includes('refus') ||
+        obsStr.includes('malnourish') ||
+        obsStr.includes('not eating')
+      );
+    });
+  }, [alerts, myPetIds, myPets]);
+
   // Active Session Scoped to this Owner
   const myActiveSession = useMemo(() => {
     // 1. Direct search in sessions state
@@ -704,6 +722,46 @@ export const OwnerDashboardPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* ═══════════ URGENT CLINICAL NUTRITION / MALNUTRITION ALERT BANNER ═══════════ */}
+        {myMalnutritionAlerts.length > 0 && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-2 border-red-300 animate-pulse">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-white/20 rounded-xl shrink-0 backdrop-blur-xs">
+                <AlertTriangle className="w-6 h-6 text-white" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2 py-0.5 rounded-full bg-white text-rose-800 text-[10px] font-black uppercase tracking-wider">
+                    Clinical Nutrition Warning
+                  </span>
+                  <span className="text-xs font-bold text-rose-100">
+                    Heritage Animal Clinic Attending Veterinarian Notified
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-white leading-snug">
+                  Food Refusal / Malnutrition Detected for {myMalnutritionAlerts[0].petName}
+                </h3>
+                <p className="text-xs sm:text-sm text-rose-100/90 leading-relaxed max-w-3xl">
+                  {myMalnutritionAlerts[0].aiObservation || 'AI Vision Scan detected that your pet is not eating or exhibiting signs of food aversion / malnutrition. Attending veterinarians and clinical staff have been alerted to closely observe dietary intake and administer nutritional support.'}
+                </p>
+                <p className="text-[11px] font-bold text-amber-200 mt-1">
+                  💡 Clinical Recommendation: {myMalnutritionAlerts[0].recommendedAction || 'Immediate examination by veterinarian. Please consult the clinic staff via the messaging portal or visit Heritage Animal Clinic.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="shrink-0 flex items-center gap-2 w-full md:w-auto">
+              <button
+                onClick={() => setActiveTab('messages')}
+                className="w-full md:w-auto px-4 py-2.5 rounded-xl bg-white hover:bg-rose-50 active:bg-rose-100 text-rose-900 font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <MessageSquare className="w-4 h-4 text-rose-600" />
+                Contact Attending Vet
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ═══════════ TAB: MY PETS (WITH ADD, EDIT, AND PHOTO UPLOAD) ═══════════ */}
         {activeTab === 'pets' && (

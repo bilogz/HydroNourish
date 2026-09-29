@@ -61,6 +61,7 @@ export const DevicesPage: React.FC = () => {
     startPumpDirect,
     stopPumpDirect,
     toggleAutoRefillDirect,
+    toggleAutoFlushDirect,
     togglePumpMasterDirect,
     deactivatePumpDirect,
     tareScaleDirect,
@@ -89,6 +90,14 @@ export const DevicesPage: React.FC = () => {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [assignPetModalOpen, setAssignPetModalOpen] = useState(false);
   const [petSearchQuery, setPetSearchQuery] = useState('');
+  const [isUsbConnected, setIsUsbConnected] = useState<boolean>(() => usbSerialService.getIsConnected());
+
+  useEffect(() => {
+    const unsubStatus = usbSerialService.onStatus((connected) => {
+      setIsUsbConnected(connected);
+    });
+    return unsubStatus;
+  }, []);
 
   // Wi-Fi Pairing & Scanning State
   const [wifiSsid, setWifiSsid] = useState(() => {
@@ -981,17 +990,17 @@ export const DevicesPage: React.FC = () => {
         ) : (
           (() => {
             const featuredDevice = (devices || []).find(d => d.id === 'HN-NODE-F778') || (devices || [])[0];
-            const isOnline = featuredDevice.status === 'Online';
-            const isConnecting = featuredDevice.status === ('Connecting' as typeof featuredDevice.status);
+            const isOnline = featuredDevice.status === 'Online' || isUsbConnected;
+            const isConnecting = !isUsbConnected && featuredDevice.status === ('Connecting' as typeof featuredDevice.status);
             const isOffline = !isOnline && !isConnecting;
 
             const badgeBg = isOnline
-              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              ? (isUsbConnected ? 'bg-teal-50 text-teal-800 border border-teal-300' : 'bg-emerald-50 text-emerald-700 border border-emerald-200')
               : isConnecting
               ? 'bg-amber-50 text-amber-700 border border-amber-200'
               : 'bg-rose-50 text-rose-700 border border-rose-200';
-            const dotColor = isOnline ? 'bg-emerald-500' : isConnecting ? 'bg-amber-400' : 'bg-rose-500';
-            const pingColor = isOnline ? 'bg-emerald-400' : isConnecting ? 'bg-amber-300' : '';
+            const dotColor = isOnline ? (isUsbConnected ? 'bg-teal-500' : 'bg-emerald-500') : isConnecting ? 'bg-amber-400' : 'bg-rose-500';
+            const pingColor = isOnline ? (isUsbConnected ? 'bg-teal-400' : 'bg-emerald-400') : isConnecting ? 'bg-amber-300' : '';
 
             const assignedPet = pets.find(p => p.id === featuredDevice.assignedPetId || p.name === featuredDevice.assignedPetName);
             const autoCamIp = featuredDevice.cameraIp || featuredDevice.firmwareVersion?.match(/CAM:([0-9.]+)/)?.[1];
@@ -1005,6 +1014,13 @@ export const DevicesPage: React.FC = () => {
               featuredDevice.autoRefillEnabled ?? (
                 featuredDevice.firmwareVersion?.includes('AUTO:ON') &&
                 !featuredDevice.firmwareVersion?.includes('AUTO:OFF')
+              )
+            );
+            const isAutoFlushOn = Boolean(
+              featuredDevice.autoFlushEnabled ?? (
+                typeof window !== 'undefined'
+                  ? localStorage.getItem(`hn_auto_flush_${featuredDevice.id}`) !== '0'
+                  : true
               )
             );
 
@@ -1050,6 +1066,10 @@ export const DevicesPage: React.FC = () => {
                             <span className="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-700 text-[10px] font-bold flex items-center gap-1">
                               <RefreshCw className="w-3 h-3 animate-spin" /> Connecting...
                             </span>
+                          ) : isUsbConnected ? (
+                            <span className="px-2 py-0.5 rounded-lg bg-teal-100 text-teal-800 border border-teal-300 text-[10px] font-bold flex items-center gap-1 shadow-2xs">
+                              <Usb className="w-3 h-3 text-teal-600 animate-pulse" /> Direct USB (Plug & Play)
+                            </span>
                           ) : (
                             <StatusBadge status={featuredDevice.status} size="sm" />
                           )}
@@ -1057,10 +1077,17 @@ export const DevicesPage: React.FC = () => {
                         <div className="text-right">
                           <span className="block text-[11px] font-mono text-slate-500 font-bold">{featuredDevice.macAddress}</span>
                           <div className="flex items-center justify-end gap-1.5 mt-0.5">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200/80 text-[10px] font-bold text-indigo-700">
-                              <Wifi className="w-3 h-3 text-indigo-600 shrink-0" />
-                              {featuredDevice.wifiSsid || 'GlobeAtHome_F83DB'}
-                            </span>
+                            {isUsbConnected ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-[10px] font-bold text-teal-700">
+                                <Usb className="w-3 h-3 text-teal-600 shrink-0" />
+                                Offline Direct USB
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200/80 text-[10px] font-bold text-indigo-700">
+                                <Wifi className="w-3 h-3 text-indigo-600 shrink-0" />
+                                {featuredDevice.wifiSsid || 'GlobeAtHome_F83DB'}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1135,8 +1162,8 @@ export const DevicesPage: React.FC = () => {
                                 {(() => {
                                   const isCat = assignedPet.species?.toLowerCase() === 'cat';
                                   const sizeLabel = isCat ? 'Cat' : (assignedPet.weight < 10 ? 'Small Dog' : assignedPet.weight > 25 ? 'Large Dog' : 'Medium Dog');
-                                  const portion = isCat ? 35 : (assignedPet.weight < 10 ? 60 : assignedPet.weight > 25 ? 220 : 110);
-                                  const waterTarget = isCat ? 200 : (assignedPet.weight < 10 ? 350 : assignedPet.weight > 25 ? 1500 : 750);
+                                  const portion = assignedPet.feedingPlan?.portionGrams || (isCat ? 35 : (assignedPet.weight < 10 ? 60 : assignedPet.weight > 25 ? 220 : 110));
+                                  const waterTarget = assignedPet.hydrationTarget || (isCat ? 200 : (assignedPet.weight < 10 ? 350 : assignedPet.weight > 25 ? 1500 : 750));
                                   return (
                                     <div className="mt-1 flex flex-wrap items-center gap-1 text-[9px] font-semibold" title="Calibrated Intake Targets by Breed & Size (Warren Panizales & Melvin Ferrer Revision)">
                                       <span className="bg-rose-50 text-rose-700 px-1.5 py-0.5 rounded border border-rose-200 shadow-2xs">
@@ -1304,8 +1331,17 @@ export const DevicesPage: React.FC = () => {
                                 </span>
                                 {(() => {
                                   const tds = featuredDevice.waterQualityPpm ?? 0;
-                                  if (tds === 0) return <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">Dry</span>;
-                                  if (tds <= 300) return <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Pure</span>;
+                                  if (tds === 0) {
+                                    return (
+                                      <span
+                                        className="text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded flex items-center gap-1 animate-pulse"
+                                        title="TDS 0 PPM (Dry): Water probe detected empty water tank! Attending veterinarian/doctor alert: Refill clean water tank immediately."
+                                      >
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                                        Dry • Doctor Alert (Refill Water Tank)
+                                      </span>
+                                    );
+                                  }
                                   if (tds <= 300) return <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Pure</span>;
                                   if (tds < 500) return <span className="text-[9px] font-bold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded">Good Tap</span>;
                                   return (
@@ -1318,6 +1354,29 @@ export const DevicesPage: React.FC = () => {
                               </div>
                             </div>
                           </div>
+
+                          {/* TDS Dry Doctor / Vet Refill Notice */}
+                          {((featuredDevice.waterQualityPpm ?? 0) === 0) && (
+                            <div className="p-3 bg-amber-50/90 border border-amber-300 rounded-xl text-xs text-amber-950 flex items-center justify-between gap-3 animate-in fade-in">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="font-extrabold text-amber-950 text-[11px] truncate">⚠️ Doctor / Staff Alert: Water Tank is Dry (0 PPM)</p>
+                                  <p className="text-[10px] text-amber-700 truncate">TDS probe detected no water in reservoir. Please refill clean water tank immediately.</p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSprayWater(featuredDevice.id);
+                                }}
+                                className="px-2.5 py-1 text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors shrink-0 shadow-2xs active:scale-95"
+                              >
+                                Refill Water Tank
+                              </button>
+                            </div>
+                          )}
 
                           {/* Level Progress Bars */}
                           <div>
@@ -1502,7 +1561,7 @@ export const DevicesPage: React.FC = () => {
                       </div>
 
                       {/* Action Row 2: Real Hardware Toggle Switches */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {/* REAL TOGGLE SWITCH 1: Water Pump Master Power (Active / Deactivated) */}
                         <div
                           onClick={() => isOnline && togglePumpMasterDirect(featuredDevice.id)}
@@ -1578,7 +1637,7 @@ export const DevicesPage: React.FC = () => {
                             <div className="min-w-0">
                               <p className="font-bold text-xs text-slate-800 leading-tight">Auto-Refill</p>
                               <p className={`text-[10px] font-extrabold ${isAutoRefillOn ? 'text-rose-700' : 'text-slate-500'}`}>
-                                {isAutoRefillOn ? 'SMART ON (150ml)' : 'PAUSED'}
+                                {isAutoRefillOn ? 'SMART ON' : 'PAUSED'}
                               </p>
                             </div>
                           </div>
@@ -1602,19 +1661,82 @@ export const DevicesPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
+
+                        {/* REAL TOGGLE SWITCH 3: Auto-Flush Smart System (ON / AUTO OFF) */}
+                        <div
+                          onClick={() => isOnline && toggleAutoFlushDirect(featuredDevice.id, !isAutoFlushOn)}
+                          className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all select-none ${
+                            !isOnline
+                              ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
+                              : isAutoFlushOn
+                              ? 'bg-purple-50/60 border-purple-300 hover:bg-purple-100/60 cursor-pointer'
+                              : 'bg-amber-50/80 border-amber-200 hover:bg-amber-100/80 cursor-pointer'
+                          }`}
+                          title="Toggle Autonomous 5-Minute Food Bowl Flushing & Sanitation"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                              isAutoFlushOn
+                                ? 'bg-purple-200/80 text-purple-800'
+                                : 'bg-amber-200 text-amber-800'
+                            }`}>
+                              <Sparkles className="w-3.5 h-3.5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-xs text-slate-800 leading-tight">Auto-Flush</p>
+                              <p className={`text-[10px] font-extrabold ${isAutoFlushOn ? 'text-purple-700' : 'text-amber-700'}`}>
+                                {isAutoFlushOn ? 'SMART ON (5m)' : 'AUTO OFF'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Real Sliding Toggle Track & Thumb */}
+                          <div
+                            className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-colors duration-300 shrink-0 ${
+                              isAutoFlushOn ? 'bg-purple-600' : 'bg-slate-300'
+                            }`}
+                          >
+                            <div
+                              className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-300 flex items-center justify-center ${
+                                isAutoFlushOn ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            >
+                              {isAutoFlushOn ? (
+                                <Check className="w-2.5 h-2.5 text-purple-600 font-bold" />
+                              ) : (
+                                <PowerOff className="w-2.5 h-2.5 text-slate-400" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Automated Cleaning & Sanitation Controls */}
                       <div className="pt-2 border-t border-slate-100/90">
-                        <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1.5">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                             <Sparkles className="w-3 h-3 text-indigo-500" />
                             Bowl & Feeder Sanitation
                           </span>
-                          <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200/80 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                            Auto-Sanitation: Food Waste & Doctor Alerts
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200/80 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                              Auto-Sanitation
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => isOnline && toggleAutoFlushDirect(featuredDevice.id, !isAutoFlushOn)}
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border transition-all cursor-pointer flex items-center gap-1 ${
+                                isAutoFlushOn
+                                  ? 'bg-purple-100 text-purple-800 border-purple-300 hover:bg-purple-200'
+                                  : 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                              }`}
+                              title="Toggle 5-minute automated food bowl flush watchdog"
+                            >
+                              {isAutoFlushOn ? <Sparkles className="w-2.5 h-2.5" /> : <PowerOff className="w-2.5 h-2.5" />}
+                              {isAutoFlushOn ? 'Auto-Flush: ON (5m)' : 'Auto-Flush: AUTO OFF'}
+                            </button>
+                          </div>
                         </div>
                         <div>
                           <button

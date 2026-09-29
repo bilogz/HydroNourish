@@ -41,6 +41,7 @@ export interface USBTelemetry {
   currentServoAngle?: number;
   lastIntakeFoodGrams?: number;
   lastIntakeWaterMl?: number;
+  autoFlush?: boolean;
 }
 
 export interface USBResponse {
@@ -76,6 +77,63 @@ class USBSerialService {
   private lastTelemetry: USBTelemetry | null = null;
   private lastScannedNetworks: ScannedWifiNetwork[] = [];
   private rxBuffer: string = '';
+  private telemetryTimer: any = null;
+  private autoConnectAttempted: boolean = false;
+
+  constructor() {
+    this.initPlugAndPlay();
+  }
+
+  private initPlugAndPlay() {
+    if (typeof navigator === 'undefined' || !('serial' in navigator)) return;
+
+    try {
+      // Plug-and-Play: Automatically connect when USB device is physically plugged in
+      navigator.serial.addEventListener('connect', async (event: any) => {
+        this.emitLog('🔌 USB device plugged in. Auto-connecting (Plug & Play)...', 'info');
+        if (event?.target) {
+          await this.openPort(event.target).catch(() => {});
+        } else {
+          await this.autoConnect();
+        }
+      });
+
+      // Disconnect: Handle physical unplug event gracefully
+      navigator.serial.addEventListener('disconnect', () => {
+        this.emitLog('🔌 USB device physically unplugged.', 'info');
+        this.stopTelemetryLoop();
+        this.readLoopActive = false;
+        this.port = null;
+        this.emitStatus(false);
+      });
+
+      // Attempt auto-connect on startup/page load for any previously-paired port
+      if (typeof window !== 'undefined') {
+        window.addEventListener('load', () => {
+          setTimeout(() => this.autoConnect().catch(() => {}), 400);
+        });
+        setTimeout(() => this.autoConnect().catch(() => {}), 600);
+      }
+    } catch (e) {
+      console.warn('[USB] Plug & Play listener init warning:', e);
+    }
+  }
+
+  public async autoConnect(): Promise<boolean> {
+    if (!this.isSupported() || this.isConnected) return false;
+    try {
+      // @ts-ignore
+      const ports = await navigator.serial.getPorts();
+      if (ports && ports.length > 0) {
+        this.emitLog(`🔌 Auto-connecting to authorized USB port (Plug & Play)...`, 'info');
+        await this.openPort(ports[0]);
+        return true;
+      }
+    } catch (e: any) {
+      console.warn('[USB] Auto-connect error:', e);
+    }
+    return false;
+  }
 
   public isSupported(): boolean {
     return typeof navigator !== 'undefined' && 'serial' in navigator;
@@ -136,6 +194,54 @@ class USBSerialService {
     });
   }
 
+  private startTelemetryLoop() {
+    this.stopTelemetryLoop();
+    this.telemetryTimer = setInterval(() => {
+      if (this.isConnected) {
+        // Query status/telemetry via USB serial every 1.8s so live scale & water levels update offline
+        this.sendCommand({ action: 'status' }).catch(() => {});
+      } else {
+        this.stopTelemetryLoop();
+      }
+    }, 1800);
+  }
+
+  private stopTelemetryLoop() {
+    if (this.telemetryTimer) {
+      clearInterval(this.telemetryTimer);
+      this.telemetryTimer = null;
+    }
+  }
+
+  public async openPort(port: any): Promise<boolean> {
+    if (this.isConnected) return true;
+    try {
+      this.port = port;
+      await this.port.open({ baudRate: 115200 });
+
+      this.emitStatus(true);
+      this.emitLog('🟢 USB COM Port connected (Plug & Play Active - Offline Ready)!', 'info');
+
+      // Start non-blocking read stream
+      this.startReading();
+
+      // Start continuous telemetry loop for offline monitoring
+      this.startTelemetryLoop();
+
+      // Query initial status and handshake
+      setTimeout(() => {
+        this.sendCommand({ action: 'ping' });
+        this.sendCommand({ action: 'status' });
+      }, 300);
+
+      return true;
+    } catch (err: any) {
+      this.emitStatus(false);
+      this.port = null;
+      throw err;
+    }
+  }
+
   public async connect(): Promise<boolean> {
     if (!this.isSupported()) {
       throw new Error('Web Serial API is not supported in this browser. Please use Chrome, Edge, or Brave.');
@@ -148,22 +254,8 @@ class USBSerialService {
     try {
       this.emitLog('Requesting USB Serial Port (ESP32 Node)...', 'info');
       // @ts-ignore
-      this.port = await navigator.serial.requestPort();
-      await this.port.open({ baudRate: 115200 });
-
-      this.emitStatus(true);
-      this.emitLog('🟢 USB COM Port opened successfully at 115200 baud!', 'info');
-
-      // Start non-blocking read loop
-      this.startReading();
-
-      // Query initial status and handshake
-      setTimeout(() => {
-        this.sendCommand({ action: 'ping' });
-        this.sendCommand({ action: 'status' });
-      }, 300);
-
-      return true;
+      const selectedPort = await navigator.serial.requestPort();
+      return await this.openPort(selectedPort);
     } catch (err: any) {
       if (err.name !== 'NotFoundError') {
         this.emitLog(`❌ Connection Error: ${err.message || err}`, 'error');
@@ -174,6 +266,7 @@ class USBSerialService {
   }
 
   public async disconnect(): Promise<void> {
+    this.stopTelemetryLoop();
     this.readLoopActive = false;
     try {
       if (this.reader) {
@@ -236,12 +329,12 @@ class USBSerialService {
       if (line.startsWith('{') && line.endsWith('}')) {
         try {
           const parsed = JSON.parse(line);
-          if (parsed.type === 'telemetry') {
+          if (parsed.type === 'telemetry' || parsed.waterLevel !== undefined || parsed.foodBowlWeightGrams !== undefined) {
             this.lastTelemetry = parsed as USBTelemetry;
             this.telemetryListeners.forEach((fn) => {
               try { fn(parsed); } catch {}
             });
-            this.emitLog(`📊 [Telemetry] Water: ${parsed.waterLevel}% | TDS: ${parsed.tds} PPM | Food: ${parsed.foodLevel}% | Pump: ${parsed.isPumping ? 'ON' : 'OFF'}`, 'telemetry');
+            this.emitLog(`📊 [Telemetry] Water: ${parsed.waterLevel ?? 0}% | TDS: ${parsed.tds ?? 0} PPM | Food: ${parsed.foodLevel ?? 0}% | Gate: ${parsed.foodGateOpen ? 'OPEN' : 'CLOSED'}`, 'telemetry');
             continue;
           } else if (parsed.type === 'response') {
             if (parsed.action === 'scan_wifi' || parsed.action === 'wifi_scan' || parsed.action === 'scan' || parsed.networks) {
@@ -349,7 +442,13 @@ class USBSerialService {
   }
 
   public async toggleAutoRefill(enabled?: boolean): Promise<boolean> {
+    await this.sendRaw(enabled ? 'AUTO ON' : 'AUTO OFF');
     return this.sendCommand({ action: 'auto_refill', enabled });
+  }
+
+  public async toggleAutoFlush(enabled?: boolean): Promise<boolean> {
+    await this.sendRaw(enabled ? 'AUTO_FLUSH ON' : 'AUTO_FLUSH OFF');
+    return this.sendCommand({ action: 'auto_flush', enabled });
   }
 
   public async togglePumpMaster(locked?: boolean): Promise<boolean> {
@@ -380,18 +479,22 @@ class USBSerialService {
   }
 
   public async dispenseCleaningWater(durationMs: number = 3000): Promise<boolean> {
+    await this.sendRaw(`SPRAY ${durationMs}`);
     return this.sendCommand({ action: 'spray', duration: durationMs });
   }
 
-  public async run19WDrainPump(durationMs: number = 6000): Promise<boolean> {
+  public async run19WDrainPump(durationMs: number = 15000): Promise<boolean> {
+    await this.sendRaw(`DRAIN ${durationMs}`);
     return this.sendCommand({ action: 'drain', duration: durationMs });
   }
 
-  public async disposeWaste(durationMs: number = 6000): Promise<boolean> {
+  public async disposeWaste(durationMs: number = 15000): Promise<boolean> {
+    await this.sendRaw(`DRAIN ${durationMs}`);
     return this.sendCommand({ action: 'drain', duration: durationMs });
   }
 
   public async fullSanitation(): Promise<boolean> {
+    await this.sendRaw('CLEANWASTE');
     return this.sendCommand({ action: 'full_sanitation' });
   }
 

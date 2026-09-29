@@ -27,7 +27,9 @@ import {
   Layers,
   ChevronRight,
   Sliders,
-  Check
+  Check,
+  Scale,
+  PowerOff
 } from 'lucide-react';
 import { useAppContext } from '../../hooks/useAppContext';
 import { Pet } from '../../types';
@@ -48,13 +50,29 @@ export const AiLearningCenterWidget: React.FC<AiLearningCenterWidgetProps> = ({
     trainAiModelNow,
     feedingLogs,
     hydrationLogs,
-    devices
+    devices,
+    pets,
+    recordCompletedFeedingSession,
+    toggleAutoFlushDirect,
+    showToast
   } = useAppContext();
 
   const [isRetraining, setIsRetraining] = useState(false);
+  const [isSimulating70g, setIsSimulating70g] = useState(false);
 
-  const activePetName = pet?.name || aiLearningProfile?.petName || 'Max';
-  const activeSpecies = pet?.species || aiLearningProfile?.species || 'Canine (Dog)';
+  const targetPet = pet || (devices[0]?.assignedPetId ? (pets || []).find(p => p.id === devices[0].assignedPetId) : null) || (pets || [])[0];
+  const targetDevId = devices[0]?.id || 'HN-NODE-F778';
+  const targetDev = (devices || []).find(d => d.id === targetDevId) || devices[0];
+  const isAutoFlushOn = Boolean(
+    targetDev?.autoFlushEnabled ?? (typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_flush_${targetDevId}`) !== '0' : true)
+  );
+
+  const activePetName = targetPet?.name || aiLearningProfile?.petName || 'Max';
+  const activeSpecies = targetPet?.species || aiLearningProfile?.species || 'Canine (Dog)';
+  const learnedPortion = targetPet?.feedingPlan?.portionGrams || aiLearningProfile?.preferredPortionGrams || 70;
+  const mealsPerDay = targetPet?.feedingPlan?.mealsPerDay || 2;
+  const dailyTarget = targetPet?.feedingPlan?.dailyTargetGrams || (learnedPortion * mealsPerDay);
+
   const confidence = aiLearningProfile?.modelConfidenceScore || 92;
   const stage = aiLearningProfile?.learningStage || 'Adaptive Tuning';
   const pace = aiLearningProfile?.learnedEatingPaceGps || 1.8;
@@ -70,6 +88,26 @@ export const AiLearningCenterWidget: React.FC<AiLearningCenterWidgetProps> = ({
     await new Promise((resolve) => setTimeout(resolve, 600));
     trainAiModelNow();
     setIsRetraining(false);
+  };
+
+  const handleSimulate70gMeal = async () => {
+    setIsSimulating70g(true);
+    try {
+      await recordCompletedFeedingSession({
+        petId: targetPet?.id || 'PET-001',
+        petName: activePetName,
+        portionGrams: 70,
+        durationSeconds: 38,
+        deviceId: devices[0]?.id || 'HN-NODE-F778'
+      });
+      showToast(
+        'success',
+        `🤖 AI Adaptive Plan: 70g Tomorrow & Onwards`,
+        `AI learned ${activePetName} consumed 70g. Updated feeding plan, tomorrow's schedule, and device patient badge to 70g.`
+      );
+    } finally {
+      setIsSimulating70g(false);
+    }
   };
 
   const getStageBadgeColor = (st: string) => {
@@ -102,23 +140,64 @@ export const AiLearningCenterWidget: React.FC<AiLearningCenterWidgetProps> = ({
             </span>
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-1.5">
-                AI Behavior & Habit Learning
+                AI Behavior &amp; Habit Learning
               </h3>
               <span className="inline-flex items-center gap-1 rounded-full border border-purple-400/30 bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-300">
                 <Sparkles className="h-2.5 w-2.5" />
-                ONLINE LEARNING
+                ONLINE REINFORCEMENT
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-teal-400/30 bg-teal-500/10 px-2 py-0.5 text-[10px] font-bold text-teal-300">
+                <Scale className="h-2.5 w-2.5" />
+                TOMORROW: {learnedPortion}g MEAL
+              </span>
+              <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                isAutoFlushOn
+                  ? 'border-purple-400/30 bg-purple-500/10 text-purple-300'
+                  : 'border-amber-400/40 bg-amber-500/15 text-amber-300'
+              }`}>
+                {isAutoFlushOn ? <Sparkles className="h-2.5 w-2.5" /> : <PowerOff className="h-2.5 w-2.5" />}
+                FLUSH: {isAutoFlushOn ? '5m ON' : 'AUTO OFF'}
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Continuously learning feeding kinetics & hydration habits for <span className="font-semibold text-slate-200">{activePetName}</span> ({activeSpecies})
+              Continuously learning feeding kinetics &amp; hydration habits for <span className="font-semibold text-slate-200">{activePetName}</span> ({activeSpecies})
             </p>
           </div>
         </div>
 
         {/* Action Controls & Stage Badge */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Quick Test: Simulate 70g Consumed */}
+          <button
+            onClick={handleSimulate70gMeal}
+            disabled={isSimulating70g}
+            className="flex items-center gap-1.5 rounded-xl border border-teal-400/40 bg-teal-500/20 hover:bg-teal-500/30 active:scale-95 px-3 py-1.5 text-xs font-black text-teal-200 transition-all cursor-pointer shadow-sm"
+            title="Simulate pet eating 70g: automatically updates profile, future dispenser schedules, and patient meal display to 70g tomorrow and onwards"
+          >
+            <Sparkles className={`h-3.5 w-3.5 text-teal-300 ${isSimulating70g ? 'animate-spin' : ''}`} />
+            <span>{isSimulating70g ? 'Updating to 70g...' : 'Simulate 70g Eaten'}</span>
+          </button>
+
+          {/* Button for Auto Off / Auto Flushing */}
+          <button
+            onClick={() => toggleAutoFlushDirect(targetDevId, !isAutoFlushOn)}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95 ${
+              isAutoFlushOn
+                ? 'border-purple-400/40 bg-purple-500/20 text-purple-200 hover:bg-purple-500/30'
+                : 'border-amber-400/60 bg-amber-500/25 text-amber-200 hover:bg-amber-500/35 ring-1 ring-amber-400/40'
+            }`}
+            title={isAutoFlushOn ? "5-minute food bowl auto-flushing is ON. Click to turn AUTO OFF." : "Auto-flushing is AUTO OFF. Click to re-enable 5-minute auto bowl flushing."}
+          >
+            {isAutoFlushOn ? (
+              <Sparkles className="h-3.5 w-3.5 text-purple-300" />
+            ) : (
+              <PowerOff className="h-3.5 w-3.5 text-amber-300" />
+            )}
+            <span>{isAutoFlushOn ? 'Auto-Flush: ON (5m)' : 'Auto-Flush: AUTO OFF'}</span>
+          </button>
+
           <div className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold ${getStageBadgeColor(stage)}`}>
             <Activity className="h-3.5 w-3.5 animate-pulse" />
             <span>{stage.toUpperCase()}</span>
@@ -139,14 +218,40 @@ export const AiLearningCenterWidget: React.FC<AiLearningCenterWidgetProps> = ({
         </div>
       </div>
 
-      {/* Grid of Learned Parameters */}
-      <div className="relative z-10 mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Metric 1: Learned Eating Pace & Adaptive Gate Window */}
+      {/* Grid of Learned Parameters (5 Adaptive Parameters) */}
+      <div className="relative z-10 mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {/* Metric 1: Learned Meal Portion (Tomorrow & Onwards) */}
+        <div className="rounded-2xl border border-teal-500/40 bg-gradient-to-br from-teal-950/40 via-slate-900/80 to-slate-900/90 p-3.5 transition-all hover:border-teal-400 hover:shadow-lg hover:shadow-teal-500/10 shadow-sm relative overflow-hidden group">
+          <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-teal-500/10 rounded-full blur-xl group-hover:bg-teal-500/20 transition-all pointer-events-none"></div>
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="flex items-center gap-1.5 font-bold text-teal-300">
+              <Scale className="h-3.5 w-3.5 text-teal-400" />
+              Learned Portion
+            </span>
+            <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40 font-black">
+              TOMORROW &amp; ONWARDS
+            </span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-black text-white font-mono">{learnedPortion}g</span>
+            <span className="text-[11px] text-teal-200/80 font-medium">/ meal target</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[11px] border-t border-slate-800/80 pt-2 text-slate-400">
+            <span>Daily Target:</span>
+            <span className="font-mono font-bold text-teal-300">{dailyTarget}g ({mealsPerDay}x/day)</span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
+            <span>Future Schedules:</span>
+            <span className="font-mono font-bold text-emerald-400">Set to {learnedPortion}g</span>
+          </div>
+        </div>
+
+        {/* Metric 2: Learned Eating Pace & Adaptive Gate Window */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5 transition-all hover:border-teal-500/30 hover:bg-slate-900/90 shadow-sm">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="flex items-center gap-1.5 font-semibold text-teal-300">
               <Utensils className="h-3.5 w-3.5 text-teal-400" />
-              Adaptive Feeder Gate
+              Adaptive Gate
             </span>
             <span className="font-mono text-[10px] text-emerald-400 font-bold">ACTIVE</span>
           </div>
@@ -164,7 +269,7 @@ export const AiLearningCenterWidget: React.FC<AiLearningCenterWidgetProps> = ({
           </div>
         </div>
 
-        {/* Metric 2: Circadian Hunger Rhythm */}
+        {/* Metric 3: Circadian Hunger Rhythm */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5 transition-all hover:border-amber-500/30 hover:bg-slate-900/90 shadow-sm">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="flex items-center gap-1.5 font-semibold text-amber-300">
@@ -189,7 +294,7 @@ export const AiLearningCenterWidget: React.FC<AiLearningCenterWidgetProps> = ({
           </div>
         </div>
 
-        {/* Metric 3: Hydration Rhythm & Intake */}
+        {/* Metric 4: Hydration Rhythm & Intake */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5 transition-all hover:border-sky-500/30 hover:bg-slate-900/90 shadow-sm">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="flex items-center gap-1.5 font-semibold text-sky-300">
@@ -214,7 +319,7 @@ export const AiLearningCenterWidget: React.FC<AiLearningCenterWidgetProps> = ({
           </div>
         </div>
 
-        {/* Metric 4: Total Sessions & Reinforcement Stage */}
+        {/* Metric 5: Total Sessions & Reinforcement Stage */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5 transition-all hover:border-purple-500/30 hover:bg-slate-900/90 shadow-sm">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="flex items-center gap-1.5 font-semibold text-purple-300">

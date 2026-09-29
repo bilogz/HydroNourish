@@ -153,6 +153,7 @@ interface AppContextType {
   invertDrainRelayDirect: (deviceId: string) => Promise<boolean>;
   runBowlSanitationCycle: (deviceId: string) => Promise<boolean>;
   toggleAutoRefillDirect: (deviceId: string, enable?: boolean) => Promise<void>;
+  toggleAutoFlushDirect: (deviceId: string, enable?: boolean) => Promise<void>;
   togglePumpMasterDirect: (deviceId: string) => Promise<void>;
   deactivatePumpDirect: (deviceId: string, deactivate?: boolean) => Promise<void>;
 
@@ -176,6 +177,7 @@ interface AppContextType {
   sendOwnerFollowUpMessage: (inquiryId: string, messageText: string, senderName?: string) => Promise<boolean>;
   deleteInquiry: (id: string) => Promise<void>;
 
+  notifyPetNotEatingOrMalnourished: (petId: string, petName: string, reason?: string) => Promise<void>;
   showToast: (type: ToastMessage['type'], title: string, message: string) => void;
   removeToast: (id: string) => void;
 }
@@ -247,6 +249,9 @@ const lastDrainActionTimeMap = new Map<string, number>();
 const pendingTares = new Map<string, { food?: number; water?: number; calFood?: number; calWater?: number }>();
 const TARE_LOCK_MS = 4000;
 const CAL_LOCK_MS = 6000;
+
+// Debounce timestamp for TDS dry / doctor refill alert
+let lastTdsDryAlertTime = 0;
 
 // Non-Destructive Device State Merger
 export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Device[] => {
@@ -626,7 +631,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 ) ? d.waterMl : rawWaterMl;
               }
 
-              return {
+              const updatedDev: Device = {
                 ...d,
                 status: 'Online',
                 lastTransmission: 'Live — Direct USB',
@@ -647,17 +652,108 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 foodGateOpen: telemetry.foodGateOpen !== undefined ? telemetry.foodGateOpen : d.foodGateOpen,
                 currentServoAngle: typeof telemetry.currentServoAngle === 'number' ? telemetry.currentServoAngle : d.currentServoAngle,
               };
+
+              // Doctor / Veterinarian Alert: When TDS reads 0 PPM (Dry water tank reservoir)
+              if (typeof telemetry.tds === 'number' && telemetry.tds === 0 && (Date.now() - lastTdsDryAlertTime > 180000)) {
+                lastTdsDryAlertTime = Date.now();
+                playNotificationChime();
+                showToast(
+                  'warning',
+                  '🚨 Doctor / Staff Alert: Water Tank is Dry (0 PPM)',
+                  `Water sensor reads 0 PPM (Dry / Empty Reservoir). Attending doctor / veterinary staff please refill clean water tank immediately.`
+                );
+              }
+
+              return updatedDev;
             }
             return d;
           });
         }
-        return prev;
+
+        // Plug-and-Play Offline Fallback: If no device matches or Supabase is offline, instantiate device immediately!
+        const offlineUsbDev: Device = {
+          id: targetId,
+          name: `HydroNourish Station (${targetId})`,
+          status: 'Online',
+          ipAddress: telemetry.ip && telemetry.ip !== '0.0.0.0' ? telemetry.ip : 'Direct USB',
+          macAddress: 'USB-DIRECT',
+          firmwareVersion: 'v2.5.0-ESP32|USB:DIRECT',
+          isPluggedIn: true,
+          lastTransmission: 'Live — Direct USB (Plug & Play)',
+          foodBowlWeightGrams: typeof telemetry.foodBowlWeightGrams === 'number' ? telemetry.foodBowlWeightGrams : 0.0,
+          scaleReady: telemetry.scaleReady !== undefined ? telemetry.scaleReady : true,
+          lastIntakeFoodGrams: typeof telemetry.lastIntakeFoodGrams === 'number' ? telemetry.lastIntakeFoodGrams : 0,
+          foodLevelPct: typeof telemetry.foodLevel === 'number' ? telemetry.foodLevel : 85,
+          waterLevelPct: typeof telemetry.waterLevel === 'number' ? telemetry.waterLevel : 80,
+          waterMl: typeof telemetry.waterMl === 'number' ? telemetry.waterMl : 150,
+          waterLiters: 0.15,
+          waterScaleReady: telemetry.waterScaleReady !== undefined ? telemetry.waterScaleReady : true,
+          waterQualityPpm: typeof telemetry.tds === 'number' ? telemetry.tds : 120,
+          isPumping: telemetry.isPumping !== undefined ? telemetry.isPumping : false,
+          autoRefillEnabled: telemetry.autoRefill !== undefined ? telemetry.autoRefill : true,
+          autoFlushEnabled: typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_flush_${targetId}`) !== '0' : true,
+          gateOpenDeg: typeof telemetry.gateOpenDeg === 'number' ? telemetry.gateOpenDeg : 90,
+          foodGateOpen: telemetry.foodGateOpen !== undefined ? telemetry.foodGateOpen : false,
+          currentServoAngle: typeof telemetry.currentServoAngle === 'number' ? telemetry.currentServoAngle : 0,
+          assignedPetId: 'PET-001',
+          assignedPetName: 'Max',
+        };
+        return [offlineUsbDev, ...prev];
       });
+    });
+
+    // Plug-and-Play USB Connection State Watchdog
+    const unsubUsbStatus = usbSerialService.onStatus((connected) => {
+      if (connected) {
+        playNotificationChime();
+        showToast(
+          'success',
+          '🔌 Direct USB Connected (Plug & Play)',
+          'ESP32 hardware connected via direct USB. Full offline control enabled without internet!'
+        );
+        setDevices((prev) => {
+          if (!prev || prev.length === 0) {
+            return [{
+              id: 'HN-NODE-F778',
+              name: 'HydroNourish Station (HN-NODE-F778)',
+              status: 'Online',
+              ipAddress: 'Direct USB',
+              macAddress: '1C:C3:AB:F9:F7:78',
+              firmwareVersion: 'v2.5.0-ESP32|USB:DIRECT',
+              isPluggedIn: true,
+              lastTransmission: 'Live — Direct USB (Plug & Play)',
+              foodBowlWeightGrams: 0.0,
+              scaleReady: true,
+              lastIntakeFoodGrams: 0,
+              foodLevelPct: 85,
+              waterLevelPct: 80,
+              waterMl: 150,
+              waterLiters: 0.15,
+              waterScaleReady: true,
+              waterQualityPpm: 120,
+              isPumping: false,
+              autoRefillEnabled: true,
+              autoFlushEnabled: true,
+              gateOpenDeg: 90,
+              foodGateOpen: false,
+              currentServoAngle: 0,
+              assignedPetId: 'PET-001',
+              assignedPetName: 'Max',
+            }];
+          }
+          return prev.map((d) => ({
+            ...d,
+            status: 'Online',
+            lastTransmission: 'Live — Direct USB (Plug & Play)',
+          }));
+        });
+      }
     });
 
     return () => {
       clearInterval(devicePollInterval);
       unsubUsb();
+      unsubUsbStatus();
     };
   }, []);
 
@@ -1353,14 +1449,18 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, petEatingActive: isEating } : d))
     );
-    dispatchFastDeviceCommand(deviceId, `/api/pet/eating?eating=${isEating ? '1' : '0'}`);
+    dispatchFastDeviceCommand(deviceId, `/api/pet/eating?eating=${isEating ? '1' : '0'}`, {
+      usbAction: () => usbSerialService.sendCommand({ action: 'pet_eating', eating: isEating }),
+    });
   };
 
   const setPetDrinkingDirect = async (deviceId: string, isDrinking: boolean) => {
     setDevices((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, petDrinkingActive: isDrinking } : d))
     );
-    dispatchFastDeviceCommand(deviceId, `/api/pet/drinking?drinking=${isDrinking ? '1' : '0'}`);
+    dispatchFastDeviceCommand(deviceId, `/api/pet/drinking?drinking=${isDrinking ? '1' : '0'}`, {
+      usbAction: () => usbSerialService.sendCommand({ action: 'pet_drinking', drinking: isDrinking }),
+    });
   };
 
   const recordCompletedFeedingSession = async (sessionData: {
@@ -1405,10 +1505,83 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     }, aiLearningProfile);
     setAiLearningProfile(updated);
 
+    // AI ADAPTIVE FEEDING: If pet ate portionGrams (e.g. 70g), update pet's feeding plan
+    // and all future/tomorrow schedules to dispense this learned portion onwards!
+    if (portionGrams > 0) {
+      setPets((prev) => prev.map((p) => {
+        if (p.id === petId || p.name.toLowerCase() === petName.toLowerCase()) {
+          const currentPlan = p.feedingPlan || {
+            dailyTargetGrams: portionGrams * 2,
+            portionGrams: portionGrams,
+            mealsPerDay: 2,
+            foodType: 'Dry Kibble',
+            dispenseTimes: ['08:00', '18:00']
+          };
+          const meals = currentPlan.mealsPerDay || 2;
+          return {
+            ...p,
+            feedingPlan: {
+              ...currentPlan,
+              portionGrams,
+              dailyTargetGrams: meals * portionGrams
+            }
+          };
+        }
+        return p;
+      }));
+
+      // Persist to Supabase pet table
+      const targetPet = (pets || []).find(p => p.id === petId || p.name.toLowerCase() === petName.toLowerCase());
+      if (targetPet) {
+        const meals = targetPet.feedingPlan?.mealsPerDay || 2;
+        updatePetInSupabase(targetPet.id, {
+          feedingPlan: {
+            ...(targetPet.feedingPlan || {}),
+            portionGrams,
+            dailyTargetGrams: meals * portionGrams,
+            foodType: targetPet.feedingPlan?.foodType || 'Dry Kibble',
+            mealsPerDay: meals,
+            dispenseTimes: targetPet.feedingPlan?.dispenseTimes || ['08:00', '18:00']
+          }
+        }).catch(() => {});
+      }
+
+      // Automatically update all future schedules for this pet to dispense portionGrams tomorrow and onwards!
+      setSchedules((prev) => prev.map((s) => {
+        if ((s.petId === petId || s.petName?.toLowerCase() === petName.toLowerCase()) && s.type !== 'water') {
+          return {
+            ...s,
+            portionGrams
+          };
+        }
+        return s;
+      }));
+    }
+
     showToast(
       'success',
-      `🍽️ Meal Logged (${portionGrams}g in ${durationSec}s)`,
-      `Recorded to eating history. AI reinforced eating pace (${(portionGrams / durationSec).toFixed(1)} g/s) with ${updated.modelConfidenceScore}% confidence.`
+      `🤖 AI Adaptive Feeding: ${portionGrams}g Tomorrow & Onwards`,
+      `AI learned ${petName} consumed ${portionGrams}g. Updated feeding plan and future schedules to dispense ${portionGrams}g tomorrow and onwards.`
+    );
+  };
+
+  const notifyPetNotEatingOrMalnourished = async (petId: string, petName: string, reason?: string) => {
+    const alertMsg = reason || `AI Vision detected that ${petName} is refusing to eat and showing signs of malnutrition or anorexia.`;
+    await addAlert({
+      petId,
+      petName,
+      alertType: 'Anorexia & Malnutrition Risk',
+      severity: 'Critical',
+      observedReading: 'Food Refusal / Satiety Aversion',
+      aiObservation: alertMsg,
+      recommendedAction: 'Immediate veterinary evaluation required. Attending veterinarian and pet owner notified.'
+    });
+
+    playNotificationChime();
+    showToast(
+      'error',
+      `⚠️ Malnutrition Alert: ${petName}`,
+      `AI Vision flagged food refusal / malnutrition. Both Pet Owner and Attending Veterinarian have been notified.`
     );
   };
 
@@ -2017,6 +2190,43 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     // 4. Persist to Supabase device row so subsequent polls don't revert
     updateDeviceInSupabase(deviceId, { firmwareVersion: newFw }).catch(() => {});
     insertScheduleToSupabase(newSch).catch(() => {});
+  };
+
+  const toggleAutoFlushDirect = async (deviceId: string, enable?: boolean) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const savedAuto = typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_flush_${deviceId}`) : null;
+    const isCurrentlyOn = savedAuto !== null ? savedAuto === '1' : Boolean(dev?.autoFlushEnabled ?? true);
+    const shouldEnable = enable !== undefined ? enable : !isCurrentlyOn;
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`hn_auto_flush_${deviceId}`, shouldEnable ? '1' : '0');
+      window.dispatchEvent(new CustomEvent('hn-auto-flush-changed', { detail: { deviceId, enabled: shouldEnable } }));
+    }
+
+    const flushPath = `/api/auto-flush?enabled=${shouldEnable ? '1' : '0'}`;
+    dispatchFastDeviceCommand(deviceId, flushPath, {
+      method: 'GET',
+      usbAction: () => usbSerialService.toggleAutoFlush(shouldEnable),
+    });
+
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId
+          ? {
+              ...d,
+              autoFlushEnabled: shouldEnable,
+            }
+          : d
+      )
+    );
+
+    showToast(
+      shouldEnable ? 'success' : 'info',
+      shouldEnable ? '🌀 Auto-Flush Enabled (5m)' : '⏸️ Auto-Flush Disabled (Auto Off)',
+      shouldEnable
+        ? `Node ${deviceId} will automatically flush uneaten food after 5 minutes.`
+        : `Automated 5-minute bowl flushing turned OFF for node ${deviceId}. Manual flush remains available.`
+    );
   };
 
   const togglePumpMasterDirect = async (deviceId: string) => {
@@ -2644,6 +2854,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         invertDrainRelayDirect,
         runBowlSanitationCycle,
         toggleAutoRefillDirect,
+        toggleAutoFlushDirect,
         togglePumpMasterDirect,
         deactivatePumpDirect,
         refillWater,
@@ -2661,6 +2872,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         markInquiryStatus,
         sendOwnerFollowUpMessage,
         deleteInquiry,
+        notifyPetNotEatingOrMalnourished,
         showToast,
         removeToast,
       }}

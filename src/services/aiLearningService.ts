@@ -385,9 +385,10 @@ export function recordCompletedEatingSession(
 
   // Incremental online running average of duration and portion
   const updatedDuration = Math.round((profile.averageMealDurationSeconds * prevCount + duration) / newCount);
-  const updatedPortion = Math.round((profile.preferredPortionGrams * prevCount + portion) / newCount);
-  const updatedPace = Number((updatedPortion / Math.max(1, updatedDuration)).toFixed(2));
-  const adaptiveWindow = updatedDuration + 8; // 8s grace window
+  // User Requirement: If pet ate portion (e.g. 70g), make it 70g for tomorrow and onwards!
+  const updatedPortion = portion;
+  const updatedPace = Number((updatedPortion / Math.max(1, duration)).toFixed(2));
+  const adaptiveWindow = duration + 8; // 8s grace window
 
   // Update peak hours
   const sessionHour = session.timestamp ? extractHourFromTimestamp(session.timestamp) : new Date().getHours();
@@ -427,11 +428,13 @@ export function recordCompletedEatingSession(
     preferredPortionGrams: updatedPortion,
     peakHungerWindows: updatedWindows,
     behavioralInsights: [
+      `AI Adaptive Portion: ${session.petName} consumed ${portion}g. Dispenser target for tomorrow & onwards updated to ${portion}g.`,
       `Online Meal #${newCount} ingested: ${portion}g consumed in ${duration}s (${(portion / duration).toFixed(1)} g/s pace).`,
       `Adaptive Gate Sizing: Window auto-adjusted to ${adaptiveWindow}s based on verified meal kinetics.`,
       `Model weights reinforced at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
     ],
     adaptiveRecommendations: [
+      `Learned Tomorrow Portion: Auto-calibrated to dispense ${portion}g per scheduled meal tomorrow and future cycles.`,
       `AI Adaptive Gate Control active: Gate will stay open during active feeding and lock within 5s of meal completion.`,
       `Expected hydration alert: Watch for hydration within next 3 to 6 minutes.`
     ]

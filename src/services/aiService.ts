@@ -345,6 +345,7 @@ export interface PetVisionScanOptions {
   reevaluateAfter45s?: boolean;
   currentSessionSeconds?: number;
   forcedWantsToEat?: boolean;
+  forcedNotEatingOrMalnourished?: boolean;
   cycleCount?: number;
   isPetDetected?: boolean;
 }
@@ -378,6 +379,9 @@ export interface PetVisionScanResult {
   eatingIntentScore: number; // 0 - 100
   eatingIntentReason: string;
   headPosture: 'Facing Bowl' | 'Head In Bowl' | 'Looking Away' | 'Distracted / Leaving' | 'Awaiting Dispense';
+  isMalnourishedOrAnorexic?: boolean;
+  isNotEatingOrRefusing?: boolean;
+  malnutritionRiskScore?: number;
   sessionDurationSeconds?: number;
   is45sTimeoutReached?: boolean;
   appetiteReevaluation?: {
@@ -465,9 +469,10 @@ export async function analyzePetVisionScan(
          The pet has been actively eating for 45 seconds and the feeder gate just closed to protect food portions and avoid overfeeding.
          Carefully inspect the pet's posture and behavior:
          - Does the pet STILL WANT TO EAT? (e.g., lingering at bowl zone, sniffing bowl, licking bowl/whiskers, looking up expectantly at dispenser, head oriented down toward bowl) -> set wantsToEat: true, eatingIntentScore: 85-99.
-         - Has the pet FINISHED EATING / SATISFIED? (e.g., walking away, turned head or body away from bowl, disinterested, resting) -> set wantsToEat: false, eatingIntentScore: 5-30.`
-      : `EATING INTENT ANALYSIS:
-         Evaluate if the pet WANTS TO EAT (looking into bowl, sniffing, approaching food dispenser, waiting expectantly for meal) vs NOT wanting to eat (looking elsewhere, resting, leaving).`;
+         - Has the pet FINISHED EATING / SATISFIED? (e.g., walking away, turned head, grooming) -> set wantsToEat: false, eatingIntentScore: 10-35.`
+      : `EATING INTENT & MALNUTRITION / FOOD REFUSAL ANALYSIS:
+         1. Evaluate if pet WANTS TO EAT vs NOT wanting to eat.
+         2. Check for FOOD REFUSAL or signs of MALNUTRITION (pet refusing presented food, turning head away from bowl, sniffing and rejecting food, appearing lethargic, weak, or severely underweight). If pet refuses food or appears malnourished, set isNotEatingOrRefusing: true and isMalnourishedOrAnorexic: true so veterinarians and owner are alerted immediately.`;
 
     const prompt = `You are a clinical AI veterinary vision assistant for Heritage Animal Clinic's HydroNourish IoT feeder station.
 Analyze this camera frame for patient '${petName}' (${petSpecies}).
@@ -486,6 +491,9 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
   "headPosture": "Facing Bowl" | "Head In Bowl" | "Looking Away" | "Distracted / Leaving" | "Awaiting Dispense",
   "intakeState": "Feeding" | "Hydrating" | "Stationary / Resting" | "Approaching Bowl" | "None Detected",
   "isPetEating": boolean,
+  "isNotEatingOrRefusing": boolean,
+  "isMalnourishedOrAnorexic": boolean,
+  "malnutritionRiskScore": number (0 to 100),
   "healthScore": number (60 to 99),
   "clinicalObservations": ["observation 1", "observation 2"],
   "recommendedAction": "clinical advice note",
@@ -546,6 +554,9 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
                 ? `${petName} is oriented toward food bowl with alert appetite posture.`
                 : `${petName} shows satisfied behavior; head turned away from station.`),
             headPosture: isNone ? 'Looking Away' : parsed.headPosture || (isEating ? 'Head In Bowl' : wantsToEat ? 'Facing Bowl' : 'Looking Away'),
+            isNotEatingOrRefusing: Boolean(parsed.isNotEatingOrRefusing),
+            isMalnourishedOrAnorexic: Boolean(parsed.isMalnourishedOrAnorexic),
+            malnutritionRiskScore: Number(parsed.malnutritionRiskScore) || (parsed.isMalnourishedOrAnorexic ? 85 : 0),
             sessionDurationSeconds: sessionSecs,
             is45sTimeoutReached: isReeval || sessionSecs >= 45,
             appetiteReevaluation: isReeval ? {
@@ -665,7 +676,18 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
   const petConfidence = neuralEdgeResult ? neuralEdgeResult.score : (97.5 + Math.round(Math.random() * 20) / 10);
   const detectedSpecies = neuralEdgeResult ? neuralEdgeResult.label : (isDog ? 'Canis lupus familiaris (Dog)' : 'Felis catus (Cat)');
 
-  if (options?.forcedWantsToEat !== undefined) {
+  const isMalnourishedOrAnorexic = Boolean(options?.forcedNotEatingOrMalnourished);
+  const isNotEatingOrRefusing = Boolean(options?.forcedNotEatingOrMalnourished);
+  const malnutritionRiskScore = isMalnourishedOrAnorexic ? 88 : 0;
+
+  if (options?.forcedNotEatingOrMalnourished) {
+    wantsToEat = false;
+    isEating = false;
+    headPosture = 'Looking Away';
+    intakeState = 'Stationary / Resting';
+    intentScore = 12.0;
+    intentReason = `⚠️ MALNUTRITION / FOOD REFUSAL ALERT: ${petName} is actively refusing offered kibble, showing signs of clinical anorexia and food avoidance.`;
+  } else if (options?.forcedWantsToEat !== undefined) {
     wantsToEat = options.forcedWantsToEat;
     isEating = wantsToEat && (sessionSecs > 0 && sessionSecs < 45);
     intakeState = isEating ? 'Feeding' : wantsToEat ? 'Approaching Bowl' : 'Stationary / Resting';
@@ -704,13 +726,18 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
     detectedSpecies,
     detectedBreed: isDog ? 'Golden Retriever / Labrador Mix' : 'Domestic Shorthair',
     confidenceScore: petConfidence,
-    postureAndBehavior: isEating
+    postureAndBehavior: isNotEatingOrRefusing
+      ? `Aversive reaction to feeding station. Patient ${petName} backed away with head turned away from food bowl.`
+      : isEating
       ? `Head lowered into smart bowl, active jaw movement (${sessionSecs}s eating session).`
       : wantsToEat
       ? `Oriented directly toward dispenser bowl with alert, expectant feeding posture.`
       : `Stepped back from feeding zone with relaxed, satisfied posture.`,
     intakeState,
     isPetEating: isEating,
+    isNotEatingOrRefusing,
+    isMalnourishedOrAnorexic,
+    malnutritionRiskScore,
     eatingConfidence: isEating ? 98.6 : (wantsToEat ? 95.0 : 89.0),
     shouldHoldFoodGateOpen: wantsToEat || isEating,
     wantsToEat,
@@ -724,25 +751,29 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
       rationale: intentReason,
       cycleRecommended: wantsToEat ? currentCycle + 1 : currentCycle
     } : undefined,
-    healthScore: 96,
+    healthScore: isMalnourishedOrAnorexic ? 64 : 96,
     clinicalObservations: [
       `Pet '${petName}' identified with real-time neural edge detection.`,
-      `Feeding intent: ${wantsToEat ? 'HUNGRY / EAGER TO EAT' : 'SATISFIED / DISINTERESTED'} (${intentScore}% score).`,
+      isNotEatingOrRefusing
+        ? `⚠️ MALNUTRITION WARNING: Food refusal detected. Patient exhibits disinterest in nourishment.`
+        : `Feeding intent: ${wantsToEat ? 'HUNGRY / EAGER TO EAT' : 'SATISFIED / DISINTERESTED'} (${intentScore}% score).`,
       isEating ? `Continuous feeding active: ${sessionSecs}s of 45s limit.` : 'Gate pulse metering ready.'
     ],
-    recommendedAction: wantsToEat 
+    recommendedAction: isNotEatingOrRefusing
+      ? `IMMEDIATE CLINICAL ATTENTION: Alert pet owner & veterinarian. Evaluate for underlying gastrointestinal or metabolic anorexia.`
+      : wantsToEat 
       ? `Open servo gate and run pulse-metering cycle to save food.`
       : `Keep food gate closed; pet has concluded feeding.`,
-    severity: 'Normal',
+    severity: isNotEatingOrRefusing ? 'Urgent Attention' : 'Normal',
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     boundingBox: box,
     suggestedActions: {
-      dispenseFood: wantsToEat,
+      dispenseFood: !isNotEatingOrRefusing && wantsToEat,
       portionGrams: 75,
       refillWater: false,
       waterAmountMl: 250,
       toggleFlash: false,
-      triggerAlert: false,
+      triggerAlert: isNotEatingOrRefusing,
       alertReason: intentReason
     }
   };

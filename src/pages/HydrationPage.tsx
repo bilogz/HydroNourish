@@ -414,7 +414,17 @@ export const HydrationPage: React.FC = () => {
                     <span className="font-mono font-bold text-slate-800">{selectedDevice.waterQualityPpm ?? 0} PPM</span>
                     {(() => {
                       const tds = selectedDevice.waterQualityPpm ?? 0;
-                      if (tds === 0) return <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">Dry</span>;
+                      if (tds === 0) {
+                        return (
+                          <span
+                            className="text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded flex items-center gap-1 animate-pulse"
+                            title="TDS 0 PPM (Dry): Water probe detected empty water tank! Doctor alert active: Refill clean water tank immediately."
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                            Dry • Doctor Alert (Refill Water Tank)
+                          </span>
+                        );
+                      }
                       if (tds <= 300) return <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Pure</span>;
                       if (tds <= 600) return <span className="text-[9px] font-bold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded">Good</span>;
                       if (tds <= 900) return <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">Fair</span>;
@@ -437,6 +447,29 @@ export const HydrationPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* TDS Dry Doctor / Staff Alert Banner */}
+            {(selectedDevice.waterQualityPpm ?? 0) === 0 && (
+              <div className="p-3.5 bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-orange-500/10 border-2 border-amber-300 rounded-2xl text-xs text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-800 shrink-0">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping inline-block" />
+                  </div>
+                  <div>
+                    <p className="font-black text-amber-950 text-xs sm:text-sm">🚨 Attending Doctor / Staff Alert: Water Tank is Dry (0 PPM)</p>
+                    <p className="text-[11px] text-amber-800 mt-0.5">TDS probe detects 0 PPM. Clean water tank reservoir is empty or dry. Attending veterinarian please refill water tank.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => dispenseWaterDirect(selectedDevice.id, 10000)}
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-black text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Droplets className="w-3.5 h-3.5" />
+                  Refill Water Tank
+                </button>
+              </div>
+            )}
 
             {/* Pump Live Control Toolbar */}
             <div className="space-y-2">

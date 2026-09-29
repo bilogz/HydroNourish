@@ -45,7 +45,8 @@ import {
   Pause,
   Clock,
   Utensils,
-  Droplets
+  Droplets,
+  PowerOff
 } from 'lucide-react';
 import { Device, AIControlMode, CameraSourceType, VisionActionRecommendation } from '../types';
 import { analyzePetVisionScan, PetVisionScanResult, extractFrameBase64 } from '../services/aiService';
@@ -54,6 +55,7 @@ import { saveVisionAnalyticsRecord } from '../services/visionAnalyticsService';
 import { VisionAnalyticsModal } from './camera/VisionAnalyticsModal';
 import { CameraSetupStudioModal } from './camera/CameraSetupStudioModal';
 import { useAppContext } from '../hooks/useAppContext';
+import { useSession } from '../contexts/SessionContext';
 
 interface LiveCameraWidgetProps {
   title?: string;
@@ -96,7 +98,10 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     recordCompletedFeedingSession,
     recordCompletedDrinkingSession,
     runBowlSanitationCycle,
+    toggleAutoFlushDirect,
+    notifyPetNotEatingOrMalnourished,
   } = useAppContext();
+  const { addNotification } = useSession();
 
   const lastEatingTimestampRef = React.useRef<number>(0);
   const lastDrinkingTimestampRef = React.useRef<number>(0);
@@ -111,6 +116,31 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const [isFoodDetectedInBowl, setIsFoodDetectedInBowl] = useState<boolean>(false);
   const lastCameraFoodReportTimeRef = React.useRef<number>(0);
   const isAutoFlushingRef = React.useRef<boolean>(false);
+
+  const targetDeviceId = device?.id || 'HN-NODE-F778';
+  const activeDevObj = (devices || []).find((d) => d.id === targetDeviceId) || device;
+  const [autoFlushEnabledLocal, setAutoFlushEnabledLocal] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(`hn_auto_flush_${targetDeviceId}`) !== '0';
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    const handleAutoFlushChanged = (e: any) => {
+      if (e.detail?.deviceId === targetDeviceId || !e.detail?.deviceId) {
+        setAutoFlushEnabledLocal(e.detail?.enabled ?? true);
+        if (!e.detail?.enabled) {
+          setAutoFlushCountdown(null);
+          foodSittingSinceRef.current = 0;
+        }
+      }
+    };
+    window.addEventListener('hn-auto-flush-changed', handleAutoFlushChanged);
+    return () => window.removeEventListener('hn-auto-flush-changed', handleAutoFlushChanged);
+  }, [targetDeviceId]);
+
+  const isAutoFlushOn = Boolean(activeDevObj?.autoFlushEnabled ?? autoFlushEnabledLocal);
 
   // Auto-discover camera IP from passed device prop or Supabase device telemetry
   const discoveredIp = React.useMemo(() => {
@@ -575,8 +605,13 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           }
         }
 
-        // If food is detected in the food bowl (validated by camera & scale) and pet is not eating:
-        if (scaleDetectsFood && (cameraDetectsFood || result.isFoodDetected) && !petIsEatingNow) {
+        // Check if auto-flushing is active (not set to Auto Off)
+        const isAutoFlushWatchActive = typeof window !== 'undefined'
+          ? localStorage.getItem(`hn_auto_flush_${targetDeviceId}`) !== '0'
+          : true;
+
+        // If food is detected in the food bowl (validated by camera & scale) and pet is not eating and auto-flush is ON:
+        if (isAutoFlushWatchActive && scaleDetectsFood && (cameraDetectsFood || result.isFoodDetected) && !petIsEatingNow) {
           if (foodSittingSinceRef.current === 0) {
             foodSittingSinceRef.current = nowMs;
           } else {
@@ -612,7 +647,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             }
           }
         } else {
-          // If food is gone or pet is eating, reset timer and clear countdown
+          // If food is gone, pet is eating, or auto-flush turned OFF, reset timer and clear countdown
           if (foodSittingSinceRef.current !== 0) {
             foodSittingSinceRef.current = 0;
             setAutoFlushCountdown(null);
@@ -1059,7 +1094,13 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   // ── AI Vision Analysis Dispatcher with Closed-Loop Hardware Control ─────────
   const handleRunAiScan = async (
     isWatchdog = false,
-    scanOptions?: { reevaluateAfter45s?: boolean; currentSessionSeconds?: number; forcedWantsToEat?: boolean; cycleCount?: number }
+    scanOptions?: {
+      reevaluateAfter45s?: boolean;
+      currentSessionSeconds?: number;
+      forcedWantsToEat?: boolean;
+      forcedNotEatingOrMalnourished?: boolean;
+      cycleCount?: number;
+    }
   ) => {
     if (isAnalyzing && !scanOptions?.reevaluateAfter45s) return;
     setIsAnalyzing(true);
@@ -1074,6 +1115,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
         reevaluateAfter45s: isReeval,
         currentSessionSeconds: currentSecs,
         forcedWantsToEat: scanOptions?.forcedWantsToEat,
+        forcedNotEatingOrMalnourished: scanOptions?.forcedNotEatingOrMalnourished,
         cycleCount: currentCycle,
         isPetDetected: isPetDetected,
       });
@@ -1084,7 +1126,8 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       const isPetPresent = Boolean(
         (result.intakeState !== 'None Detected' && result.detectedBreed !== 'None' && (result.confidenceScore || 0) >= 20) ||
         isPetDetected ||
-        scanOptions?.forcedWantsToEat !== undefined
+        scanOptions?.forcedWantsToEat !== undefined ||
+        scanOptions?.forcedNotEatingOrMalnourished !== undefined
       );
 
       setAiScanResult(result);
@@ -1214,6 +1257,27 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             setActiveRecommendation(actions);
           }
         }
+      }
+
+      // ── MALNUTRITION & FOOD REFUSAL DETECTION WATCHDOG ──
+      // If AI detects pet is not eating, refusing kibble, or showing malnutrition / anorexia signs:
+      if (result.isNotEatingOrRefusing || result.isMalnourishedOrAnorexic) {
+        executedActionText = 'Distress Alert';
+        const reason = `⚠️ CLINICAL MALNUTRITION ALERT: AI Vision Scan detected that ${petName} is actively refusing offered food and exhibiting signs of malnutrition / anorexia (Risk Score: ${result.malnutritionRiskScore || 88}%). Heritage Animal Clinic attending veterinarians and pet owner have been notified.`;
+        
+        await notifyPetNotEatingOrMalnourished(
+          device?.assignedPetId || 'PET-001',
+          petName,
+          reason
+        );
+
+        addNotification(
+          'health_alert',
+          `⚠️ Malnutrition & Food Refusal: ${petName}`,
+          `AI Vision detected ${petName} is not eating / exhibiting food refusal signs. Pet owner and attending veterinarian notified.`,
+          'critical',
+          { petName, severity: 'critical' }
+        );
       }
 
       // Persist to Vision Analytics Telemetry
@@ -2668,6 +2732,20 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                     >
                       Flush Now
                     </button>
+                    {/* AUTO OFF BUTTON FOR AUTO FLUSHING */}
+                    <button
+                      onClick={() => {
+                        const targetDevId = device?.id || 'HN-NODE-F778';
+                        toggleAutoFlushDirect(targetDevId, false);
+                        setAutoFlushCountdown(null);
+                        foodSittingSinceRef.current = 0;
+                      }}
+                      className="px-2 py-0.5 bg-rose-600/90 hover:bg-rose-500 text-white rounded text-[10px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition-all shadow-sm flex items-center gap-1"
+                      title="Turn Auto-Flushing AUTO OFF (Stop automated bowl flush)"
+                    >
+                      <PowerOff className="w-2.5 h-2.5" />
+                      Auto Off
+                    </button>
                   </div>
                 </div>
               );
@@ -2814,6 +2892,43 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                     <span>Test 45s</span>
                   </button>
                 )}
+
+                {/* Test Anorexia / Malnutrition Flag Button */}
+                <button
+                  onClick={() => {
+                    handleRunAiScan(false, { forcedNotEatingOrMalnourished: true });
+                  }}
+                  className="bg-rose-700/90 hover:bg-rose-600 text-white font-bold text-[10px] px-2.5 py-1 rounded-lg shadow-md flex items-center gap-1 transition-all cursor-pointer border border-rose-400/50"
+                  title="Simulate AI detection of pet refusing food / malnutrition to test instant notification on Admin/Veterinarian and Pet Owner pages"
+                >
+                  <AlertCircle className="w-3 h-3 text-amber-300" />
+                  <span>Flag Anorexia</span>
+                </button>
+
+                {/* Auto-Flush On / Auto Off Toggle Button */}
+                <button
+                  onClick={() => {
+                    const targetDevId = device?.id || 'HN-NODE-F778';
+                    toggleAutoFlushDirect(targetDevId, !isAutoFlushOn);
+                    if (isAutoFlushOn) {
+                      setAutoFlushCountdown(null);
+                      foodSittingSinceRef.current = 0;
+                    }
+                  }}
+                  className={`font-bold text-[10px] px-2.5 py-1 rounded-lg shadow-md flex items-center gap-1 transition-all cursor-pointer border ${
+                    isAutoFlushOn
+                      ? 'bg-purple-700/90 hover:bg-purple-600 text-white border-purple-400/50'
+                      : 'bg-amber-600/90 hover:bg-amber-500 text-white border-amber-400/50 ring-1 ring-amber-400/50'
+                  }`}
+                  title="Toggle Autonomous 5-Minute Food Bowl Flushing (Turn Auto-Flush ON or AUTO OFF)"
+                >
+                  {isAutoFlushOn ? (
+                    <Sparkles className="w-3 h-3 text-purple-200" />
+                  ) : (
+                    <PowerOff className="w-3 h-3 text-amber-200" />
+                  )}
+                  <span>{isAutoFlushOn ? 'Auto-Flush: ON' : 'Auto-Flush: AUTO OFF'}</span>
+                </button>
 
                 <button
                   onClick={() => handleRunAiScan()}

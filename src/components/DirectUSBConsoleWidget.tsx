@@ -24,7 +24,8 @@ import {
   AlertTriangle,
   RotateCw,
   Gauge,
-  Scale
+  Scale,
+  Sparkles
 } from 'lucide-react';
 import { usbSerialService, USBTelemetry, ScannedWifiNetwork } from '../services/usbSerialService';
 
@@ -150,22 +151,20 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
 
   const quickCommands = [
     { label: '🍖 Feed (90°)', cmd: 'FEED' },
-    { label: '💧 Water (2.5s)', cmd: 'WATER' },
-    { label: '🚯 Waste Disposal', cmd: 'DISPOSE' },
-    { label: '🧼 Full Sanitize', cmd: 'FULLCLEAN' },
-    { label: '🐾 Pet Profile', cmd: 'PROFILE' },
+    { label: '💧 Water (10s)', cmd: 'WATER' },
+    { label: '🧼 Clean Waste (19s)', cmd: 'CLEANWASTE' },
+    { label: '🌀 Flush 15s', cmd: 'DRAIN 15000' },
+    { label: '🚿 Spray 3s', cmd: 'SPRAY 3000' },
+    { label: '⚡ Auto-Flush ON', cmd: 'AUTO_FLUSH ON' },
+    { label: '⏸️ Auto-Flush OFF', cmd: 'AUTO_FLUSH OFF' },
     { label: '🌊 Pump ON', cmd: 'PUMP ON' },
     { label: '🛑 Pump OFF', cmd: 'PUMP OFF' },
+    { label: '🐾 Pet Profile', cmd: 'PROFILE' },
     { label: '🔄 360° Test', cmd: 'TESTMOTOR' },
     { label: '🔀 Invert Dir', cmd: 'INVERTDIR' },
-    { label: '⚡ Speed: 1500µs', cmd: 'SPEED:1500' },
-    { label: '⚡ Speed: 2000µs', cmd: 'SPEED:2000' },
-    { label: '⚡ Speed: 3000µs', cmd: 'SPEED:3000' },
     { label: '📊 Status', cmd: 'STATUS' },
     { label: '⚖️ Tare Food (0g)', cmd: 'TARE' },
     { label: '💧 Tare Water (0ml)', cmd: 'WATERTARE' },
-    { label: '💧 Water Status', cmd: 'WATER' },
-    { label: '⚖️ Weight', cmd: 'WEIGHT' },
     { label: '🛠️ Diag', cmd: 'DIAG' },
     { label: '🔒 Lock Motor', cmd: 'MOTOR ON' },
     { label: '🔓 Free Motor', cmd: 'MOTOR OFF' },
@@ -196,9 +195,13 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
               ) : (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 border border-slate-700 text-slate-400">
                   <span className="w-2 h-2 rounded-full bg-slate-500"></span>
-                  Ready to Connect
+                  Plug & Play Ready
                 </span>
               )}
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-teal-500/10 border border-teal-500/30 text-teal-300">
+                <Zap className="w-3 h-3 text-teal-400" />
+                Plug & Play (Auto-Detect)
+              </span>
             </div>
             <p className="text-slate-400 text-xs mt-0.5">
               Zero-latency direct hardware link via USB Serial (WebSerial API)
@@ -414,6 +417,67 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
                 <div>
                   <p className="font-bold text-xs text-white">Tare Water</p>
                   <p className="text-[10px] text-slate-400">Zero Out (0ml)</p>
+                </div>
+              </button>
+
+              {/* Auto-Flush Toggle */}
+              <button
+                onClick={() => runAction(() => usbSerialService.toggleAutoFlush())}
+                disabled={!isConnected || isActing}
+                className="p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-cyan-500/50 flex flex-col items-center text-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group active:scale-95"
+              >
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <RotateCw className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-bold text-xs text-white">Auto-Flush Timer</p>
+                  <p className="text-[10px] text-slate-400">{telemetry?.autoFlush ? 'Enabled (5m)' : 'Disabled'}</p>
+                </div>
+              </button>
+
+              {/* Clean Waste (19s Full Sanitation) */}
+              <button
+                onClick={() => runAction(() => usbSerialService.fullSanitation())}
+                disabled={!isConnected || isActing}
+                className="p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-teal-500/50 flex flex-col items-center text-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group active:scale-95"
+                title="Full 3-in-1 sanitation: Gate Closed + 3s Spray + 15s Flush + Tare"
+              >
+                <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-bold text-xs text-white">Clean Waste</p>
+                  <p className="text-[10px] text-slate-400">19s 3-in-1 Cycle</p>
+                </div>
+              </button>
+
+              {/* Spray Clean Rinse (3s) */}
+              <button
+                onClick={() => runAction(() => usbSerialService.dispenseCleaningWater(3000))}
+                disabled={!isConnected || isActing}
+                className="p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-blue-500/50 flex flex-col items-center text-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group active:scale-95"
+              >
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Droplets className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-bold text-xs text-white">Spray Bowl</p>
+                  <p className="text-[10px] text-slate-400">GPIO 18 (3s)</p>
+                </div>
+              </button>
+
+              {/* Flush / Drain Pump (15s) */}
+              <button
+                onClick={() => runAction(() => usbSerialService.disposeWaste(15000))}
+                disabled={!isConnected || isActing}
+                className="p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/50 flex flex-col items-center text-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group active:scale-95"
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-bold text-xs text-white">Flush Bowl</p>
+                  <p className="text-[10px] text-slate-400">GPIO 23 (15s)</p>
                 </div>
               </button>
 
