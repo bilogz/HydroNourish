@@ -45,6 +45,7 @@ import {
   Smartphone,
   RotateCw,
   Dog,
+  WifiOff,
 } from 'lucide-react';
 
 const isRealHost = (h: string | undefined | null): boolean => {
@@ -691,7 +692,7 @@ export const DevicesPage: React.FC = () => {
       selectedDevice?.firmwareVersion?.match(/CAM:([0-9.]+)/)?.[1] || '';
 
     const cleanCamIp = isRealHost(autoCamIp) ? autoCamIp.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() : '';
-    const cleanDevIp = isRealHost(selectedDevice?.ipAddress) ? selectedDevice!.ipAddress.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() : '';
+    const cleanDevIp = (selectedDevice?.ipAddress && isRealHost(selectedDevice.ipAddress)) ? selectedDevice.ipAddress.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() : '';
     const lastSavedIp = typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') : '';
     const cleanSavedIp = isRealHost(lastSavedIp) ? lastSavedIp!.trim() : '';
 
@@ -946,14 +947,78 @@ export const DevicesPage: React.FC = () => {
     ? usbTelemetry.rssi
     : (featuredDevice?.wifiSignalDbm || null);
 
-  const connectionMode: 'dual' | 'usb' | 'wifi' | 'offline' = 
-    isFlashDirectConnected && isWifiConnected
-      ? 'dual'
+  const connectionMode: 'usb' | 'wifi' | 'offline' = 
+    isWifiConnected
+      ? 'wifi'
       : isFlashDirectConnected
       ? 'usb'
-      : isWifiConnected
-      ? 'wifi'
       : 'offline';
+
+  const [isDisconnectingWifi, setIsDisconnectingWifi] = useState(false);
+
+  const handleDisconnectWifi = async () => {
+    if (isDisconnectingWifi) return;
+    setIsDisconnectingWifi(true);
+    showToast('info', 'Disconnecting Wi-Fi', 'Sending disconnect signal to ESP32...');
+
+    try {
+      const cleanIp = (activeWifiIp || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+      const endpointsToTry = [
+        cleanIp ? `http://${cleanIp}/api/wifi/disconnect` : null,
+        cleanIp ? `http://${cleanIp}/api/wifi/off` : null,
+        cleanIp ? `http://${cleanIp}/api/wifi/setup-mode` : null,
+        'http://hydronourish.local/api/wifi/disconnect',
+        'http://hydronourish.local/api/wifi/off',
+        'http://hydronourish-feeder.local/api/wifi/disconnect',
+        'http://hydronourish-cam.local/api/wifi/disconnect',
+        'http://hydronourish-cam.local/api/wifi/setup-mode',
+        'http://192.168.4.1/api/wifi/disconnect',
+        'http://192.168.4.1/api/wifi/setup-mode',
+      ].filter(Boolean) as string[];
+
+      const httpPromises = endpointsToTry.map(url =>
+        fetch(url, { method: 'POST', mode: 'no-cors' }).catch(() => {})
+      );
+
+      // Direct USB Serial link if connected
+      if (isFlashDirectConnected || usbSerialService.getIsConnected()) {
+        try {
+          await usbSerialService.disconnectWifi();
+        } catch (e) {
+          console.warn('[Direct USB] Disconnect error:', e);
+        }
+      }
+
+      // Supabase Cloud queue
+      const targetDev = featuredDevice || (devices || [])[0];
+      if (targetDev?.id) {
+        try {
+          await sendWifiProvisionToSupabase(targetDev.id, '__DISCONNECT__', '');
+          await updateDevice(targetDev.id, {
+            status: 'Offline',
+            wifiSsid: 'Offline'
+          });
+        } catch (e) {
+          console.warn('[Supabase] Offline update error:', e);
+        }
+      }
+
+      await Promise.race([
+        Promise.allSettled(httpPromises),
+        new Promise(r => setTimeout(r, 1200))
+      ]);
+
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('hydronourish_paired_ssid');
+      }
+
+      showToast('success', 'Wi-Fi Disconnected', 'ESP32 Wi-Fi disconnected. Device running in offline SoftAP mode.');
+    } catch (err: any) {
+      showToast('error', 'Disconnect Failed', err?.message || 'Failed to disconnect Wi-Fi.');
+    } finally {
+      setIsDisconnectingWifi(false);
+    }
+  };
 
   return (
     <DashboardLayout pageTitle="ESP32 Smart Device Nodes" breadcrumbs={[{ label: 'Devices' }]}>
@@ -973,13 +1038,12 @@ export const DevicesPage: React.FC = () => {
           title="Online Telemetry Status"
           value={`${(devices || []).filter(d => d.status === 'Online').length} Online`}
           subtitle={`${isFlashDirectConnected ? '⚡ USB Flash: Active' : '⚡ USB: Off'} • ${isWifiConnected ? '📶 Wi-Fi: Connected' : '📶 Wi-Fi: Off'}`}
-          icon={connectionMode === 'dual' ? Zap : isFlashDirectConnected ? Usb : Radio}
-          iconBgColor={isFlashDirectConnected ? 'bg-teal-50' : 'bg-emerald-50'}
-          iconTextColor={isFlashDirectConnected ? 'text-teal-600' : 'text-emerald-600'}
+          icon={isWifiConnected ? Radio : isFlashDirectConnected ? Usb : Radio}
+          iconBgColor={isWifiConnected ? 'bg-indigo-50' : isFlashDirectConnected ? 'bg-teal-50' : 'bg-slate-50'}
+          iconTextColor={isWifiConnected ? 'text-indigo-600' : isFlashDirectConnected ? 'text-teal-600' : 'text-slate-500'}
           badgeText={
-            connectionMode === 'dual' ? 'Dual Link' :
-            isFlashDirectConnected ? 'Direct USB' :
-            isWifiConnected ? 'Wi-Fi Cloud' : 'Offline'
+            isWifiConnected ? 'Wi-Fi Cloud' :
+            isFlashDirectConnected ? 'Direct USB' : 'Offline'
           }
           badgeType={connectionMode !== 'offline' ? 'success' : 'alert'}
         />
@@ -1063,8 +1127,8 @@ export const DevicesPage: React.FC = () => {
             const isOffline = !isOnline && !isConnecting;
 
             const badgeBg = isOnline
-              ? (connectionMode === 'dual'
-                  ? 'bg-gradient-to-r from-teal-50 to-indigo-50 text-teal-900 border border-teal-300'
+              ? (isWifiConnected
+                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                   : isUsbConnected
                   ? 'bg-teal-50 text-teal-800 border border-teal-300'
                   : 'bg-emerald-50 text-emerald-700 border border-emerald-200')
@@ -1072,10 +1136,10 @@ export const DevicesPage: React.FC = () => {
               ? 'bg-amber-50 text-amber-700 border border-amber-200'
               : 'bg-rose-50 text-rose-700 border border-rose-200';
             const dotColor = isOnline
-              ? (connectionMode === 'dual' ? 'bg-teal-500' : isUsbConnected ? 'bg-teal-500' : 'bg-emerald-500')
+              ? (isWifiConnected ? 'bg-indigo-500' : isUsbConnected ? 'bg-teal-500' : 'bg-emerald-500')
               : isConnecting ? 'bg-amber-400' : 'bg-rose-500';
             const pingColor = isOnline
-              ? (connectionMode === 'dual' ? 'bg-teal-400' : isUsbConnected ? 'bg-teal-400' : 'bg-emerald-400')
+              ? (isWifiConnected ? 'bg-indigo-400' : isUsbConnected ? 'bg-teal-400' : 'bg-emerald-400')
               : isConnecting ? 'bg-amber-300' : '';
 
             const assignedPet = pets.find(p => p.id === featuredDevice.assignedPetId || p.name === featuredDevice.assignedPetName);
@@ -1142,14 +1206,6 @@ export const DevicesPage: React.FC = () => {
                             <span className="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-700 text-[10px] font-bold flex items-center gap-1">
                               <RefreshCw className="w-3 h-3 animate-spin" /> Connecting...
                             </span>
-                          ) : connectionMode === 'dual' ? (
-                            <span className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-teal-100 to-indigo-100 text-teal-900 border border-teal-300 text-[10px] font-black flex items-center gap-1 shadow-2xs">
-                              <Zap className="w-3 h-3 text-teal-600 animate-pulse" /> Dual: USB Flash + Wi-Fi
-                            </span>
-                          ) : isFlashDirectConnected ? (
-                            <span className="px-2 py-0.5 rounded-lg bg-teal-100 text-teal-800 border border-teal-300 text-[10px] font-bold flex items-center gap-1 shadow-2xs">
-                              <Usb className="w-3 h-3 text-teal-600 animate-pulse" /> Direct USB Flash Active
-                            </span>
                           ) : isWifiConnected ? (
                             <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 shadow-2xs ${
                               (activeWifiIp === '192.168.4.1' || activeWifiSsid?.includes('Setup'))
@@ -1168,6 +1224,10 @@ export const DevicesPage: React.FC = () => {
                                 </>
                               )}
                             </span>
+                          ) : isFlashDirectConnected ? (
+                            <span className="px-2 py-0.5 rounded-lg bg-teal-100 text-teal-800 border border-teal-300 text-[10px] font-bold flex items-center gap-1 shadow-2xs">
+                              <Usb className="w-3 h-3 text-teal-600 animate-pulse" /> Direct USB Flash Active
+                            </span>
                           ) : (
                             <StatusBadge status={featuredDevice.status} size="sm" />
                           )}
@@ -1175,7 +1235,7 @@ export const DevicesPage: React.FC = () => {
                         <div className="text-right">
                           <span className="block text-[11px] font-mono text-slate-500 font-bold">{featuredDevice.macAddress}</span>
                           <div className="flex items-center justify-end gap-1.5 mt-0.5">
-                            {/* Explicit Dual Status Indicators */}
+                            {/* Explicit Independent Status Indicators */}
                             <span
                               className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-colors ${
                                 isFlashDirectConnected
@@ -1989,14 +2049,12 @@ export const DevicesPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="relative flex h-2.5 w-2.5">
                   <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    connectionMode === 'dual' ? 'bg-teal-400' :
-                    isFlashDirectConnected ? 'bg-teal-400' :
-                    isWifiConnected ? 'bg-indigo-400' : 'bg-slate-300'
+                    isWifiConnected ? 'bg-indigo-400' :
+                    isFlashDirectConnected ? 'bg-teal-400' : 'bg-slate-300'
                   }`} />
                   <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                    connectionMode === 'dual' ? 'bg-teal-500' :
-                    isFlashDirectConnected ? 'bg-teal-500' :
-                    isWifiConnected ? 'bg-indigo-500' : 'bg-slate-400'
+                    isWifiConnected ? 'bg-indigo-500' :
+                    isFlashDirectConnected ? 'bg-teal-500' : 'bg-slate-400'
                   }`} />
                 </span>
                 <span className="text-[11px] font-black uppercase tracking-wider text-slate-800">
@@ -2005,10 +2063,10 @@ export const DevicesPage: React.FC = () => {
               </div>
 
               {/* Mode Badge */}
-              {connectionMode === 'dual' ? (
-                <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-teal-50 to-indigo-50 border border-teal-300 text-teal-900 text-[10px] font-black flex items-center gap-1 shadow-2xs">
-                  <Zap className="w-3 h-3 text-teal-600 animate-pulse" />
-                  Dual Active (USB Flash + Wi-Fi)
+              {isWifiConnected ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-300 text-indigo-800 text-[10px] font-black flex items-center gap-1 shadow-2xs">
+                  <Wifi className="w-3 h-3 text-indigo-600" />
+                  Wi-Fi Connected ({activeWifiSsid})
                 </span>
               ) : isFlashDirectConnected ? (
                 <span className="px-2.5 py-0.5 rounded-full bg-teal-50 border border-teal-300 text-teal-800 text-[10px] font-black flex items-center gap-1 shadow-2xs">
@@ -2126,9 +2184,30 @@ export const DevicesPage: React.FC = () => {
                 </p>
                 <div className="mt-1.5 pt-1.5 border-t border-slate-100 flex items-center justify-between">
                   <span className="text-[9px] text-slate-400">2.4 GHz RF</span>
-                  <span className="text-[10px] font-bold text-indigo-600">
-                    {isWifiConnected ? 'Cloud Synced' : 'Offline'}
-                  </span>
+                  {isWifiConnected ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-indigo-600">Cloud Synced</span>
+                      <button
+                        type="button"
+                        onClick={handleDisconnectWifi}
+                        disabled={isDisconnectingWifi}
+                        className="text-[10px] font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-1 border border-rose-200 disabled:opacity-50"
+                        title="Disconnect Wi-Fi network and revert ESP32 to SoftAP mode"
+                        id="btn-disconnect-wifi"
+                      >
+                        {isDisconnectingWifi ? (
+                          <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                        ) : (
+                          <WifiOff className="w-2.5 h-2.5" />
+                        )}
+                        Disconnect Wi-Fi
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-400">
+                      Offline
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

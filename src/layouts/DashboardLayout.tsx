@@ -559,24 +559,22 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             <Link
               to="/app/devices"
               className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs hover:scale-[1.02] cursor-pointer ${
-                isUsbConnected && isWifiConnected
-                  ? 'bg-gradient-to-r from-teal-50 to-indigo-50 border-teal-300 text-teal-900 ring-1 ring-teal-400/40'
+                isWifiConnected
+                  ? 'bg-indigo-50 border-indigo-300 text-indigo-800 ring-1 ring-indigo-400/40'
                   : isUsbConnected
                   ? 'bg-teal-50 border-teal-300 text-teal-800 ring-1 ring-teal-400/40'
-                  : isWifiConnected
-                  ? 'bg-indigo-50 border-indigo-300 text-indigo-800 ring-1 ring-indigo-400/40'
                   : 'bg-slate-100/80 border-slate-200 text-slate-500 hover:text-slate-700'
               }`}
               title="Click to view hardware connection & pair Wi-Fi"
             >
               <span className="relative flex h-2 w-2">
-                {(isUsbConnected || isWifiConnected) ? (
+                {(isWifiConnected || isUsbConnected) ? (
                   <>
                     <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                      isUsbConnected ? 'bg-teal-400' : 'bg-indigo-400'
+                      isWifiConnected ? 'bg-indigo-400' : 'bg-teal-400'
                     }`} />
                     <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                      isUsbConnected ? 'bg-teal-500' : 'bg-indigo-500'
+                      isWifiConnected ? 'bg-indigo-500' : 'bg-teal-500'
                     }`} />
                   </>
                 ) : (
@@ -584,20 +582,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 )}
               </span>
 
-              {isUsbConnected && isWifiConnected ? (
+              {isWifiConnected ? (
                 <>
-                  <Zap className="w-3.5 h-3.5 text-teal-600 animate-pulse" />
-                  <span>Dual: Flash Direct + Wi-Fi</span>
+                  <Wifi className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Wi-Fi: {activeWifiSsid}</span>
                 </>
               ) : isUsbConnected ? (
                 <>
                   <Usb className="w-3.5 h-3.5 text-teal-600 animate-pulse" />
                   <span>Flash Direct: ON</span>
-                </>
-              ) : isWifiConnected ? (
-                <>
-                  <Wifi className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Wi-Fi: {activeWifiSsid}</span>
                 </>
               ) : (
                 <>

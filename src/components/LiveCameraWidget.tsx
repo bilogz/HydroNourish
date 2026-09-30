@@ -811,6 +811,10 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
 
     const fetchSnapshot = () => {
       if (inFlight || !isMounted) return;
+      if (failCount > 10 && failCount % 10 !== 0) {
+        failCount++;
+        return;
+      }
       inFlight = true;
 
       const candidates = [

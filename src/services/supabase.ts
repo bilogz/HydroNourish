@@ -479,7 +479,7 @@ function getHeartbeatStatus(
 
   // If under maintenance
   if (dbStatus === 'maintenance') {
-    return { status: 'maintenance', ageSec };
+    return { status: 'Warning' as Device['status'], ageSec };
   }
 
   if (ageSec <= 420) {

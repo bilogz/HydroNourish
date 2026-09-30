@@ -252,6 +252,28 @@ const pendingTares = new Map<string, { food?: number; water?: number; calFood?: 
 const TARE_LOCK_MS = 4000;
 const CAL_LOCK_MS = 6000;
 
+const roundGrams = (grams: number) => Math.max(0, Math.round(grams * 10) / 10);
+
+/** Keep dashboard bowl weight in lock-step with the ESP32 published value without 0.1g flicker. */
+const stabilizeBowlWeight = (
+  previous: number | undefined,
+  incoming: number | undefined,
+  options?: { gateOpen?: boolean; force?: boolean }
+): number | undefined => {
+  if (typeof incoming !== 'number' || Number.isNaN(incoming)) return previous;
+  const next = roundGrams(incoming);
+  if (options?.force || previous === undefined) return next;
+  const delta = Math.abs(next - previous);
+  if (next === 0 && previous <= 2.5) return 0;
+  if (options?.gateOpen) {
+    if (delta < 0.15) return previous;
+    return next;
+  }
+  if (delta < 0.4) return previous;
+  if (delta < 2.5) return roundGrams(previous * 0.72 + next * 0.28);
+  return next;
+};
+
 // Debounce timestamp for TDS dry / doctor refill alert
 let lastTdsDryAlertTime = 0;
 
@@ -265,7 +287,25 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
   incoming.forEach((d) => {
     const prev = map.get(d.id);
     if (prev) {
+      // 🛡️ Live Priority Guard: If device is streaming real-time via USB or LAN,
+      // prevent background Supabase cloud polling from overwriting active sensor readings!
+      const isLiveStreaming = prev.lastTransmission?.includes('Live — Direct USB') || prev.lastTransmission?.includes('Live — Wi-Fi LAN');
+      const isCloudIncoming = !d.lastTransmission?.includes('Live — Direct USB') && !d.lastTransmission?.includes('Live — Wi-Fi LAN');
+
       const merged: Device = { ...prev, ...d };
+
+      if (isLiveStreaming && isCloudIncoming) {
+        if (prev.foodBowlWeightGrams !== undefined) merged.foodBowlWeightGrams = prev.foodBowlWeightGrams;
+        if (prev.scaleReady !== undefined) merged.scaleReady = prev.scaleReady;
+        if (prev.waterQualityPpm !== undefined) merged.waterQualityPpm = prev.waterQualityPpm;
+        if (prev.waterMl !== undefined) merged.waterMl = prev.waterMl;
+        if (prev.waterLiters !== undefined) merged.waterLiters = prev.waterLiters;
+        if (prev.waterLevelPct !== undefined) merged.waterLevelPct = prev.waterLevelPct;
+        if (prev.waterScaleReady !== undefined) merged.waterScaleReady = prev.waterScaleReady;
+        if (prev.foodLevelPct !== undefined) merged.foodLevelPct = prev.foodLevelPct;
+        if (prev.wifiSignalDbm !== undefined && prev.wifiSignalDbm !== -60) merged.wifiSignalDbm = prev.wifiSignalDbm;
+        merged.lastTransmission = prev.lastTransmission;
+      }
 
       // 1. Check local storage preference for auto-refill
       const savedAuto = typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_refill_${d.id}`) : null;
@@ -299,8 +339,14 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
       // --- Calibration lock: suppress stale readings for CAL_LOCK_MS after calibrate ---
       if (tareLock?.food && (now - tareLock.food) < TARE_LOCK_MS) {
         merged.foodBowlWeightGrams = 0.0;
+      } else if (isLiveStreaming && isCloudIncoming) {
+        merged.foodBowlWeightGrams = prev.foodBowlWeightGrams;
       } else if (d.foodBowlWeightGrams !== undefined) {
-        merged.foodBowlWeightGrams = d.foodBowlWeightGrams;
+        const forceCal = Boolean(tareLock?.calFood && (now - tareLock.calFood) < CAL_LOCK_MS);
+        merged.foodBowlWeightGrams = stabilizeBowlWeight(prev.foodBowlWeightGrams, d.foodBowlWeightGrams, {
+          gateOpen: merged.foodGateOpen,
+          force: forceCal,
+        });
       }
 
       // --- Water scale tare lock: force 0 for TARE_LOCK_MS after tare ---
@@ -582,31 +628,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (res.ok) {
             activeLanHost = host;
             const data = await res.json();
-            if (data && (data.deviceId || data.success)) {
-              if (typeof window !== 'undefined' && data.ip && data.ip !== '0.0.0.0') {
-                localStorage.setItem('hn_last_known_ip', data.ip);
+            if (data && (data.deviceId || data.device_id || data.success || data.online)) {
+              const activeIp = (data.ip && data.ip !== '0.0.0.0') ? data.ip : ((data.ip_address && data.ip_address !== '0.0.0.0') ? data.ip_address : host);
+              if (typeof window !== 'undefined' && activeIp && activeIp !== '0.0.0.0') {
+                localStorage.setItem('hn_last_known_ip', activeIp);
               }
+              const cleanMac = data.mac || data.mac_address || '';
+              const macSuffix = cleanMac ? cleanMac.replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase() : '';
+              const targetId = data.deviceId || data.device_id || (macSuffix ? `HN-NODE-${macSuffix}` : 'HN-NODE-F778');
+
+              const rawScaleReady = data.scaleReady !== undefined ? data.scaleReady : data.scale_ready;
+              const rawWaterScaleReady = data.waterScaleReady !== undefined ? data.waterScaleReady : data.water_scale_ready;
+              const rawWeight = typeof data.foodBowlWeightGrams === 'number' ? data.foodBowlWeightGrams : (typeof data.food_bowl_weight_grams === 'number' ? data.food_bowl_weight_grams : undefined);
+              const rawFoodLevel = typeof data.foodLevel === 'number' ? data.foodLevel : (typeof data.food_level_pct === 'number' ? data.food_level_pct : undefined);
+              const rawWaterLevel = typeof data.waterLevel === 'number' ? data.waterLevel : (typeof data.water_level_percent === 'number' ? data.water_level_percent : undefined);
+              const rawWaterMl = typeof data.waterMl === 'number' ? data.waterMl : (typeof data.water_ml === 'number' ? data.water_ml : undefined);
+              const rawTds = typeof data.tds === 'number' ? data.tds : (typeof data.tds_ppm === 'number' ? data.tds_ppm : undefined);
+              const rawRssi = typeof data.rssi === 'number' && data.rssi !== 0 ? data.rssi : (typeof data.wifi_rssi === 'number' && data.wifi_rssi !== 0 ? data.wifi_rssi : -60);
+
               setDevices((prev) => {
-                const targetId = data.deviceId || 'HN-NODE-F778';
                 const hasMatch = prev.some((d) => d.id === targetId);
+                const prevMatch = prev.find((d) => d.id === targetId);
+                const lanTareLock = pendingTares.get(targetId);
+                const lanNow = Date.now();
+                let lanWeight = rawWeight;
+                if (lanTareLock?.food && (lanNow - lanTareLock.food) < TARE_LOCK_MS) {
+                  lanWeight = 0.0;
+                } else {
+                  lanWeight = stabilizeBowlWeight(prevMatch?.foodBowlWeightGrams, rawWeight, {
+                    gateOpen: data.foodGateOpen !== undefined ? Boolean(data.foodGateOpen) : prevMatch?.foodGateOpen,
+                    force: Boolean(lanTareLock?.calFood && (lanNow - lanTareLock.calFood) < CAL_LOCK_MS),
+                  });
+                }
                 const updatedFields: Partial<Device> = {
                   status: 'Online',
                   lastTransmission: 'Live — Wi-Fi LAN',
-                  ipAddress: (data.ip && data.ip !== '0.0.0.0') ? data.ip : host,
+                  ipAddress: activeIp,
+                  macAddress: cleanMac || undefined,
                   wifiSsid: data.ssid || undefined,
-                  wifiSignalDbm: typeof data.rssi === 'number' ? data.rssi : -60,
-                  foodBowlWeightGrams: typeof data.foodBowlWeightGrams === 'number' ? data.foodBowlWeightGrams : undefined,
-                  scaleReady: data.scaleReady !== undefined ? data.scaleReady : true,
-                  foodLevelPct: typeof data.foodLevel === 'number' ? data.foodLevel : undefined,
-                  waterLevelPct: typeof data.waterLevel === 'number' ? data.waterLevel : undefined,
-                  waterMl: typeof data.waterMl === 'number' ? data.waterMl : undefined,
-                  waterLiters: typeof data.waterMl === 'number' ? Number((data.waterMl / 1000).toFixed(2)) : undefined,
-                  waterScaleReady: data.waterScaleReady !== undefined ? data.waterScaleReady : true,
-                  waterQualityPpm: typeof data.tds === 'number' ? data.tds : undefined,
-                  isPumping: data.isPumping !== undefined ? data.isPumping : false,
-                  autoRefillEnabled: data.autoRefill !== undefined ? data.autoRefill : true,
-                  foodGateOpen: data.foodGateOpen !== undefined ? data.foodGateOpen : false,
-                  currentServoAngle: typeof data.currentServoAngle === 'number' ? data.currentServoAngle : 0,
+                  wifiSignalDbm: rawRssi,
+                  foodBowlWeightGrams: lanWeight,
+                  scaleReady: rawScaleReady !== undefined ? Boolean(rawScaleReady) : undefined,
+                  foodLevelPct: rawFoodLevel,
+                  waterLevelPct: rawWaterLevel,
+                  waterMl: rawWaterMl,
+                  waterLiters: rawWaterMl !== undefined ? Number((rawWaterMl / 1000).toFixed(2)) : undefined,
+                  waterScaleReady: rawWaterScaleReady !== undefined ? Boolean(rawWaterScaleReady) : undefined,
+                  waterQualityPpm: rawTds,
+                  isPumping: data.isPumping !== undefined ? Boolean(data.isPumping) : (data.pump_active !== undefined ? Boolean(data.pump_active) : false),
+                  autoRefillEnabled: data.autoRefill !== undefined ? Boolean(data.autoRefill) : (data.auto_refill_enabled !== undefined ? Boolean(data.auto_refill_enabled) : true),
+                  foodGateOpen: data.foodGateOpen !== undefined ? Boolean(data.foodGateOpen) : (data.food_gate_open !== undefined ? Boolean(data.food_gate_open) : false),
+                  currentServoAngle: typeof data.currentServoAngle === 'number' ? data.currentServoAngle : (typeof data.current_servo_angle === 'number' ? data.current_servo_angle : 0),
                 };
                 if (hasMatch) {
                   return prev.map((d) => (d.id === targetId ? { ...d, ...updatedFields } : d));
@@ -616,29 +688,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     deviceName: `HydroNourish Station (${targetId})`,
                     hardwareStatus: 'available',
                     status: 'Online',
-                    ipAddress: (data.ip && data.ip !== '0.0.0.0') ? data.ip : host,
-                    macAddress: data.mac || '1C:C3:AB:F9:F7:78',
+                    ipAddress: activeIp,
+                    macAddress: cleanMac || '1C:C3:AB:F9:F7:78',
                     firmwareVersion: 'v2.5.0-ESP32|WIFI:LAN',
                     isPluggedIn: true,
                     batteryPct: 100,
                     lastTransmission: 'Live — Wi-Fi LAN',
-                    foodBowlWeightGrams: typeof data.foodBowlWeightGrams === 'number' ? data.foodBowlWeightGrams : 0.0,
-                    scaleReady: data.scaleReady !== undefined ? data.scaleReady : true,
+                    foodBowlWeightGrams: lanWeight ?? 0.0,
+                    scaleReady: rawScaleReady !== undefined ? Boolean(rawScaleReady) : true,
                     lastIntakeFoodGrams: 0,
-                    foodLevelPct: typeof data.foodLevel === 'number' ? data.foodLevel : 85,
-                    waterLevelPct: typeof data.waterLevel === 'number' ? data.waterLevel : 80,
-                    waterMl: typeof data.waterMl === 'number' ? data.waterMl : 150,
-                    waterLiters: 0.15,
-                    waterScaleReady: data.waterScaleReady !== undefined ? data.waterScaleReady : true,
-                    waterQualityPpm: typeof data.tds === 'number' ? data.tds : 120,
-                    isPumping: data.isPumping !== undefined ? data.isPumping : false,
-                    autoRefillEnabled: data.autoRefill !== undefined ? data.autoRefill : true,
+                    foodLevelPct: rawFoodLevel ?? 85,
+                    waterLevelPct: rawWaterLevel ?? 80,
+                    waterMl: rawWaterMl ?? 150,
+                    waterLiters: rawWaterMl !== undefined ? Number((rawWaterMl / 1000).toFixed(2)) : 0.15,
+                    waterScaleReady: rawWaterScaleReady !== undefined ? Boolean(rawWaterScaleReady) : true,
+                    waterQualityPpm: rawTds ?? 120,
+                    isPumping: data.isPumping !== undefined ? Boolean(data.isPumping) : (data.pump_active !== undefined ? Boolean(data.pump_active) : false),
+                    autoRefillEnabled: data.autoRefill !== undefined ? Boolean(data.autoRefill) : (data.auto_refill_enabled !== undefined ? Boolean(data.auto_refill_enabled) : true),
                     autoFlushEnabled: true,
                     gateOpenDeg: 90,
-                    foodGateOpen: data.foodGateOpen !== undefined ? data.foodGateOpen : false,
-                    currentServoAngle: typeof data.currentServoAngle === 'number' ? data.currentServoAngle : 0,
+                    foodGateOpen: data.foodGateOpen !== undefined ? Boolean(data.foodGateOpen) : (data.food_gate_open !== undefined ? Boolean(data.food_gate_open) : false),
+                    currentServoAngle: typeof data.currentServoAngle === 'number' ? data.currentServoAngle : (typeof data.current_servo_angle === 'number' ? data.current_servo_angle : 0),
                     wifiSsid: data.ssid || 'Garcia Wifi 4G Wifi',
-                    wifiSignalDbm: typeof data.rssi === 'number' ? data.rssi : -60,
+                    wifiSignalDbm: rawRssi,
                     assignedPetId: 'PET-001',
                     assignedPetName: 'Max',
                   };
@@ -669,9 +741,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (usbTareLock?.food && (usbNow - usbTareLock.food) < TARE_LOCK_MS) {
                 stabilizedWeight = 0.0;
               } else {
-                stabilizedWeight = typeof telemetry.foodBowlWeightGrams === 'number'
-                  ? telemetry.foodBowlWeightGrams
-                  : d.foodBowlWeightGrams;
+                stabilizedWeight = stabilizeBowlWeight(
+                  d.foodBowlWeightGrams,
+                  typeof telemetry.foodBowlWeightGrams === 'number' ? telemetry.foodBowlWeightGrams : undefined,
+                  {
+                    gateOpen: telemetry.foodGateOpen !== undefined ? telemetry.foodGateOpen : d.foodGateOpen,
+                    force: Boolean(usbTareLock?.calFood && (usbNow - usbTareLock.calFood) < CAL_LOCK_MS),
+                  }
+                );
               }
 
               // Water tare lock
@@ -755,7 +832,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           isPluggedIn: true,
           batteryPct: 100,
           lastTransmission: 'Live — Direct USB (Plug & Play)',
-          foodBowlWeightGrams: typeof telemetry.foodBowlWeightGrams === 'number' ? telemetry.foodBowlWeightGrams : 0.0,
+          foodBowlWeightGrams: typeof telemetry.foodBowlWeightGrams === 'number' ? roundGrams(telemetry.foodBowlWeightGrams) : 0.0,
           scaleReady: telemetry.scaleReady !== undefined ? telemetry.scaleReady : true,
           lastIntakeFoodGrams: typeof telemetry.lastIntakeFoodGrams === 'number' ? telemetry.lastIntakeFoodGrams : 0,
           foodLevelPct: typeof telemetry.foodLevel === 'number' ? telemetry.foodLevel : 85,
@@ -1969,7 +2046,10 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
           const data = await res.json();
           if (data && typeof data.weight_grams === 'number') {
             setDevices((prev) =>
-              prev.map((d) => (d.id === deviceId ? { ...d, foodBowlWeightGrams: data.weight_grams } : d))
+              prev.map((d) => (d.id === deviceId ? {
+                ...d,
+                foodBowlWeightGrams: stabilizeBowlWeight(d.foodBowlWeightGrams, data.weight_grams, { gateOpen: d.foodGateOpen, force: true }) ?? roundGrams(data.weight_grams),
+              } : d))
             );
             return data.weight_grams;
           }

@@ -168,12 +168,10 @@ class USBSerialService {
     return typeof this.lastTelemetry?.rssi === 'number' ? this.lastTelemetry.rssi : null;
   }
 
-  public getConnectionMode(isWifiOnlineFallback: boolean = false): 'dual' | 'usb' | 'wifi' | 'offline' {
-    const usb = this.isConnected;
+  public getConnectionMode(isWifiOnlineFallback: boolean = false): 'usb' | 'wifi' | 'offline' {
     const wifi = this.isWifiConnected() || isWifiOnlineFallback;
-    if (usb && wifi) return 'dual';
-    if (usb) return 'usb';
     if (wifi) return 'wifi';
+    if (this.isConnected) return 'usb';
     return 'offline';
   }
 
@@ -364,12 +362,16 @@ class USBSerialService {
       if (line.startsWith('{') && line.endsWith('}')) {
         try {
           const parsed = JSON.parse(line);
-          if (parsed.type === 'telemetry' || parsed.waterLevel !== undefined || parsed.foodBowlWeightGrams !== undefined) {
+          if (parsed.type === 'telemetry' || parsed.waterLevel !== undefined || parsed.foodBowlWeightGrams !== undefined || parsed.food_bowl_weight_grams !== undefined) {
+            if (!parsed.deviceId && parsed.device_id) parsed.deviceId = parsed.device_id;
+            if (typeof parsed.foodBowlWeightGrams !== 'number' && parsed.food_bowl_weight_grams !== undefined) {
+              parsed.foodBowlWeightGrams = Number(parsed.food_bowl_weight_grams);
+            }
             this.lastTelemetry = parsed as USBTelemetry;
             this.telemetryListeners.forEach((fn) => {
               try { fn(parsed); } catch {}
             });
-            this.emitLog(`📊 [Telemetry] Water: ${parsed.waterLevel ?? 0}% | TDS: ${parsed.tds ?? 0} PPM | Food: ${parsed.foodLevel ?? 0}% | Gate: ${parsed.foodGateOpen ? 'OPEN' : 'CLOSED'}`, 'telemetry');
+            this.emitLog(`📊 [Telemetry] Water: ${parsed.waterLevel ?? 0}% | Scale: ${parsed.foodBowlWeightGrams ?? 0}g | TDS: ${parsed.tds ?? 0} PPM | Gate: ${parsed.foodGateOpen ? 'OPEN' : 'CLOSED'}`, 'telemetry');
             continue;
           } else if (parsed.type === 'response') {
             if (parsed.action === 'scan_wifi' || parsed.action === 'wifi_scan' || parsed.action === 'scan' || parsed.networks) {
@@ -515,6 +517,12 @@ class USBSerialService {
     // Send both JSON action and plain-text PAIR:ssid,pass for universal ESP32 firmware compatibility
     await this.sendRaw(`PAIR:${ssid.trim()},${pass.trim()}`);
     return this.sendCommand({ action: 'pair_wifi', ssid: ssid.trim(), password: pass.trim() });
+  }
+
+  public async disconnectWifi(): Promise<boolean> {
+    await this.sendRaw('DISCONNECT_WIFI');
+    await this.sendRaw('WIFIOFF');
+    return this.sendCommand({ action: 'disconnect_wifi', enabled: true });
   }
 
   public async controlMotor(state: 'lock' | 'free' | 'hold_on' | 'hold_off' | 'step' | 'test', steps?: number): Promise<boolean> {
