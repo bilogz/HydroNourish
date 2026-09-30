@@ -931,13 +931,14 @@ export const DevicesPage: React.FC = () => {
   const isFlashDirectConnected = isUsbConnected;
   const isWifiConnected = Boolean(
     (usbTelemetry?.wifiConnected) ||
-    (featuredDevice?.status === 'Online' && featuredDevice?.wifiSsid && featuredDevice.wifiSsid !== 'Offline') ||
-    (isRealHost(featuredDevice?.ipAddress)) ||
-    (typeof window !== 'undefined' && Boolean(localStorage.getItem('hn_last_known_ip')))
+    (featuredDevice?.status !== 'Offline' && featuredDevice?.wifiSsid && featuredDevice.wifiSsid !== 'Offline') ||
+    (featuredDevice?.status !== 'Offline' && isRealHost(featuredDevice?.ipAddress))
   );
   const activeWifiSsid = (isUsbConnected && usbTelemetry?.ssid)
     ? usbTelemetry.ssid
-    : (featuredDevice?.wifiSsid && featuredDevice.wifiSsid !== 'Offline' ? featuredDevice.wifiSsid : (typeof window !== 'undefined' ? localStorage.getItem('hydronourish_paired_ssid') : null) || wifiSsid || 'Garcia Wifi 4G Wifi');
+    : (featuredDevice?.wifiSsid && featuredDevice.wifiSsid !== 'Offline'
+        ? featuredDevice.wifiSsid
+        : (isWifiConnected ? ((typeof window !== 'undefined' ? localStorage.getItem('hydronourish_paired_ssid') : null) || 'Garcia Wifi 4G Wifi') : 'Offline'));
   const activeWifiIp = (isUsbConnected && usbTelemetry?.ip && isRealHost(usbTelemetry.ip))
     ? usbTelemetry.ip
     : (isRealHost(featuredDevice?.ipAddress) ? featuredDevice!.ipAddress : (typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') : null));
@@ -1055,8 +1056,10 @@ export const DevicesPage: React.FC = () => {
           </div>
         ) : (
           (() => {
-            const isOnline = featuredDevice ? (featuredDevice.status === 'Online' || isUsbConnected) : isUsbConnected;
-            const isConnecting = !isUsbConnected && featuredDevice?.status === ('Connecting' as typeof featuredDevice.status);
+            const isOnline = featuredDevice
+              ? (featuredDevice.status === 'Online' || isWifiConnected || isUsbConnected)
+              : (isWifiConnected || isUsbConnected);
+            const isConnecting = !isOnline && !isUsbConnected && featuredDevice?.status === ('Connecting' as typeof featuredDevice.status);
             const isOffline = !isOnline && !isConnecting;
 
             const badgeBg = isOnline

@@ -443,12 +443,7 @@ function getHeartbeatStatus(
   updatedAt?: string | null,
   lastSeenAt?: string | null
 ): { status: Device['status']; ageSec: number } {
-  // If the record was explicitly marked offline or maintenance
-  if (dbStatus === 'Offline' || dbStatus === 'offline' || dbStatus === 'maintenance') {
-    return { status: 'Offline', ageSec: 9999 };
-  }
-
-  // Parse all candidate timestamps
+  // Parse all candidate timestamps first
   const candidates: number[] = [];
   const parseTs = (val?: string | null) => {
     if (!val) return;
@@ -466,7 +461,10 @@ function getHeartbeatStatus(
 
   // If no timestamp or unable to parse
   if (candidates.length === 0) {
-    return { status: 'Offline', ageSec: 9999 };
+    if (dbStatus === 'Online' || dbStatus === 'online') {
+      return { status: 'Online', ageSec: 0 };
+    }
+    return { status: (dbStatus as Device['status']) || 'Offline', ageSec: 9999 };
   }
 
   // Pick the most recent valid timestamp
@@ -474,18 +472,18 @@ function getHeartbeatStatus(
   const nowMs = Date.now();
   const ageSec = Math.max(0, Math.round((nowMs - latestParsed) / 1000));
 
-  // ESP32 pushes telemetry every 20 seconds.
-  // Grace window accounts for: WiFi reconnect (~25s), cloud provision switching (~45s), hotspot delay,
-  // and up to 4 password retry attempts × 12s each = ~48s + fallback loops.
-  //
-  // Online:     last packet ≤ 45s ago  (allows 2 missed 20s cycles + network jitter)
-  // Connecting: 46s – 300s (5 min)    (WiFi switching, cloud provision reconnect in progress)
-  // Offline:    > 300s (5 minutes)    (device truly powered off or unreachable)
-  if (ageSec <= 45) {
+  // If device transmitted packets within 120s (2 minutes), it is unequivocally Online!
+  // This graceful window easily absorbs packet retries on weak RF signals (-75 to -85 dBm).
+  if (ageSec <= 120) {
     return { status: 'Online', ageSec };
   }
 
-  if (ageSec <= 300) {
+  // If under maintenance
+  if (dbStatus === 'maintenance') {
+    return { status: 'maintenance', ageSec };
+  }
+
+  if (ageSec <= 420) {
     return { status: 'Connecting' as Device['status'], ageSec };
   }
 

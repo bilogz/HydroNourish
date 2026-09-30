@@ -882,31 +882,41 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
 
     let foundIp: string | null = null;
 
-    const probeTarget = (host: string): Promise<string | null> => {
+    const probeTarget = async (host: string): Promise<string | null> => {
+      // 1. Ultra-fast diagnostic check on /ping and /status across Port 81 & Port 80
+      const testEndpoints = [
+        `http://${host}:81/ping`,
+        `http://${host}/ping`,
+        `http://${host}:81/status`,
+        `http://${host}/status`,
+        `http://${host}/api/status`,
+      ];
+      for (const ep of testEndpoints) {
+        try {
+          const res = await fetch(ep, { signal: AbortSignal.timeout(1200), mode: 'cors' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.status === 'online' || data?.device_type?.includes('ESP32') || data?.device?.includes('ESP32') || data?.stream_url) {
+              return data.ip || data.ip_address || host;
+            }
+          }
+        } catch {}
+      }
+
+      // 2. Secondary fallback: image probe on /capture
       return new Promise((resolve) => {
         let settled = false;
-        // Test 1: Image probe on /capture
         const img = new Image();
         img.onload = () => {
           if (!settled) { settled = true; resolve(host); }
         };
-        img.onerror = () => {};
+        img.onerror = () => {
+          if (!settled) { settled = true; resolve(null); }
+        };
         img.src = `http://${host}/capture?_t=${Date.now()}`;
-
-        // Test 2: Fetch probe on /api/status
-        fetch(`http://${host}/api/status`, { signal: AbortSignal.timeout(1800) })
-          .then((r) => r.json())
-          .then((data) => {
-            if (!settled && (data.device_type?.includes('ESP32-CAM') || data.stream_url)) {
-              settled = true;
-              resolve(data.ip_address || host);
-            }
-          })
-          .catch(() => {});
-
         setTimeout(() => {
           if (!settled) { settled = true; resolve(null); }
-        }, 2200);
+        }, 2500);
       });
     };
 
@@ -977,62 +987,81 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     setTestingCamIp(formatted);
     setTestResult(null);
 
-    const testUrl = `http://${formatted}/capture?_t=${Date.now()}`;
-    const img = new Image();
-    let settled = false;
+    let verified = false;
+    let verifiedMsg = '';
 
-    img.onload = () => {
-      if (!settled) {
-        settled = true;
-        setTestingCamIp(null);
-        setTestResult({ ip: formatted, success: true, msg: `✅ Online! Camera responsive at ${formatted}` });
-        setCameraIp(formatted);
-        setInputIp(formatted);
-        localStorage.setItem('hn_camera_ip', formatted);
-        if (device?.id) updateDevice(device.id, { cameraIp: formatted });
-        setStreamPortIndex(0);
-        setStreamKey(Date.now());
-        setIsStreamLoading(true);
-        setStreamError(false);
+    // Step 1: Probe fast lightweight /ping and /status routes (Port 81 and Port 80)
+    const probeRoutes = [
+      `http://${formatted}:81/ping`,
+      `http://${formatted}/ping`,
+      `http://${formatted}:81/status`,
+      `http://${formatted}/status`,
+      `http://${formatted}/api/status`,
+    ];
+
+    for (const route of probeRoutes) {
+      try {
+        const res = await fetch(route, { signal: AbortSignal.timeout(1600), mode: 'cors' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.status === 'online' || data?.device_type || data?.device || data?.stream_url || data?.ip) {
+            verified = true;
+            verifiedMsg = `✅ Online! Camera responding at ${formatted} (${data.device || data.device_type || 'ESP32-CAM'})`;
+            break;
+          }
+        }
+      } catch {
+        // Continue trying remaining endpoints
       }
-    };
+    }
 
-    img.onerror = () => {
-      fetch(`http://${formatted}/api/status`, { signal: AbortSignal.timeout(2000) })
-        .then((r) => r.json())
-        .then((data) => {
+    // Step 2: Fallback to /capture image probe if fetch preflight was blocked or restricted
+    if (!verified) {
+      verified = await new Promise<boolean>((resolve) => {
+        let settled = false;
+        const img = new Image();
+        img.onload = () => {
           if (!settled) {
             settled = true;
-            setTestingCamIp(null);
-            setTestResult({ ip: formatted, success: true, msg: `✅ Online! (${data.device_type || 'ESP32-CAM'})` });
-            setCameraIp(formatted);
-            setInputIp(formatted);
-            localStorage.setItem('hn_camera_ip', formatted);
-            if (device?.id) updateDevice(device.id, { cameraIp: formatted });
-            setStreamPortIndex(0);
-            setStreamKey(Date.now());
-            setIsStreamLoading(true);
-            setStreamError(false);
+            verifiedMsg = `✅ Online! Frame received from ${formatted}`;
+            resolve(true);
           }
-        })
-        .catch(() => {
+        };
+        img.onerror = () => {
           if (!settled) {
             settled = true;
-            setTestingCamIp(null);
-            setTestResult({ ip: formatted, success: false, msg: `❌ Unreachable at ${formatted}. Check power & Wi-Fi.` });
+            resolve(false);
           }
-        });
-    };
+        };
+        img.src = `http://${formatted}/capture?_t=${Date.now()}`;
+        setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            resolve(false);
+          }
+        }, 4000);
+      });
+    }
 
-    img.src = testUrl;
-
-    setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        setTestingCamIp(null);
-        setTestResult({ ip: formatted, success: false, msg: `❌ Timeout at ${formatted}. Camera did not respond.` });
-      }
-    }, 2800);
+    setTestingCamIp(null);
+    if (verified) {
+      setTestResult({ ip: formatted, success: true, msg: verifiedMsg || `✅ Online! Camera responding at ${formatted}` });
+      setCameraIp(formatted);
+      setInputIp(formatted);
+      localStorage.setItem('hn_camera_ip', formatted);
+      if (device?.id) updateDevice(device.id, { cameraIp: formatted });
+      setStreamPortIndex(0);
+      setStreamKey(Date.now());
+      setIsStreamLoading(true);
+      setStreamError(false);
+      showToast('success', 'Camera Connected', `Stream syncing with ${formatted}`);
+    } else {
+      setTestResult({
+        ip: formatted,
+        success: false,
+        msg: `❌ Unreachable at ${formatted}. Ensure camera is powered, Wi-Fi matches, or flash firmware via USB.`,
+      });
+    }
   };
 
   // Watchdog timer: If loading takes longer than 4.5s on current candidate, auto-try next candidate
