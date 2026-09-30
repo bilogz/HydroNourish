@@ -580,6 +580,91 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }, 1500);
 
+    // 📶 Autonomous Local LAN / Wi-Fi Standalone Poller (Every 2.5s)
+    // Connects web app directly to ESP32 over Wi-Fi without requiring USB or cloud!
+    const lanPollInterval = setInterval(async () => {
+      const savedIp = typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') : null;
+      const targets = [savedIp, 'hydronourish.local', 'hydronourish-feeder.local', '192.168.4.1'].filter(Boolean) as string[];
+
+      for (const host of targets) {
+        if (!host || host === 'Direct USB' || host === '0.0.0.0') continue;
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 1200);
+          const res = await fetch(`http://${host}/api/status`, { signal: ctrl.signal });
+          clearTimeout(timer);
+          if (res.ok) {
+            const data = await res.json();
+            if (data && (data.deviceId || data.success)) {
+              if (typeof window !== 'undefined' && data.ip && data.ip !== '0.0.0.0') {
+                localStorage.setItem('hn_last_known_ip', data.ip);
+              }
+              setDevices((prev) => {
+                const targetId = data.deviceId || 'HN-NODE-F778';
+                const hasMatch = prev.some((d) => d.id === targetId);
+                const updatedFields: Partial<Device> = {
+                  status: 'Online',
+                  lastTransmission: 'Live — Wi-Fi LAN',
+                  ipAddress: (data.ip && data.ip !== '0.0.0.0') ? data.ip : host,
+                  wifiSsid: data.ssid || undefined,
+                  wifiSignalDbm: typeof data.rssi === 'number' ? data.rssi : -60,
+                  foodBowlWeightGrams: typeof data.foodBowlWeightGrams === 'number' ? data.foodBowlWeightGrams : undefined,
+                  scaleReady: data.scaleReady !== undefined ? data.scaleReady : true,
+                  foodLevelPct: typeof data.foodLevel === 'number' ? data.foodLevel : undefined,
+                  waterLevelPct: typeof data.waterLevel === 'number' ? data.waterLevel : undefined,
+                  waterMl: typeof data.waterMl === 'number' ? data.waterMl : undefined,
+                  waterLiters: typeof data.waterMl === 'number' ? Number((data.waterMl / 1000).toFixed(2)) : undefined,
+                  waterScaleReady: data.waterScaleReady !== undefined ? data.waterScaleReady : true,
+                  waterQualityPpm: typeof data.tds === 'number' ? data.tds : undefined,
+                  isPumping: data.isPumping !== undefined ? data.isPumping : false,
+                  autoRefillEnabled: data.autoRefill !== undefined ? data.autoRefill : true,
+                  foodGateOpen: data.foodGateOpen !== undefined ? data.foodGateOpen : false,
+                  currentServoAngle: typeof data.currentServoAngle === 'number' ? data.currentServoAngle : 0,
+                };
+                if (hasMatch) {
+                  return prev.map((d) => (d.id === targetId ? { ...d, ...updatedFields } : d));
+                } else {
+                  const newDev: Device = {
+                    id: targetId,
+                    deviceName: `HydroNourish Station (${targetId})`,
+                    hardwareStatus: 'available',
+                    status: 'Online',
+                    ipAddress: (data.ip && data.ip !== '0.0.0.0') ? data.ip : host,
+                    macAddress: data.mac || '1C:C3:AB:F9:F7:78',
+                    firmwareVersion: 'v2.5.0-ESP32|WIFI:LAN',
+                    isPluggedIn: true,
+                    batteryPct: 100,
+                    lastTransmission: 'Live — Wi-Fi LAN',
+                    foodBowlWeightGrams: typeof data.foodBowlWeightGrams === 'number' ? data.foodBowlWeightGrams : 0.0,
+                    scaleReady: data.scaleReady !== undefined ? data.scaleReady : true,
+                    lastIntakeFoodGrams: 0,
+                    foodLevelPct: typeof data.foodLevel === 'number' ? data.foodLevel : 85,
+                    waterLevelPct: typeof data.waterLevel === 'number' ? data.waterLevel : 80,
+                    waterMl: typeof data.waterMl === 'number' ? data.waterMl : 150,
+                    waterLiters: 0.15,
+                    waterScaleReady: data.waterScaleReady !== undefined ? data.waterScaleReady : true,
+                    waterQualityPpm: typeof data.tds === 'number' ? data.tds : 120,
+                    isPumping: data.isPumping !== undefined ? data.isPumping : false,
+                    autoRefillEnabled: data.autoRefill !== undefined ? data.autoRefill : true,
+                    autoFlushEnabled: true,
+                    gateOpenDeg: 90,
+                    foodGateOpen: data.foodGateOpen !== undefined ? data.foodGateOpen : false,
+                    currentServoAngle: typeof data.currentServoAngle === 'number' ? data.currentServoAngle : 0,
+                    wifiSsid: data.ssid || 'Garcia Wifi 4G Wifi',
+                    wifiSignalDbm: typeof data.rssi === 'number' ? data.rssi : -60,
+                    assignedPetId: 'PET-001',
+                    assignedPetName: 'Max',
+                  };
+                  return [newDev, ...prev];
+                }
+              });
+              break;
+            }
+          }
+        } catch {}
+      }
+    }, 2500);
+
     // Direct USB WebSerial Live Telemetry Wire
     const unsubUsb = usbSerialService.onTelemetry((telemetry) => {
       if (!telemetry) return;
@@ -694,7 +779,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           deviceName: `HydroNourish Station (${targetId})`,
           hardwareStatus: 'available',
           status: 'Online',
-          ipAddress: telemetry.ip && telemetry.ip !== '0.0.0.0' ? telemetry.ip : 'Direct USB',
+          ipAddress: (telemetry.ip && telemetry.ip !== '0.0.0.0') ? telemetry.ip : (typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') || '192.168.4.1' : '192.168.4.1'),
           macAddress: 'USB-DIRECT',
           firmwareVersion: 'v2.5.0-ESP32|USB:DIRECT',
           isPluggedIn: true,
@@ -742,7 +827,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               wifiSignalDbm: -60,
               batteryPct: 100,
               status: 'Online',
-              ipAddress: 'Direct USB',
+              ipAddress: (typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') || '192.168.4.1' : '192.168.4.1'),
               macAddress: '1C:C3:AB:F9:F7:78',
               firmwareVersion: 'v2.5.0-ESP32|USB:DIRECT',
               isPluggedIn: true,
@@ -777,6 +862,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return () => {
       clearInterval(devicePollInterval);
+      clearInterval(lanPollInterval);
       unsubUsb();
       unsubUsbStatus();
     };
@@ -1270,17 +1356,29 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       liveIp = ipMatch[1];
     }
 
+    // Validate whether a string is a real network IP or hostname (not "Direct USB", "0.0.0.0", or "Offline")
+    const isRealHost = (val: string | undefined | null): boolean => {
+      if (!val) return false;
+      const clean = val.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+      return Boolean(clean && clean !== 'Direct USB' && clean !== '0.0.0.0' && clean !== 'Offline');
+    };
+
     // Also check ipAddress field directly
     const devIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    const savedIp = typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') : null;
 
-    // Direct Target Resolution: If a known live IP or devIp exists, ONLY dispatch to that IP!
-    // Prevents blasting duplicate simultaneous requests to mDNS hostnames and SoftAP
-    const targetIp = liveIp || (devIp && devIp !== '0.0.0.0' ? devIp : null);
-    const candidateIps = targetIp
-      ? [targetIp]
-      : ['hydronourish-feeder.local', 'hydronourish.local', '192.168.4.1'];
+    const validLiveIp = isRealHost(liveIp) ? liveIp : null;
+    const validDevIp = isRealHost(devIp) ? devIp : null;
+    const validSavedIp = isRealHost(savedIp) ? savedIp : null;
 
-    const uniqueIps = Array.from(new Set(candidateIps));
+    const primaryTargetIp = validLiveIp || validDevIp || validSavedIp || null;
+
+    // Independent LAN Candidates: primary known IP, mDNS names, and SoftAP portal
+    const candidateIps: string[] = [];
+    if (primaryTargetIp) candidateIps.push(primaryTargetIp);
+    candidateIps.push('hydronourish.local', 'hydronourish-feeder.local', '192.168.4.1');
+
+    const uniqueIps = Array.from(new Set(candidateIps)).filter(isRealHost);
     const endpointPath = path.startsWith('/') ? path : `/${path}`;
 
     // 3. Fast LAN fetch with 1500ms AbortController (prevents thread hangs if on cellular/different network)

@@ -570,9 +570,9 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
       }
 
       if (!parsedCamIp && rawFw && rawFw.includes('CAM:')) {
-        const match = rawFw.match(/CAM:([0-9.]+)/i);
+        const match = rawFw.match(/CAM:([^|]+)/i);
         if (match && match[1]) {
-          parsedCamIp = match[1];
+          parsedCamIp = match[1].trim();
         }
       }
 
@@ -752,6 +752,22 @@ export async function updateDeviceInSupabase(id: string, updated: Partial<Device
         fw = `${fw}|${gateStateTag}`;
       }
       payload.firmware_version = fw;
+    }
+    if (updated.cameraIp !== undefined) {
+      const cleanCam = updated.cameraIp.trim();
+      let fw = payload.firmware_version || updated.firmwareVersion || '';
+      if (!fw) fw = 'v2.5.0-ESP32';
+      if (fw.includes('CAM:')) {
+        fw = fw.replace(/CAM:[^|]+/, `CAM:${cleanCam}`);
+      } else {
+        fw = `${fw}|CAM:${cleanCam}`;
+      }
+      payload.firmware_version = fw;
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('hn_camera_ip', cleanCam);
+        } catch {}
+      }
     }
     if (updated.lastTransmission !== undefined) payload.last_transmission = updated.lastTransmission;
 

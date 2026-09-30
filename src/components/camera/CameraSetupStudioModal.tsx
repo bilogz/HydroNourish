@@ -666,6 +666,63 @@ export const CameraSetupStudioModal: React.FC<CameraSetupStudioModalProps> = ({
                 <p>3. Click <strong className="text-teal-400">"Auto-Pair via USB"</strong> — the website transmits credentials directly and starts streaming immediately!</p>
               </div>
 
+              {/* Quick Hotspot & Router Presets */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Quick Hotspot &amp; Network Presets:</span>
+                  <span className="text-[10px] text-slate-500">1-click fill</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWifiSsid('realme C63');
+                      setWifiPassword('nigga123');
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      wifiSsid === 'realme C63'
+                        ? 'bg-amber-950/80 border-amber-500 text-amber-200 shadow-sm ring-1 ring-amber-500/50'
+                        : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300'
+                    }`}
+                  >
+                    <span>📱 realme C63</span>
+                    <span className="text-[9px] font-mono bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-semibold">Hotspot</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWifiSsid('Garcia Wifi 4G Wifi');
+                      setWifiPassword('GaRCi4F4m');
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      wifiSsid === 'Garcia Wifi 4G Wifi'
+                        ? 'bg-teal-950/80 border-teal-500 text-teal-200 shadow-sm ring-1 ring-teal-500/50'
+                        : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300'
+                    }`}
+                  >
+                    <span>📶 Garcia Wifi 4G Wifi</span>
+                    <span className="text-[9px] font-mono bg-teal-500/20 text-teal-300 px-1 py-0.2 rounded font-semibold">Router</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWifiSsid('GlobeAtHome_F83DB');
+                      setWifiPassword('RDGNNL7M46T');
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      wifiSsid === 'GlobeAtHome_F83DB'
+                        ? 'bg-sky-950/80 border-sky-500 text-sky-200 shadow-sm ring-1 ring-sky-500/50'
+                        : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300'
+                    }`}
+                  >
+                    <span>🌐 GlobeAtHome_F83DB</span>
+                    <span className="text-[9px] font-mono bg-sky-500/20 text-sky-300 px-1 py-0.2 rounded font-semibold">Clinic</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="space-y-2.5">
                 <div>
                   <label className="text-[11px] font-bold text-slate-300 block mb-1">Wi-Fi Network Name (SSID):</label>

@@ -91,14 +91,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, []);
 
   const isWifiConnected = Boolean(
-    (isUsbConnected && usbTelemetry?.wifiConnected) ||
-    (!isUsbConnected && devices?.some(d => d.status === 'Online' && d.wifiSsid && d.wifiSsid !== 'Offline' && d.ipAddress !== 'Direct USB')) ||
-    (usbTelemetry?.wifiConnected)
+    (usbTelemetry?.wifiConnected) ||
+    (devices?.some(d => d.status === 'Online' && d.wifiSsid && d.wifiSsid !== 'Offline')) ||
+    (devices?.some(d => d.ipAddress && d.ipAddress !== 'Direct USB' && d.ipAddress !== '0.0.0.0')) ||
+    (typeof window !== 'undefined' && Boolean(localStorage.getItem('hn_last_known_ip')))
   );
 
   const activeWifiSsid = (isUsbConnected && usbTelemetry?.ssid)
     ? usbTelemetry.ssid
-    : (devices?.find(d => d.wifiSsid && d.wifiSsid !== 'Offline')?.wifiSsid || 'Clinic_WiFi');
+    : (devices?.find(d => d.wifiSsid && d.wifiSsid !== 'Offline')?.wifiSsid || 'Garcia Wifi 4G Wifi');
 
   const { adminProfile, signOut, isAdmin, isStaff } = useAuth();
   const { activeSession, sessions } = useSession();

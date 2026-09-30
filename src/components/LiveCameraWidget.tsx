@@ -48,6 +48,8 @@ import {
   Droplets,
   PowerOff,
   Dog,
+  Search,
+  Globe,
 } from 'lucide-react';
 import { Device, AIControlMode, CameraSourceType, VisionActionRecommendation } from '../types';
 import { analyzePetVisionScan, PetVisionScanResult, extractFrameBase64 } from '../services/aiService';
@@ -87,6 +89,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const {
     devices,
     showToast,
+    updateDevice,
     dispenseDirect,
     dispenseWaterDirect,
     openGateDirect,
@@ -158,8 +161,8 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
         }
       }
       if (device.firmwareVersion) {
-        const match = device.firmwareVersion.match(/CAM:([0-9.]+)/i);
-        if (match && match[1] && match[1] !== '192.168.4.1' && match[1] !== '0.0.0.0') {
+        const match = device.firmwareVersion.match(/CAM:([^|]+)/i);
+        if (match && match[1] && match[1].trim() !== '192.168.4.1' && match[1].trim() !== '0.0.0.0') {
           if (typeof window !== 'undefined') localStorage.setItem('hn_camera_ip', match[1].trim());
           return match[1].trim();
         }
@@ -177,8 +180,8 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           }
         }
         if (d.firmwareVersion) {
-          const match = d.firmwareVersion.match(/CAM:([0-9.]+)/i);
-          if (match && match[1] && match[1] !== '192.168.4.1' && match[1] !== '0.0.0.0') {
+          const match = d.firmwareVersion.match(/CAM:([^|]+)/i);
+          if (match && match[1] && match[1].trim() !== '192.168.4.1' && match[1].trim() !== '0.0.0.0') {
             if (typeof window !== 'undefined') localStorage.setItem('hn_camera_ip', match[1].trim());
             return match[1].trim();
           }
@@ -211,6 +214,18 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     }
   }, [discoveredIp]);
 
+  // Real-time Hardware Telemetry: If ESP32 reports pet eating or approaching, instantly activate Pet in View
+  useEffect(() => {
+    if (activeDevObj?.petEatingActive) {
+      setIsPetDetected(true);
+      setTrackingConfidence(98);
+      setTrackingActivity('Feeding at Smart Bowl');
+      setHeadPosture('Head In Bowl');
+      setPetDistanceToFoodBowlCm(12);
+      consecutiveMissingFramesRef.current = 0;
+    }
+  }, [activeDevObj?.petEatingActive]);
+
   const [inputIp, setInputIp] = useState<string>(cameraIp);
   const [isEditingIp, setIsEditingIp] = useState(false);
   const [streamKey, setStreamKey] = useState<number>(Date.now());
@@ -220,6 +235,18 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const [flashOn, setFlashOn] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
+  const [crossOriginMode, setCrossOriginMode] = useState<'anonymous' | undefined>(undefined);
+  const [streamMode, setStreamMode] = useState<'mjpeg' | 'snapshot'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('hn_stream_mode') as any) || 'mjpeg';
+    }
+    return 'mjpeg';
+  });
+  const [snapshotLiveUrl, setSnapshotLiveUrl] = useState<string | null>(null);
+  const [isAutoDetectingCam, setIsAutoDetectingCam] = useState<boolean>(false);
+  const [detectedCamStatus, setDetectedCamStatus] = useState<string | null>(null);
+  const [testingCamIp, setTestingCamIp] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ ip: string; success: boolean; msg: string } | null>(null);
 
   // ── Stream Smoothness & Setup Studio State ──────────────────────────────────
   const [streamPreset, setStreamPreset] = useState<'smooth' | 'balanced' | 'hd'>(() => {
@@ -582,16 +609,16 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           consecutivePetFramesRef.current = 0;
           consecutiveMissingFramesRef.current = (consecutiveMissingFramesRef.current || 0) + 1;
 
-          // Only clear detection after missing for at least 2 consecutive scan frames (~2.4s) to eliminate frame flicker
-          if (consecutiveMissingFramesRef.current >= 2) {
+          // Dwell latch: Only clear detection after missing for at least 15 consecutive scan frames (~18s) to eliminate flicker and keep scanned pet visible in real time
+          if (consecutiveMissingFramesRef.current >= 15 && !activeDev?.petEatingActive) {
             setIsPetDetected(false);
             setTrackingConfidence(0);
             setPetWantsToEat(false);
             setEatingIntentScore(0);
-            if (activeDev?.petEatingActive && consecutiveMissingFramesRef.current >= 4) {
+            if (activeDev?.petEatingActive && consecutiveMissingFramesRef.current >= 20) {
               setPetEatingDirect(targetDeviceId, false);
             }
-            if (activeDev?.petDrinkingActive && consecutiveMissingFramesRef.current >= 4) {
+            if (activeDev?.petDrinkingActive && consecutiveMissingFramesRef.current >= 20) {
               setPetDrinkingDirect(targetDeviceId, false);
             }
             if (result.isHumanPresent) {
@@ -774,7 +801,241 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     return () => clearInterval(interval);
   }, [isStreamLoading, streamError, streamPortIndex]);
 
-  // Watchdog timer: If loading takes longer than 5s on current candidate, auto-try next candidate or error
+  // ── High-Speed Snapshot Polling Mode (Guaranteed Display Fallback) ──────────
+  useEffect(() => {
+    if (streamMode !== 'snapshot' || cameraSource !== 'esp32') return;
+
+    let isMounted = true;
+    let inFlight = false;
+    let failCount = 0;
+
+    const fetchSnapshot = () => {
+      if (inFlight || !isMounted) return;
+      inFlight = true;
+
+      const candidates = [
+        `http://${cleanIp}/capture?_t=${Date.now()}`,
+        `http://${cleanIp}:81/capture?_t=${Date.now()}`,
+        `http://hydronourish-cam.local/capture?_t=${Date.now()}`,
+        `http://192.168.4.1/capture?_t=${Date.now()}`
+      ];
+      const targetUrl = candidates[streamPortIndex] || candidates[0];
+
+      const img = new Image();
+      img.onload = () => {
+        if (!isMounted) return;
+        setSnapshotLiveUrl(targetUrl);
+        setIsStreamLoading(false);
+        setStreamError(false);
+        inFlight = false;
+        failCount = 0;
+      };
+      img.onerror = () => {
+        if (!isMounted) return;
+        inFlight = false;
+        failCount++;
+        if (failCount > 8) {
+          setStreamError(true);
+        }
+      };
+      img.src = targetUrl;
+    };
+
+    fetchSnapshot();
+    const interval = setInterval(fetchSnapshot, 220);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [streamMode, cleanIp, cameraSource, streamPortIndex]);
+
+  // ── 1-Click Camera Auto-Detect Scanner ────────────────────────────────────
+  const handleAutoDetectCamera = async () => {
+    setIsAutoDetectingCam(true);
+    setDetectedCamStatus('Scanning local network for ESP32-CAM...');
+
+    const mainEspIp = (device?.ipAddress || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+
+    // Priority candidate hostnames and IPs to probe
+    const probeList = [
+      'hydronourish-cam.local',
+      cleanIp,
+      '192.168.4.1',
+      '192.168.100.159',
+      '192.168.100.158',
+      '192.168.100.157',
+      '192.168.1.159',
+      '192.168.1.100',
+      '192.168.0.159',
+      mainEspIp,
+    ].filter(Boolean) as string[];
+
+    const anchorIp = mainEspIp || cleanIp;
+    if (anchorIp && anchorIp.includes('.')) {
+      const base = anchorIp.substring(0, anchorIp.lastIndexOf('.'));
+      for (let i = 150; i <= 165; i++) {
+        const candidate = `${base}.${i}`;
+        if (!probeList.includes(candidate)) probeList.push(candidate);
+      }
+    }
+
+    let foundIp: string | null = null;
+
+    const probeTarget = (host: string): Promise<string | null> => {
+      return new Promise((resolve) => {
+        let settled = false;
+        // Test 1: Image probe on /capture
+        const img = new Image();
+        img.onload = () => {
+          if (!settled) { settled = true; resolve(host); }
+        };
+        img.onerror = () => {};
+        img.src = `http://${host}/capture?_t=${Date.now()}`;
+
+        // Test 2: Fetch probe on /api/status
+        fetch(`http://${host}/api/status`, { signal: AbortSignal.timeout(1800) })
+          .then((r) => r.json())
+          .then((data) => {
+            if (!settled && (data.device_type?.includes('ESP32-CAM') || data.stream_url)) {
+              settled = true;
+              resolve(data.ip_address || host);
+            }
+          })
+          .catch(() => {});
+
+        setTimeout(() => {
+          if (!settled) { settled = true; resolve(null); }
+        }, 2200);
+      });
+    };
+
+    // Check primary targets first
+    for (const host of probeList.slice(0, 5)) {
+      const res = await probeTarget(host);
+      if (res) {
+        foundIp = res;
+        break;
+      }
+    }
+
+    // Check remaining in parallel batches
+    if (!foundIp) {
+      const rest = probeList.slice(5);
+      for (let i = 0; i < rest.length; i += 4) {
+        const batch = rest.slice(i, i + 4);
+        const results = await Promise.all(batch.map(probeTarget));
+        const match = results.find(Boolean);
+        if (match) {
+          foundIp = match;
+          break;
+        }
+      }
+    }
+
+    // Check main ESP32 if it knows the camera IP
+    if (!foundIp && mainEspIp) {
+      try {
+        const resp = await fetch(`http://${mainEspIp}/api/status`, { signal: AbortSignal.timeout(1500) });
+        if (resp.ok) {
+          const devData = await resp.json();
+          if (devData?.cam_ip && devData.cam_ip !== '0.0.0.0' && devData.cam_ip !== '172.20.10.3') {
+            foundIp = devData.cam_ip;
+          }
+        }
+      } catch {}
+    }
+
+    setIsAutoDetectingCam(false);
+
+    if (foundIp) {
+      const finalIp = foundIp.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+      setDetectedCamStatus(`✅ Found Camera at ${finalIp}!`);
+      setCameraIp(finalIp);
+      setInputIp(finalIp);
+      localStorage.setItem('hn_camera_ip', finalIp);
+      setStreamPortIndex(0);
+      setStreamKey(Date.now());
+      setIsStreamLoading(true);
+      setStreamError(false);
+
+      if (device?.id) {
+        updateDevice(device.id, { cameraIp: finalIp });
+      }
+
+      showToast('success', 'Camera Detected!', `Connected to ESP32-CAM at ${finalIp}`);
+    } else {
+      setDetectedCamStatus('No camera found automatically. Connect camera to Wi-Fi or plug via USB.');
+      showToast('info', 'Auto-Scan Complete', 'Please click "Connect Camera" to pair Wi-Fi or enter IP manually.');
+    }
+  };
+
+  // ── Manual IP Tester ──────────────────────────────────────────────────────
+  const handleTestIp = async (ipToTest: string) => {
+    const formatted = ipToTest.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    if (!formatted) return;
+    setTestingCamIp(formatted);
+    setTestResult(null);
+
+    const testUrl = `http://${formatted}/capture?_t=${Date.now()}`;
+    const img = new Image();
+    let settled = false;
+
+    img.onload = () => {
+      if (!settled) {
+        settled = true;
+        setTestingCamIp(null);
+        setTestResult({ ip: formatted, success: true, msg: `✅ Online! Camera responsive at ${formatted}` });
+        setCameraIp(formatted);
+        setInputIp(formatted);
+        localStorage.setItem('hn_camera_ip', formatted);
+        if (device?.id) updateDevice(device.id, { cameraIp: formatted });
+        setStreamPortIndex(0);
+        setStreamKey(Date.now());
+        setIsStreamLoading(true);
+        setStreamError(false);
+      }
+    };
+
+    img.onerror = () => {
+      fetch(`http://${formatted}/api/status`, { signal: AbortSignal.timeout(2000) })
+        .then((r) => r.json())
+        .then((data) => {
+          if (!settled) {
+            settled = true;
+            setTestingCamIp(null);
+            setTestResult({ ip: formatted, success: true, msg: `✅ Online! (${data.device_type || 'ESP32-CAM'})` });
+            setCameraIp(formatted);
+            setInputIp(formatted);
+            localStorage.setItem('hn_camera_ip', formatted);
+            if (device?.id) updateDevice(device.id, { cameraIp: formatted });
+            setStreamPortIndex(0);
+            setStreamKey(Date.now());
+            setIsStreamLoading(true);
+            setStreamError(false);
+          }
+        })
+        .catch(() => {
+          if (!settled) {
+            settled = true;
+            setTestingCamIp(null);
+            setTestResult({ ip: formatted, success: false, msg: `❌ Unreachable at ${formatted}. Check power & Wi-Fi.` });
+          }
+        });
+    };
+
+    img.src = testUrl;
+
+    setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        setTestingCamIp(null);
+        setTestResult({ ip: formatted, success: false, msg: `❌ Timeout at ${formatted}. Camera did not respond.` });
+      }
+    }, 2800);
+  };
+
+  // Watchdog timer: If loading takes longer than 4.5s on current candidate, auto-try next candidate
   useEffect(() => {
     if (!isStreamLoading || streamError) return;
     const t = setTimeout(() => {
@@ -785,14 +1046,20 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
         return;
       }
       if (streamPortIndex < streamCandidates.length - 1) {
-        setStreamPortIndex(prev => prev + 1);
+        setStreamPortIndex((prev) => prev + 1);
       } else {
-        setIsStreamLoading(false);
-        setStreamError(true);
+        // Auto-fallback to snapshot mode before declaring error!
+        if (streamMode === 'mjpeg') {
+          setStreamMode('snapshot');
+          setIsStreamLoading(true);
+        } else {
+          setIsStreamLoading(false);
+          setStreamError(true);
+        }
       }
-    }, 5000);
+    }, 4500);
     return () => clearTimeout(t);
-  }, [isStreamLoading, streamError, streamPortIndex, streamCandidates.length]);
+  }, [isStreamLoading, streamError, streamPortIndex, streamCandidates.length, streamMode]);
 
   const handleSaveIp = (e: React.FormEvent) => {
     e.preventDefault();
@@ -800,9 +1067,15 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     if (formatted) {
       setCameraIp(formatted);
       localStorage.setItem('hn_camera_ip', formatted);
+      if (device?.id) {
+        updateDevice(device.id, { cameraIp: formatted });
+      }
       setStreamPortIndex(0);
       setStreamKey(Date.now());
+      setIsStreamLoading(true);
+      setStreamError(false);
       setIsEditingIp(false);
+      showToast('success', 'Camera IP Saved', `Assigned: ${formatted}. Connecting...`);
     }
   };
 
@@ -816,13 +1089,20 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const handleStreamError = () => {
     // If the image already has decoded frames, ignore synthetic abort/error events
     if (mjpegImgRef.current && mjpegImgRef.current.naturalWidth > 0) {
+      setIsStreamLoading(false);
+      setStreamError(false);
       return;
     }
     if (streamPortIndex < streamCandidates.length - 1) {
-      setStreamPortIndex(prev => prev + 1);
+      setStreamPortIndex((prev) => prev + 1);
     } else {
-      setIsStreamLoading(false);
-      setStreamError(true);
+      if (streamMode === 'mjpeg') {
+        setStreamMode('snapshot');
+        setIsStreamLoading(true);
+      } else {
+        setIsStreamLoading(false);
+        setStreamError(true);
+      }
     }
   };
 
@@ -1854,6 +2134,64 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             <span className="hidden sm:inline">AI Scanner</span>
           </button>
 
+          {/* Stream Mode Switcher (MJPEG vs Snapshot) */}
+          <div className="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/80">
+            <button
+              type="button"
+              onClick={() => {
+                setStreamMode('mjpeg');
+                setIsStreamLoading(true);
+                setStreamError(false);
+                setStreamKey(Date.now());
+              }}
+              className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                streamMode === 'mjpeg'
+                  ? 'bg-rose-500 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="30 FPS Real-time MJPEG Stream"
+            >
+              30 FPS
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStreamMode('snapshot');
+                setIsStreamLoading(true);
+                setStreamError(false);
+              }}
+              className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                streamMode === 'snapshot'
+                  ? 'bg-sky-500 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Snapshot Polling Mode (Guaranteed reliable fallback)"
+            >
+              Snapshot
+            </button>
+          </div>
+
+          {/* Prominent Connect Camera Button */}
+          <button
+            onClick={() => setIsWifiModalOpen(true)}
+            title="Pair or Connect ESP32-CAM to Wi-Fi"
+            className="p-2 rounded-lg bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold transition-all text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/25 cursor-pointer"
+          >
+            <Wifi className="w-3.5 h-3.5" />
+            <span>Connect Camera</span>
+          </button>
+
+          {/* Auto-Detect Scanner Button */}
+          <button
+            onClick={handleAutoDetectCamera}
+            disabled={isAutoDetectingCam}
+            title="Auto-detect ESP32-CAM on local Wi-Fi subnet"
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold transition-all text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <Search className={`w-3.5 h-3.5 text-sky-400 ${isAutoDetectingCam ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{isAutoDetectingCam ? 'Scanning...' : 'Find Cam'}</span>
+          </button>
+
           {/* CAMERA SETUP & SMOOTHNESS STUDIO */}
           <button
             onClick={() => setIsSetupStudioOpen(true)}
@@ -2328,6 +2666,22 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               </div>
             </div>
           </div>
+        ) : streamMode === 'snapshot' ? (
+          /* Snapshot Polling Mode (Reliable image polling fallback) */
+          <img
+            ref={mjpegImgRef}
+            key={`snapshot-${streamKey}`}
+            src={snapshotLiveUrl || `${captureUrl}&mode=fast`}
+            alt="ESP32-CAM Snapshot Stream"
+            onLoad={() => {
+              setIsStreamLoading(false);
+              setStreamError(false);
+            }}
+            onError={handleStreamError}
+            className={`w-full h-full object-cover transition-opacity duration-200 ${
+              streamError ? 'hidden' : isStreamLoading ? 'opacity-30' : 'opacity-100'
+            }`}
+          />
         ) : (
           /* Default: ESP32-CAM MJPEG Stream Image */
           <img
@@ -2335,7 +2689,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             key={`${streamKey}-${streamPortIndex}`}
             src={currentStreamUrl}
             alt="ESP32-CAM Real-Time Stream"
-            crossOrigin="anonymous"
+            crossOrigin={crossOriginMode}
             onLoad={() => {
               setIsStreamLoading(false);
               setStreamError(false);
@@ -3136,55 +3490,143 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           </div>
         )}
 
-        {/* Offline / Error Fallback Screen */}
+        {/* Offline / Error Fallback Screen - User-Friendly Connection Wizard */}
         {streamError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 p-6 text-center z-10">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3">
-              <AlertCircle className="w-6 h-6" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/92 backdrop-blur-md p-6 text-center z-10 overflow-y-auto">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3 shadow-lg shadow-amber-500/10">
+              <Wifi className="w-7 h-7 animate-pulse" />
             </div>
-            <h4 className="font-bold text-sm text-slate-200">Camera Feed Connecting / Standby</h4>
-            <p className="text-xs text-slate-400 max-w-sm mt-1">
-              Camera is currently offline or connecting. Configure Wi-Fi credentials or retry stream.
+
+            <h4 className="font-extrabold text-base text-slate-100">
+              ESP32-CAM Stream Standby
+            </h4>
+            <p className="text-xs text-slate-400 max-w-md mt-1 mb-3">
+              Unable to reach camera stream at <code className="bg-slate-800 px-1.5 py-0.5 rounded text-rose-300 font-mono text-[11px]">{cleanIp}</code>. Let's get your camera stream online:
             </p>
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+
+            {/* Live Scan or Detection Status Feedback */}
+            {detectedCamStatus && (
+              <div className="mb-3 px-3 py-1.5 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-200 text-xs font-medium max-w-md flex items-center justify-center gap-2 animate-in fade-in">
+                {isAutoDetectingCam && <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-400" />}
+                <span>{detectedCamStatus}</span>
+              </div>
+            )}
+
+            {/* Test IP Feedback */}
+            {testResult && (
+              <div className={`mb-3 px-3 py-1.5 rounded-lg text-xs font-medium max-w-md border animate-in fade-in ${
+                testResult.success
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-200'
+                  : 'bg-rose-500/15 border-rose-500/30 text-rose-200'
+              }`}>
+                {testResult.msg}
+              </div>
+            )}
+
+            {/* User Friendly Action Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-md w-full mb-4">
+              {/* Option 1: 1-Click Auto-Detect */}
               <button
                 type="button"
-                onClick={() => setIsWifiConfigOpen(true)}
-                className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/30 cursor-pointer"
+                onClick={handleAutoDetectCamera}
+                disabled={isAutoDetectingCam}
+                className="p-3 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs flex items-center gap-2.5 shadow-md shadow-sky-600/25 cursor-pointer disabled:opacity-50 text-left transition-all"
               >
-                <Wifi className="w-3.5 h-3.5" />
-                Configure Wi-Fi Wirelessly
+                <Search className={`w-4 h-4 shrink-0 ${isAutoDetectingCam ? 'animate-spin' : ''}`} />
+                <div>
+                  <div className="font-extrabold">{isAutoDetectingCam ? 'Scanning...' : '1-Click Auto-Detect'}</div>
+                  <div className="text-[10px] text-sky-100 font-normal opacity-90">Finds camera IP automatically</div>
+                </div>
               </button>
+
+              {/* Option 2: Pair Camera Wi-Fi Modal */}
               <button
-                onClick={handleRefresh}
-                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-rose-500/20 cursor-pointer"
+                type="button"
+                onClick={() => setIsWifiModalOpen(true)}
+                className="p-3 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold text-xs flex items-center gap-2.5 shadow-md shadow-teal-600/25 cursor-pointer text-left transition-all"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Retry Stream
+                <Wifi className="w-4 h-4 shrink-0" />
+                <div>
+                  <div className="font-extrabold">Pair Camera Wi-Fi</div>
+                  <div className="text-[10px] text-emerald-100 font-normal opacity-90">Send Wi-Fi SSID & Password</div>
+                </div>
               </button>
+
+              {/* Option 3: Switch to Snapshot Mode */}
               <button
+                type="button"
+                onClick={() => {
+                  setStreamMode('snapshot');
+                  setIsStreamLoading(true);
+                  setStreamError(false);
+                }}
+                className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs flex items-center gap-2.5 cursor-pointer text-left transition-all"
+              >
+                <Camera className="w-4 h-4 text-sky-400 shrink-0" />
+                <div>
+                  <div className="font-extrabold">Try Snapshot Mode</div>
+                  <div className="text-[10px] text-slate-400 font-normal">Bypasses browser stream blocks</div>
+                </div>
+              </button>
+
+              {/* Option 4: Camera Studio / USB */}
+              <button
+                type="button"
                 onClick={() => setIsSetupStudioOpen(true)}
-                className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5 border border-slate-700 cursor-pointer"
+                className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs flex items-center gap-2.5 cursor-pointer text-left transition-all"
               >
-                <Sliders className="w-3.5 h-3.5" />
-                Camera Studio
-              </button>
-              <a
-                href={isDomainOrTunnel ? `https://${cleanIp}/stream` : `http://${cleanIp}/stream`}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                Open Port 80 Stream
-              </a>
-              <button
-                onClick={() => setIsEditingIp(true)}
-                className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs border border-slate-700 cursor-pointer"
-              >
-                Change IP ({cleanIp})
+                <Sliders className="w-4 h-4 text-rose-400 shrink-0" />
+                <div>
+                  <div className="font-extrabold">USB & Camera Studio</div>
+                  <div className="text-[10px] text-slate-400 font-normal">Direct USB flash & diagnostics</div>
+                </div>
               </button>
             </div>
+
+            {/* Quick IP Tester & Direct Connect */}
+            <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 max-w-md w-full mb-3">
+              <div className="text-[11px] font-bold text-slate-300 text-left mb-1.5 flex items-center justify-between">
+                <span>Enter Camera IP or Hostname:</span>
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" /> Retry Stream
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={inputIp}
+                  onChange={(e) => setInputIp(e.target.value)}
+                  placeholder="e.g. 192.168.100.159 or hydronourish-cam.local"
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-rose-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleTestIp(inputIp)}
+                  disabled={Boolean(testingCamIp)}
+                  className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-all cursor-pointer disabled:opacity-50 shrink-0 flex items-center gap-1"
+                >
+                  {testingCamIp ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                  <span>{testingCamIp ? 'Testing...' : 'Test & Connect'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* SoftAP Hotspot Direct Link Tip */}
+            <p className="text-[11px] text-slate-500 max-w-md text-xs">
+              💡 If your ESP32-CAM is in Hotspot Setup Mode: connect your phone or PC to Wi-Fi <strong className="text-amber-300">HydroNourish-CAM-Setup</strong> and open{' '}
+              <a
+                href="http://192.168.4.1"
+                target="_blank"
+                rel="noreferrer"
+                className="text-sky-400 hover:underline font-mono"
+              >
+                http://192.168.4.1
+              </a>.
+            </p>
           </div>
         )}
       </div>

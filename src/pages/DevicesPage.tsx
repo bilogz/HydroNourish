@@ -47,6 +47,12 @@ import {
   Dog,
 } from 'lucide-react';
 
+const isRealHost = (h: string | undefined | null): boolean => {
+  if (!h) return false;
+  const clean = h.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+  return Boolean(clean && clean !== 'Direct USB' && clean !== '0.0.0.0' && clean !== 'Offline');
+};
+
 export const DevicesPage: React.FC = () => {
   const {
     devices,
@@ -682,10 +688,12 @@ export const DevicesPage: React.FC = () => {
 
     // Extract dynamic Camera IP if known
     const autoCamIp = selectedDevice?.cameraIp || 
-      selectedDevice?.firmwareVersion?.match(/CAM:([0-9.]+)/)?.[1] || 
-      (typeof window !== 'undefined' ? localStorage.getItem('hydronourish_camera_ip') : '') || '';
-    const cleanCamIp = autoCamIp ? autoCamIp.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() : '';
-    const cleanDevIp = selectedDevice?.ipAddress ? selectedDevice.ipAddress.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() : '';
+      selectedDevice?.firmwareVersion?.match(/CAM:([0-9.]+)/)?.[1] || '';
+
+    const cleanCamIp = isRealHost(autoCamIp) ? autoCamIp.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() : '';
+    const cleanDevIp = isRealHost(selectedDevice?.ipAddress) ? selectedDevice!.ipAddress.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() : '';
+    const lastSavedIp = typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') : '';
+    const cleanSavedIp = isRealHost(lastSavedIp) ? lastSavedIp!.trim() : '';
 
     // Image Beacon Pings (Immune to HTTPS mixed-content blocks)
     const targets = [
@@ -695,9 +703,10 @@ export const DevicesPage: React.FC = () => {
       'hydronourish-feeder.local',
       'hydronourish.local',
       cleanDevIp,
+      cleanSavedIp,
       cleanCamIp,
       cleanCamIp ? `${cleanCamIp}:81` : ''
-    ].filter(Boolean) as string[];
+    ].filter(isRealHost) as string[];
 
     for (const t of targets) {
       try {
@@ -921,16 +930,17 @@ export const DevicesPage: React.FC = () => {
 
   const isFlashDirectConnected = isUsbConnected;
   const isWifiConnected = Boolean(
-    (isUsbConnected && usbTelemetry?.wifiConnected) ||
-    (!isUsbConnected && featuredDevice?.status === 'Online' && featuredDevice?.wifiSsid && featuredDevice.wifiSsid !== 'Offline' && featuredDevice.ipAddress !== 'Direct USB') ||
-    (usbTelemetry?.wifiConnected)
+    (usbTelemetry?.wifiConnected) ||
+    (featuredDevice?.status === 'Online' && featuredDevice?.wifiSsid && featuredDevice.wifiSsid !== 'Offline') ||
+    (isRealHost(featuredDevice?.ipAddress)) ||
+    (typeof window !== 'undefined' && Boolean(localStorage.getItem('hn_last_known_ip')))
   );
   const activeWifiSsid = (isUsbConnected && usbTelemetry?.ssid)
     ? usbTelemetry.ssid
-    : (featuredDevice?.wifiSsid || (typeof window !== 'undefined' ? localStorage.getItem('hydronourish_paired_ssid') : null) || wifiSsid || 'GlobeAtHome_F83DB');
-  const activeWifiIp = (isUsbConnected && usbTelemetry?.ip && usbTelemetry.ip !== '0.0.0.0')
+    : (featuredDevice?.wifiSsid && featuredDevice.wifiSsid !== 'Offline' ? featuredDevice.wifiSsid : (typeof window !== 'undefined' ? localStorage.getItem('hydronourish_paired_ssid') : null) || wifiSsid || 'Garcia Wifi 4G Wifi');
+  const activeWifiIp = (isUsbConnected && usbTelemetry?.ip && isRealHost(usbTelemetry.ip))
     ? usbTelemetry.ip
-    : (featuredDevice?.ipAddress && featuredDevice.ipAddress !== 'Direct USB' ? featuredDevice.ipAddress : null);
+    : (isRealHost(featuredDevice?.ipAddress) ? featuredDevice!.ipAddress : (typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') : null));
   const activeWifiRssi = (isUsbConnected && typeof usbTelemetry?.rssi === 'number')
     ? usbTelemetry.rssi
     : (featuredDevice?.wifiSignalDbm || null);
@@ -2382,6 +2392,63 @@ export const DevicesPage: React.FC = () => {
               </p>
             </div>
           )}
+
+          {/* Quick Hotspot & Router Presets */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Quick-Fill Hotspot & Network Presets:</span>
+              <span className="text-[10px] text-slate-400">1-click fill</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setWifiSsid('realme C63');
+                  setWifiPassword('nigga123');
+                }}
+                className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  wifiSsid === 'realme C63'
+                    ? 'bg-amber-100 border-amber-400 text-amber-900 shadow-xs ring-2 ring-amber-400/50'
+                    : 'bg-white hover:bg-amber-50 border-slate-200 text-slate-700'
+                }`}
+              >
+                <span>📱 realme C63</span>
+                <span className="text-[9px] font-mono bg-amber-200/80 text-amber-900 px-1 py-0.2 rounded font-semibold">Hotspot</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setWifiSsid('Garcia Wifi 4G Wifi');
+                  setWifiPassword('GaRCi4F4m');
+                }}
+                className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  wifiSsid === 'Garcia Wifi 4G Wifi'
+                    ? 'bg-indigo-100 border-indigo-400 text-indigo-900 shadow-xs ring-2 ring-indigo-400/50'
+                    : 'bg-white hover:bg-indigo-50 border-slate-200 text-slate-700'
+                }`}
+              >
+                <span>📶 Garcia Wifi 4G Wifi</span>
+                <span className="text-[9px] font-mono bg-indigo-200/80 text-indigo-900 px-1 py-0.2 rounded font-semibold">Router</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setWifiSsid('GlobeAtHome_F83DB');
+                  setWifiPassword('RDGNNL7M46T');
+                }}
+                className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  wifiSsid === 'GlobeAtHome_F83DB'
+                    ? 'bg-sky-100 border-sky-400 text-sky-900 shadow-xs ring-2 ring-sky-400/50'
+                    : 'bg-white hover:bg-sky-50 border-slate-200 text-slate-700'
+                }`}
+              >
+                <span>🌐 GlobeAtHome_F83DB</span>
+                <span className="text-[9px] font-mono bg-sky-200/80 text-sky-900 px-1 py-0.2 rounded font-semibold">Clinic</span>
+              </button>
+            </div>
+          </div>
 
           {/* Wi-Fi SSID Input */}
           <div>

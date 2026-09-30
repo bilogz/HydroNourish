@@ -30,8 +30,8 @@ export function validateTelemetryPayload(body: any): { valid: boolean; error?: s
   const rawFwOriginal = String(body.firmwareVersion || body.firmware_version || 'v2.5.0-ESP32');
   let cameraIp = body.cameraIp || body.camera_ip || body.sta_ip || '';
   if (!cameraIp && rawFwOriginal.includes('CAM:')) {
-    const match = rawFwOriginal.match(/CAM:([0-9.]+)/i);
-    if (match && match[1]) cameraIp = match[1];
+    const match = rawFwOriginal.match(/CAM:([^|]+)/i);
+    if (match && match[1]) cameraIp = match[1].trim();
   }
 
   const timestamp = body.timestamp ? String(body.timestamp) : new Date().toISOString();
@@ -196,6 +196,13 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
         const val = Number(p.replace('GATE:', '').trim());
         if (!isNaN(val) && val >= 10 && val <= 180) parsedGateOpenDeg = val;
       }
+    }
+  }
+
+  if (!parsedCamIp && rawFw && rawFw.includes('CAM:')) {
+    const match = rawFw.match(/CAM:([^|]+)/i);
+    if (match && match[1]) {
+      parsedCamIp = match[1].trim();
     }
   }
 
