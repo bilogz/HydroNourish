@@ -1780,19 +1780,34 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-sm text-slate-100">{title}</h3>
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all ${
-                streamError
-                  ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${streamError ? 'bg-rose-400' : 'bg-emerald-400 animate-pulse'}`}></span>
-                <span>{streamError ? 'STANDBY' : 'LIVE HD'}</span>
-                {!streamError && cleanIp && (
-                  <span className="font-mono text-[9px] text-emerald-200/90 pl-1 border-l border-emerald-500/30">
-                    {cleanIp}
+              {(() => {
+                const isCamInSetupMode = Boolean(cleanIp === '192.168.4.1' || cleanIp.startsWith('192.168.4.') || currentDev?.cameraIp === '192.168.4.1');
+                return (
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all ${
+                    streamError
+                      ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                      : isCamInSetupMode
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      streamError
+                        ? 'bg-rose-400'
+                        : isCamInSetupMode
+                        ? 'bg-amber-400 animate-pulse'
+                        : 'bg-emerald-400 animate-pulse'
+                    }`}></span>
+                    <span>{streamError ? 'STANDBY' : isCamInSetupMode ? '🛠️ SETUP MODE' : 'LIVE HD'}</span>
+                    {!streamError && cleanIp && (
+                      <span className={`font-mono text-[9px] pl-1 border-l ${
+                        isCamInSetupMode ? 'text-amber-200/90 border-amber-500/30' : 'text-emerald-200/90 border-emerald-500/30'
+                      }`}>
+                        {cleanIp}
+                      </span>
+                    )}
                   </span>
-                )}
-              </span>
+                );
+              })()}
             </div>
             <p className="text-[11px] text-slate-400 font-mono">
               <span className="text-rose-400 font-bold">IP: {cleanIp}</span>
@@ -1910,6 +1925,30 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Camera Setup Mode Banner */}
+      {(() => {
+        const isCamInSetupMode = Boolean(cleanIp === '192.168.4.1' || cleanIp.startsWith('192.168.4.') || currentDev?.cameraIp === '192.168.4.1');
+        if (!isCamInSetupMode) return null;
+        return (
+          <div className="bg-amber-500/15 border-b border-amber-500/40 px-4 py-2 text-xs text-amber-200 flex items-center justify-between gap-3 flex-wrap animate-in slide-in-from-top-1">
+            <div className="flex items-center gap-2">
+              <Radio className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+              <span>
+                <strong>Camera in Setup Mode</strong>: Connected via hotspot <code className="bg-amber-950/60 px-1.5 py-0.5 rounded font-mono text-[11px] text-amber-300 font-bold">{cleanIp}</code> (SoftAP: <code className="font-mono text-amber-300">HydroNourish-CAM-Setup</code>).
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsSetupStudioOpen(true)}
+              className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-sm flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+            >
+              <Wifi className="w-3.5 h-3.5" />
+              <span>Pair Home Wi-Fi</span>
+            </button>
+          </div>
+        );
+      })()}
 
       {/* AI Control & Optical Source Secondary Toolbar */}
       <div className="px-4 py-2.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2 text-xs">

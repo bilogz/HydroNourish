@@ -1131,8 +1131,22 @@ export const DevicesPage: React.FC = () => {
                               <Usb className="w-3 h-3 text-teal-600 animate-pulse" /> Direct USB Flash Active
                             </span>
                           ) : isWifiConnected ? (
-                            <span className="px-2 py-0.5 rounded-lg bg-indigo-100 text-indigo-800 border border-indigo-300 text-[10px] font-bold flex items-center gap-1 shadow-2xs">
-                              <Wifi className="w-3 h-3 text-indigo-600" /> Wi-Fi Online ({activeWifiSsid})
+                            <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 shadow-2xs ${
+                              (activeWifiIp === '192.168.4.1' || activeWifiSsid?.includes('Setup'))
+                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                : 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                            }`}>
+                              {(activeWifiIp === '192.168.4.1' || activeWifiSsid?.includes('Setup')) ? (
+                                <>
+                                  <Radio className="w-3 h-3 text-amber-600 animate-pulse" />
+                                  <span>🛠️ Setup Mode ({activeWifiSsid})</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Wifi className="w-3 h-3 text-indigo-600" />
+                                  <span>Wi-Fi Online ({activeWifiSsid})</span>
+                                </>
+                              )}
                             </span>
                           ) : (
                             <StatusBadge status={featuredDevice.status} size="sm" />
@@ -2044,18 +2058,30 @@ export const DevicesPage: React.FC = () => {
               {/* Box 2: Wi-Fi Network Link */}
               <div className={`p-2.5 rounded-xl border transition-all ${
                 isWifiConnected
-                  ? 'bg-indigo-50/90 border-indigo-300 shadow-2xs'
+                  ? (activeWifiIp === '192.168.4.1' || activeWifiSsid?.includes('Setup'))
+                    ? 'bg-amber-50/90 border-amber-300 shadow-2xs'
+                    : 'bg-indigo-50/90 border-indigo-300 shadow-2xs'
                   : 'bg-white border-slate-200'
               }`}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-extrabold text-[11px] flex items-center gap-1 text-slate-800">
-                    <Wifi className={`w-3.5 h-3.5 ${isWifiConnected ? 'text-indigo-600' : 'text-slate-400'}`} />
+                    <Wifi className={`w-3.5 h-3.5 ${
+                      isWifiConnected
+                        ? (activeWifiIp === '192.168.4.1' || activeWifiSsid?.includes('Setup')) ? 'text-amber-600' : 'text-indigo-600'
+                        : 'text-slate-400'
+                    }`} />
                     Wi-Fi Network Link
                   </span>
                   {isWifiConnected ? (
-                    <span className="px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-300 text-[9px] font-black flex items-center gap-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping inline-block" />
-                      CONNECTED
+                    <span className={`px-1.5 py-0.2 rounded-full border text-[9px] font-black flex items-center gap-0.5 ${
+                      (activeWifiIp === '192.168.4.1' || activeWifiSsid?.includes('Setup'))
+                        ? 'bg-amber-100 text-amber-800 border-amber-300'
+                        : 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full animate-ping inline-block ${
+                        (activeWifiIp === '192.168.4.1' || activeWifiSsid?.includes('Setup')) ? 'bg-amber-500' : 'bg-indigo-500'
+                      }`} />
+                      {(activeWifiIp === '192.168.4.1' || activeWifiSsid?.includes('Setup')) ? 'SETUP MODE' : 'CONNECTED'}
                     </span>
                   ) : (
                     <span className="px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold">

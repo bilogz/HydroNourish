@@ -65,9 +65,11 @@ export const CameraSetupStudioModal: React.FC<CameraSetupStudioModalProps> = ({
   isStreamOnline = true
 }) => {
   const { showToast, devices } = useAppContext();
+  const cleanIp = (cameraIp || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+  const isCamInSetupMode = Boolean(cleanIp === '192.168.4.1' || cleanIp.startsWith('192.168.4.'));
 
   const [activeTab, setActiveTab] = useState<'smoothness' | 'usb' | 'wifi' | 'optics'>(() => {
-    return isStreamOnline ? 'smoothness' : 'wifi';
+    return (isCamInSetupMode || !isStreamOnline) ? 'wifi' : 'smoothness';
   });
 
   // ── Stream Smoothness & Presets ──
@@ -103,8 +105,6 @@ export const CameraSetupStudioModal: React.FC<CameraSetupStudioModalProps> = ({
   }, [cameraIp]);
 
   if (!isOpen) return null;
-
-  const cleanIp = (cameraIp || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
 
   // Helper to dispatch non-blocking HTTP requests to Camera IP & mDNS
   const sendCameraControl = (varName: string, val: string | number) => {
@@ -458,6 +458,21 @@ export const CameraSetupStudioModal: React.FC<CameraSetupStudioModalProps> = ({
           </button>
         </div>
 
+        {/* Setup Mode Notice Banner */}
+        {isCamInSetupMode && (
+          <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-2xl text-xs text-amber-200 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Radio className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+              <span>
+                <strong>Camera Connected in Setup Mode</strong>: IP is <code className="bg-amber-950/60 px-1.5 py-0.5 rounded font-mono text-[11px] text-amber-300 font-bold">{cleanIp}</code> (Hotspot: <code className="font-mono text-amber-300">HydroNourish-CAM-Setup</code>).
+              </span>
+            </div>
+            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black text-[10px] uppercase tracking-wider border border-amber-500/30">
+              🛠️ Setup Mode Active
+            </span>
+          </div>
+        )}
+
         {/* Tab Navigation */}
         <div className="flex items-center bg-slate-950 p-1 rounded-2xl border border-slate-800 text-xs">
           <button
@@ -472,6 +487,7 @@ export const CameraSetupStudioModal: React.FC<CameraSetupStudioModalProps> = ({
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
+            {isCamInSetupMode && <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping mr-0.5" />}
             <Wifi className="w-3.5 h-3.5" />
             <span>Wireless Wi-Fi</span>
           </button>
