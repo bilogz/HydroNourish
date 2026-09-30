@@ -658,6 +658,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 wifiSignalDbm: typeof telemetry.rssi === 'number' && telemetry.rssi !== 0 ? telemetry.rssi : d.wifiSignalDbm,
               };
 
+              // If hardware telemetry reports gate has closed, release any pending open gate override
+              if (telemetry.foodGateOpen === false && d.foodGateOpen === true) {
+                const currentOv = pendingUserOverrides.get(targetId);
+                if (currentOv && currentOv.foodGateOpen) {
+                  pendingUserOverrides.set(targetId, {
+                    ...currentOv,
+                    foodGateOpen: false,
+                    isManualGateHold: false,
+                    time: Date.now(),
+                  });
+                }
+              }
+
               // Doctor / Veterinarian Alert: When TDS reads 0 PPM (Dry water tank reservoir)
               if (typeof telemetry.tds === 'number' && telemetry.tds === 0 && (Date.now() - lastTdsDryAlertTime > 180000)) {
                 lastTdsDryAlertTime = Date.now();
@@ -1333,23 +1346,27 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       prev.map((d) => (d.id === targetDeviceId ? { ...d, foodGateOpen: true, isManualGateHold: false } : d))
     );
 
-    // After 2.5 seconds (gate cycle completion on ESP32), gate closes cleanly
+    // Closed-Loop Dispense: Gate remains OPEN until food bowl scale hits targetPortion!
+    // Hardware ESP32 firmware monitors HX711 and closes servo once targetPortion is reached.
+    // Safety fallback timeout (35s) only in case hopper runs completely dry or jams.
     setTimeout(() => {
       const currentOverride = pendingUserOverrides.get(targetDeviceId);
-      pendingUserOverrides.set(targetDeviceId, {
-        ...currentOverride,
-        foodGateOpen: false,
-        isManualGateHold: false,
-        time: Date.now(),
-      });
-      setDevices((prev) =>
-        prev.map((d) =>
-          d.id === targetDeviceId
-            ? { ...d, foodGateOpen: false, isManualGateHold: false }
-            : d
-        )
-      );
-    }, 2500);
+      if (currentOverride?.lastDispenseTime === now && currentOverride?.foodGateOpen) {
+        pendingUserOverrides.set(targetDeviceId, {
+          ...currentOverride,
+          foodGateOpen: false,
+          isManualGateHold: false,
+          time: Date.now(),
+        });
+        setDevices((prev) =>
+          prev.map((d) =>
+            d.id === targetDeviceId
+              ? { ...d, foodGateOpen: false, isManualGateHold: false }
+              : d
+          )
+        );
+      }
+    }, 35000);
 
     insertScheduleToSupabase(newSch).catch(() => {});
   };

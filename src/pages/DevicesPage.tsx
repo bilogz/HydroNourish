@@ -379,6 +379,13 @@ export const DevicesPage: React.FC = () => {
     ? (Number(localStorage.getItem(`hn_gate_angle_${featuredDevice?.id}`) || localStorage.getItem('hn_gate_angle')) || 90)
     : 90);
 
+  // Auto-reset isDispensingMeal when hardware confirms the gate has closed
+  useEffect(() => {
+    if (!featuredDevice?.foodGateOpen && isDispensingMeal) {
+      setIsDispensingMeal(false);
+    }
+  }, [featuredDevice?.foodGateOpen, isDispensingMeal]);
+
   useEffect(() => {
     const saved = typeof window !== 'undefined'
       ? Number(localStorage.getItem(`hn_gate_angle_${selectedDevice?.id}`) || localStorage.getItem('hn_gate_angle'))
@@ -1543,18 +1550,20 @@ export const DevicesPage: React.FC = () => {
                           const isGateOpen = Boolean(featuredDevice.foodGateOpen);
                           const isCat = assignedPet?.species?.toLowerCase() === 'cat';
                           const idealMealPortion = isCat ? 35 : (!assignedPet ? 75 : assignedPet.weight < 10 ? 60 : assignedPet.weight > 25 ? 220 : 110);
+                          const currentFoodWeight = Number(featuredDevice.foodBowlWeightGrams ?? 0);
+                          const isDispensingActive = isGateOpen || isDispensingMeal;
 
                           const handleFeed = (e: React.MouseEvent) => {
                             e.stopPropagation();
-                            if (!isOnline || isGateOpen || isDispensingMeal) return;
+                            if (!isOnline || isDispensingActive) return;
                             setIsDispensingMeal(true);
                             dispenseDirect(featuredDevice.id, idealMealPortion, `Ideal Meal (${idealMealPortion}g)`);
-                            setTimeout(() => setIsDispensingMeal(false), 3800);
                           };
 
                           const handleStopFeeding = (e: React.MouseEvent) => {
                             e.stopPropagation();
                             if (!isOnline || !isGateOpen) return;
+                            setIsDispensingMeal(false);
                             closeGateDirect(featuredDevice.id);
                           };
 
@@ -1567,10 +1576,10 @@ export const DevicesPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={handleFeed}
-                                disabled={!isOnline || isGateOpen || isDispensingMeal}
+                                disabled={!isOnline || isDispensingActive}
                                 className={`flex-1 py-2.5 px-2 font-bold transition-all flex items-center justify-center gap-1.5 ${
-                                  !isOnline || isGateOpen || isDispensingMeal
-                                    ? isGateOpen || isDispensingMeal
+                                  !isOnline || isDispensingActive
+                                    ? isDispensingActive
                                       ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-500/50 cursor-not-allowed opacity-90'
                                       : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                     : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white cursor-pointer active:scale-95'
@@ -1578,13 +1587,17 @@ export const DevicesPage: React.FC = () => {
                                 title={
                                   !isOnline
                                     ? 'Node is offline'
-                                    : isGateOpen || isDispensingMeal
-                                    ? `Dispensing meal (${idealMealPortion}g) — Gate opens once and will close automatically`
-                                    : `Feed Ideal Meal (${idealMealPortion}g for ${assignedPet?.name || 'Pet'}) — Dispenses and closes gate`
+                                    : isDispensingActive
+                                    ? `Dispensing ${idealMealPortion}g — Gate stays open until scale reaches ${idealMealPortion}g (Currently: ${Math.round(currentFoodWeight)}g)`
+                                    : `Feed Ideal Meal (${idealMealPortion}g for ${assignedPet?.name || 'Pet'}) — Dispenses until target weight is reached`
                                 }
                               >
                                 <Utensils className="w-3.5 h-3.5 shrink-0" />
-                                <span>{isGateOpen || isDispensingMeal ? 'Feeding (Once)...' : `Feed (${idealMealPortion}g)`}</span>
+                                <span>
+                                  {isDispensingActive
+                                    ? `Dispensing (${Math.round(currentFoodWeight)}g / ${idealMealPortion}g)...`
+                                    : `Feed (${idealMealPortion}g)`}
+                                </span>
                               </button>
                               <button
                                 type="button"
