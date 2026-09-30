@@ -173,6 +173,7 @@ interface AppContextType {
   addDevice: (device: Omit<Device, 'id' | 'status' | 'lastTransmission'>) => void;
   updateDevice: (id: string, updated: Partial<Device>) => Promise<void>;
   removeDevice: (id: string) => void;
+  setRefillLock: (deviceId: string, type: 'food' | 'water') => void;
   addUser: (user: Omit<ClinicUser, 'id' | 'lastActive'>) => void;
   updateUser: (id: string, updated: Partial<ClinicUser>) => void;
   toggleUserStatus: (userId: string) => void;
@@ -255,9 +256,11 @@ const lastOpenGateActionTimeMap = new Map<string, number>();
 
 // Tare lock: suppress incoming telemetry for 4s after a tare so the display shows 0
 // Calibration lock: suppress incoming telemetry for 6s after calibration so the scale re-reads correctly
-const pendingTares = new Map<string, { food?: number; water?: number; calFood?: number; calWater?: number }>();
+// Refill lock: suppress incoming telemetry for 8s after refill so the display shows the refilled value
+const pendingTares = new Map<string, { food?: number; water?: number; calFood?: number; calWater?: number; refillFood?: number }>();
 const TARE_LOCK_MS = 4000;
 const CAL_LOCK_MS = 6000;
+const REFILL_LOCK_MS = 8000;
 
 const roundGrams = (grams: number) => Math.max(0, Math.round(grams * 10) / 10);
 const roundMl = (ml: number) => Math.max(0, Math.round(ml));
@@ -389,6 +392,7 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
 
       // --- Food scale tare lock: force 0 for TARE_LOCK_MS after tare ---
       // --- Calibration lock: suppress stale readings for CAL_LOCK_MS after calibrate ---
+      // --- Refill lock: suppress foodLevelPct for REFILL_LOCK_MS after refill ---
       if (tareLock?.food && (now - tareLock.food) < TARE_LOCK_MS) {
         merged.foodBowlWeightGrams = 0.0;
       } else if (isLiveStreaming && isCloudIncoming) {
@@ -399,6 +403,15 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
           gateOpen: merged.foodGateOpen,
           force: forceCal,
         });
+      }
+
+      // --- Food hopper refill lock: preserve refilled value for REFILL_LOCK_MS ---
+      if (tareLock?.refillFood && (now - tareLock.refillFood) < REFILL_LOCK_MS) {
+        merged.foodLevelPct = prev.foodLevelPct;
+      } else if (isLiveStreaming && isCloudIncoming) {
+        merged.foodLevelPct = prev.foodLevelPct;
+      } else if (d.foodLevelPct !== undefined) {
+        merged.foodLevelPct = d.foodLevelPct;
       }
 
       // --- Water scale tare lock: force 0 for TARE_LOCK_MS after tare ---
@@ -752,7 +765,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   wifiSignalDbm: rawRssi,
                   foodBowlWeightGrams: lanWeight,
                   scaleReady: rawScaleReady !== undefined ? Boolean(rawScaleReady) : undefined,
-                  foodLevelPct: rawFoodLevel,
+                  foodLevelPct: (lanTareLock?.refillFood && (lanNow - lanTareLock.refillFood) < REFILL_LOCK_MS)
+                    ? prevMatch?.foodLevelPct
+                    : rawFoodLevel,
                   waterLevelPct: lanWaterMl !== undefined ? Math.min(100, Math.max(0, Math.round((lanWaterMl / (prevMatch?.reservoirCapacityMl || 2500)) * 100))) : rawWaterLevel,
                   waterMl: lanWaterMl,
                   waterLiters: lanWaterMl !== undefined ? Number((lanWaterMl / 1000).toFixed(2)) : undefined,
@@ -880,7 +895,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 foodBowlWeightGrams: stabilizedWeight,
                 scaleReady: telemetry.scaleReady !== undefined ? telemetry.scaleReady : d.scaleReady,
                 lastIntakeFoodGrams: typeof telemetry.lastIntakeFoodGrams === 'number' ? telemetry.lastIntakeFoodGrams : d.lastIntakeFoodGrams,
-                foodLevelPct: typeof telemetry.foodLevel === 'number' ? telemetry.foodLevel : d.foodLevelPct,
+                foodLevelPct: (usbTareLock?.refillFood && (usbNow - usbTareLock.refillFood) < REFILL_LOCK_MS) 
+                  ? d.foodLevelPct 
+                  : (typeof telemetry.foodLevel === 'number' ? telemetry.foodLevel : d.foodLevelPct),
                 waterLevelPct: typeof telemetry.waterLevel === 'number' ? telemetry.waterLevel : d.waterLevelPct,
                 waterMl: stabilizedWaterMl,
                 waterLiters: stabilizedWaterMl !== undefined
@@ -2939,8 +2956,18 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   const updateDevice = async (id: string, updated: Partial<Device>) => {
-    setDevices((prev) => (prev ?? []).map((d) => (d.id === id ? { ...d, ...updated } : d)));
+    setDevices((prev) => (prev ?? []).map((d) => d.id === id ? { ...d, ...updated } : d)));
     await updateDeviceInSupabase(id, updated);
+  };
+
+  const setRefillLock = (deviceId: string, type: 'food' | 'water') => {
+    const now = Date.now();
+    const existing = pendingTares.get(deviceId) || {};
+    if (type === 'food') {
+      pendingTares.set(deviceId, { ...existing, refillFood: now });
+    } else {
+      pendingTares.set(deviceId, { ...existing, refillWater: now });
+    }
   };
 
   const removeDevice = async (id: string) => {
@@ -3297,6 +3324,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         addDevice,
         updateDevice,
         removeDevice,
+        setRefillLock,
         addUser,
         updateUser,
         toggleUserStatus,

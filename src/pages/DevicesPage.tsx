@@ -86,6 +86,7 @@ export const DevicesPage: React.FC = () => {
     startDrainPumpDirect,
     stopDrainPumpDirect,
     invertDrainRelayDirect,
+    setRefillLock,
   } = useAppContext();
 
   const [connectModalOpen, setConnectModalOpen] = useState(false);
@@ -363,6 +364,9 @@ export const DevicesPage: React.FC = () => {
 
   const handleRefillHopperClick = async (deviceId: string) => {
     try {
+      // Set refill lock to prevent telemetry override for 8 seconds
+      setRefillLock(deviceId, 'food');
+      
       if (usbSerialService.getIsConnected()) {
         await usbSerialService.refillHopper();
       }

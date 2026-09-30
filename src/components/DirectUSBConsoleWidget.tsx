@@ -28,6 +28,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { usbSerialService, USBTelemetry, ScannedWifiNetwork } from '../services/usbSerialService';
+import { useAppContext } from '../hooks/useAppContext';
 
 interface DirectUSBConsoleWidgetProps {
   onClose?: () => void;
@@ -42,6 +43,7 @@ interface LogEntry {
 }
 
 export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () => {
+  const { setRefillLock } = useAppContext();
   const [isConnected, setIsConnected] = useState(usbSerialService.getIsConnected());
   const [isConnecting, setIsConnecting] = useState(false);
   const [telemetry, setTelemetry] = useState<USBTelemetry | null>(usbSerialService.getLastTelemetry());
@@ -109,6 +111,13 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
     if (isConnected) {
       await usbSerialService.disconnect();
     } else {
+      // Check browser compatibility before attempting connection
+      const compatInfo = usbSerialService.getBrowserCompatibilityInfo();
+      if (!compatInfo.supported) {
+        alert(`USB Hardware Control Not Available\n\n${compatInfo.message}\n\nRecommended browsers: ${compatInfo.recommendedBrowsers.join(', ')}`);
+        return;
+      }
+
       setIsConnecting(true);
       try {
         await usbSerialService.connect();
@@ -540,7 +549,10 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
                     Dispense 75g
                   </button>
                   <button
-                    onClick={() => runAction(() => usbSerialService.refillHopper())}
+                    onClick={() => runAction(async () => {
+                      setRefillLock('USB-DIRECT', 'food');
+                      await usbSerialService.refillHopper();
+                    })}
                     disabled={!isConnected || isActing}
                     className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 active:scale-95"
                   >

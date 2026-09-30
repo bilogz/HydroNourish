@@ -146,7 +146,72 @@ class USBSerialService {
   }
 
   public isSupported(): boolean {
-    return typeof navigator !== 'undefined' && 'serial' in navigator;
+    if (typeof navigator === 'undefined') return false;
+    if (!('serial' in navigator)) return false;
+    // Additional check for secure context (HTTPS or localhost)
+    if (typeof window !== 'undefined' && 
+        window.location.protocol !== 'https:' && 
+        window.location.hostname !== 'localhost' && 
+        window.location.hostname !== '127.0.0.1') {
+      console.warn('[USB] Web Serial API requires HTTPS or localhost');
+      return false;
+    }
+    return true;
+  }
+
+  public getBrowserCompatibilityInfo(): { supported: boolean; message: string; recommendedBrowsers: string[] } {
+    if (typeof navigator === 'undefined') {
+      return {
+        supported: false,
+        message: 'Web Serial API not available in this environment',
+        recommendedBrowsers: ['Chrome 89+', 'Edge 89+', 'Opera 75+', 'Brave']
+      };
+    }
+
+    if (!('serial' in navigator)) {
+      const userAgent = navigator.userAgent || '';
+      const isFirefox = userAgent.includes('Firefox');
+      const isSafari = userAgent.includes('Safari') && !userAgent.includes('Chrome');
+      
+      if (isFirefox) {
+        return {
+          supported: false,
+          message: 'Firefox does not support Web Serial API. It is available in Chrome, Edge, Opera, and Brave.',
+          recommendedBrowsers: ['Chrome 89+', 'Edge 89+', 'Opera 75+', 'Brave']
+        };
+      }
+      
+      if (isSafari) {
+        return {
+          supported: false,
+          message: 'Safari does not support Web Serial API. It is available in Chrome, Edge, Opera, and Brave.',
+          recommendedBrowsers: ['Chrome 89+', 'Edge 89+', 'Opera 75+', 'Brave']
+        };
+      }
+
+      return {
+        supported: false,
+        message: 'Web Serial API is not supported in this browser',
+        recommendedBrowsers: ['Chrome 89+', 'Edge 89+', 'Opera 75+', 'Brave']
+      };
+    }
+
+    if (typeof window !== 'undefined' && 
+        window.location.protocol !== 'https:' && 
+        window.location.hostname !== 'localhost' && 
+        window.location.hostname !== '127.0.0.1') {
+      return {
+        supported: false,
+        message: 'Web Serial API requires a secure context (HTTPS) or localhost. Access via HTTPS to enable USB hardware control.',
+        recommendedBrowsers: ['Chrome 89+', 'Edge 89+', 'Opera 75+', 'Brave']
+      };
+    }
+
+    return {
+      supported: true,
+      message: 'Web Serial API is supported and ready',
+      recommendedBrowsers: ['Chrome 89+', 'Edge 89+', 'Opera 75+', 'Brave']
+    };
   }
 
   public getIsConnected(): boolean {
