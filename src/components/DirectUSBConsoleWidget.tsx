@@ -190,17 +190,28 @@ export const DirectUSBConsoleWidget: React.FC<DirectUSBConsoleWidgetProps> = () 
               {isConnected ? (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 animate-pulse">
                   <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  Connected @ 115200 Baud
+                  Flash Direct @ 115200 Baud
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 border border-slate-700 text-slate-400">
                   <span className="w-2 h-2 rounded-full bg-slate-500"></span>
-                  Plug & Play Ready
+                  Flash Direct: Off
+                </span>
+              )}
+              {telemetry?.wifiConnected ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-500/20 border border-indigo-500/40 text-indigo-300">
+                  <Wifi className="w-3 h-3 text-indigo-400" />
+                  Wi-Fi: {telemetry.ssid || 'Connected'}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-800 border border-slate-700 text-slate-400">
+                  <Wifi className="w-3 h-3 text-slate-500" />
+                  Wi-Fi: Disconnected
                 </span>
               )}
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-teal-500/10 border border-teal-500/30 text-teal-300">
                 <Zap className="w-3 h-3 text-teal-400" />
-                Plug & Play (Auto-Detect)
+                Plug & Play
               </span>
             </div>
             <p className="text-slate-400 text-xs mt-0.5">

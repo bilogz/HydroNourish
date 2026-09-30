@@ -258,7 +258,7 @@ export const OwnerDashboardPage: React.FC = () => {
       const isMyPet = myPetIds.includes(a.petId) || myPets.some((p) => p.name?.toLowerCase() === a.petName?.toLowerCase());
       if (!isMyPet) return false;
       const typeStr = (a.alertType || '').toLowerCase();
-      const obsStr = (a.aiObservation || a.message || '').toLowerCase();
+      const obsStr = (a.aiObservation || (a as any).message || '').toLowerCase();
       return (
         typeStr.includes('malnutrition') ||
         typeStr.includes('anorexia') ||

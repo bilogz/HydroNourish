@@ -89,7 +89,7 @@ class USBSerialService {
 
     try {
       // Plug-and-Play: Automatically connect when USB device is physically plugged in
-      navigator.serial.addEventListener('connect', async (event: any) => {
+      (navigator as any).serial.addEventListener('connect', async (event: any) => {
         this.emitLog('🔌 USB device plugged in. Auto-connecting (Plug & Play)...', 'info');
         if (event?.target) {
           await this.openPort(event.target).catch(() => {});
@@ -99,7 +99,7 @@ class USBSerialService {
       });
 
       // Disconnect: Handle physical unplug event gracefully
-      navigator.serial.addEventListener('disconnect', () => {
+      (navigator as any).serial.addEventListener('disconnect', () => {
         this.emitLog('🔌 USB device physically unplugged.', 'info');
         this.stopTelemetryLoop();
         this.readLoopActive = false;
@@ -149,6 +149,31 @@ class USBSerialService {
 
   public getLastScannedNetworks(): ScannedWifiNetwork[] {
     return this.lastScannedNetworks;
+  }
+
+  public isWifiConnected(): boolean {
+    return Boolean(this.lastTelemetry?.wifiConnected);
+  }
+
+  public getWifiSsid(): string {
+    return this.lastTelemetry?.ssid || '';
+  }
+
+  public getWifiIp(): string {
+    return this.lastTelemetry?.ip || '';
+  }
+
+  public getWifiRssi(): number | null {
+    return typeof this.lastTelemetry?.rssi === 'number' ? this.lastTelemetry.rssi : null;
+  }
+
+  public getConnectionMode(isWifiOnlineFallback: boolean = false): 'dual' | 'usb' | 'wifi' | 'offline' {
+    const usb = this.isConnected;
+    const wifi = this.isWifiConnected() || isWifiOnlineFallback;
+    if (usb && wifi) return 'dual';
+    if (usb) return 'usb';
+    if (wifi) return 'wifi';
+    return 'offline';
   }
 
   public onLog(listener: USBLogListener): () => void {
@@ -238,6 +263,15 @@ class USBSerialService {
     } catch (err: any) {
       this.emitStatus(false);
       this.port = null;
+      const isLocked = String(err?.message || '').toLowerCase().includes('failed to open') ||
+                       String(err?.message || '').toLowerCase().includes('denied');
+      if (isLocked) {
+        const enhancedErr = new Error(
+          'COM Port is locked or in use by another program (e.g., PlatformIO Serial Monitor in VSCode, another terminal, or another browser window). Please stop the serial monitor in VSCode terminal (Ctrl+C) and try again.'
+        );
+        enhancedErr.name = 'PortLockedError';
+        throw enhancedErr;
+      }
       throw err;
     }
   }

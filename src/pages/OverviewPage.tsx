@@ -139,7 +139,7 @@ export const OverviewPage: React.FC = () => {
   const activeMalnutritionAlerts = (alerts || []).filter(a => {
     if (a.reviewStatus === 'Resolved') return false;
     const typeStr = (a.alertType || '').toLowerCase();
-    const obsStr = (a.aiObservation || a.message || '').toLowerCase();
+    const obsStr = (a.aiObservation || (a as any).message || '').toLowerCase();
     return (
       typeStr.includes('malnutrition') ||
       typeStr.includes('anorexia') ||
@@ -347,12 +347,36 @@ export const OverviewPage: React.FC = () => {
           />
           <StatCard
             title="Device Connection"
-            value={hasDeviceConnected ? (isUsbConnected ? 'Online (USB)' : hardware.status) : 'Offline'}
-            subtitle={hasDeviceConnected ? (isUsbConnected ? 'Direct USB Plug & Play' : 'Signal: ' + hardware.wifiSignalDbm + ' dBm') : 'No telemetry'}
-            icon={isUsbConnected ? Usb : Zap}
-            iconBgColor={isUsbConnected ? 'bg-teal-50' : 'bg-emerald-50'}
-            iconTextColor={isUsbConnected ? 'text-teal-600' : 'text-emerald-600'}
-            badgeText={hasDeviceConnected ? (isUsbConnected ? 'Direct USB' : 'Active Stream') : 'Disconnected'}
+            value={
+              hasDeviceConnected
+                ? (isUsbConnected && hardware?.status === 'Online'
+                    ? 'Dual (USB + Wi-Fi)'
+                    : isUsbConnected
+                    ? 'Flash Direct (USB)'
+                    : 'Online (Wi-Fi)')
+                : 'Offline'
+            }
+            subtitle={
+              hasDeviceConnected
+                ? (isUsbConnected && hardware?.status === 'Online'
+                    ? `USB Active • Wi-Fi: ${hardware.wifiSsid || 'Connected'}`
+                    : isUsbConnected
+                    ? 'Direct USB Cable Link (Offline)'
+                    : `Wi-Fi: ${hardware?.wifiSsid || 'Connected'} (${hardware?.wifiSignalDbm || -60} dBm)`)
+                : 'No telemetry'
+            }
+            icon={isUsbConnected && hardware?.status === 'Online' ? Zap : isUsbConnected ? Usb : Wifi}
+            iconBgColor={isUsbConnected && hardware?.status === 'Online' ? 'bg-gradient-to-r from-teal-50 to-indigo-50' : isUsbConnected ? 'bg-teal-50' : 'bg-indigo-50'}
+            iconTextColor={isUsbConnected && hardware?.status === 'Online' ? 'text-teal-600' : isUsbConnected ? 'text-teal-600' : 'text-indigo-600'}
+            badgeText={
+              hasDeviceConnected
+                ? (isUsbConnected && hardware?.status === 'Online'
+                    ? 'Dual Active'
+                    : isUsbConnected
+                    ? 'Flash Direct'
+                    : 'Wi-Fi Active')
+                : 'Disconnected'
+            }
             badgeType={hasDeviceConnected ? 'success' : 'alert'}
           />
           <StatCard

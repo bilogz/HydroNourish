@@ -651,6 +651,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 gateOpenDeg: typeof telemetry.gateOpenDeg === 'number' ? telemetry.gateOpenDeg : d.gateOpenDeg,
                 foodGateOpen: telemetry.foodGateOpen !== undefined ? telemetry.foodGateOpen : d.foodGateOpen,
                 currentServoAngle: typeof telemetry.currentServoAngle === 'number' ? telemetry.currentServoAngle : d.currentServoAngle,
+                wifiSsid: telemetry.wifiConnected ? (telemetry.ssid || d.wifiSsid) : d.wifiSsid,
+                ipAddress: (telemetry.ip && telemetry.ip !== '0.0.0.0') ? telemetry.ip : d.ipAddress,
+                wifiSignalDbm: typeof telemetry.rssi === 'number' && telemetry.rssi !== 0 ? telemetry.rssi : d.wifiSignalDbm,
               };
 
               // Doctor / Veterinarian Alert: When TDS reads 0 PPM (Dry water tank reservoir)
@@ -673,12 +676,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Plug-and-Play Offline Fallback: If no device matches or Supabase is offline, instantiate device immediately!
         const offlineUsbDev: Device = {
           id: targetId,
-          name: `HydroNourish Station (${targetId})`,
+          deviceName: `HydroNourish Station (${targetId})`,
+          hardwareStatus: 'available',
           status: 'Online',
           ipAddress: telemetry.ip && telemetry.ip !== '0.0.0.0' ? telemetry.ip : 'Direct USB',
           macAddress: 'USB-DIRECT',
           firmwareVersion: 'v2.5.0-ESP32|USB:DIRECT',
           isPluggedIn: true,
+          batteryPct: 100,
           lastTransmission: 'Live — Direct USB (Plug & Play)',
           foodBowlWeightGrams: typeof telemetry.foodBowlWeightGrams === 'number' ? telemetry.foodBowlWeightGrams : 0.0,
           scaleReady: telemetry.scaleReady !== undefined ? telemetry.scaleReady : true,
@@ -695,6 +700,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           gateOpenDeg: typeof telemetry.gateOpenDeg === 'number' ? telemetry.gateOpenDeg : 90,
           foodGateOpen: telemetry.foodGateOpen !== undefined ? telemetry.foodGateOpen : false,
           currentServoAngle: typeof telemetry.currentServoAngle === 'number' ? telemetry.currentServoAngle : 0,
+          wifiSsid: telemetry.wifiConnected ? (telemetry.ssid || 'GlobeAtHome_F83DB') : undefined,
+          wifiSignalDbm: typeof telemetry.rssi === 'number' && telemetry.rssi !== 0 ? telemetry.rssi : -65,
           assignedPetId: 'PET-001',
           assignedPetName: 'Max',
         };
@@ -715,7 +722,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (!prev || prev.length === 0) {
             return [{
               id: 'HN-NODE-F778',
-              name: 'HydroNourish Station (HN-NODE-F778)',
+              deviceName: 'HydroNourish Station (HN-NODE-F778)',
+              hardwareStatus: 'available',
+              wifiSignalDbm: -60,
+              batteryPct: 100,
               status: 'Online',
               ipAddress: 'Direct USB',
               macAddress: '1C:C3:AB:F9:F7:78',
@@ -1580,7 +1590,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       }));
 
       // Sync deduction with ESP32 via Direct USB and HTTP
-      if (usbSerialService.isConnected()) {
+      if (usbSerialService.getIsConnected()) {
         usbSerialService.deductFood(portionGrams).catch(() => {});
       }
       const cleanIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
