@@ -6,7 +6,7 @@
  * Supabase Realtime subscriptions, and ESP32 hardware telemetry stream engine.
  */
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   Pet,
   FeedingSchedule,
@@ -243,6 +243,8 @@ const pendingUserOverrides = new Map<string, {
 // Anti-bounce debounce tracking for spray rinse and drain pumps
 const lastSprayActionTimeMap = new Map<string, number>();
 const lastDrainActionTimeMap = new Map<string, number>();
+const lastCloseGateActionTimeMap = new Map<string, number>();
+const lastOpenGateActionTimeMap = new Map<string, number>();
 
 // Tare lock: suppress incoming telemetry for 4s after a tare so the display shows 0
 // Calibration lock: suppress incoming telemetry for 6s after calibration so the scale re-reads correctly
@@ -1036,9 +1038,32 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   }, [sidebarCollapsed]);
 
   // ─── Toast Helpers ───────────────────────────────────────────────────
+  const recentToastsMap = useRef<Map<string, number>>(new Map());
+
   const showToast = (type: ToastMessage['type'], title: string, message: string) => {
-    const id = 'toast-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5);
-    setToasts((prev) => [...prev, { id, type, title, message }]);
+    const key = `${title}::${message}`;
+    const now = Date.now();
+    const lastShown = recentToastsMap.current.get(key) || 0;
+    // Suppress identical toast within 3 seconds
+    if (now - lastShown < 3000) {
+      return;
+    }
+    // Also suppress same title for gate/dispense/feeding actions within 2.5 seconds
+    if (title.includes('Gate') || title.includes('Dispense') || title.includes('Feed')) {
+      const titleKey = `TITLE::${title}`;
+      const lastTitleShown = recentToastsMap.current.get(titleKey) || 0;
+      if (now - lastTitleShown < 2500) {
+        return;
+      }
+      recentToastsMap.current.set(titleKey, now);
+    }
+    recentToastsMap.current.set(key, now);
+
+    const id = 'toast-' + now + '-' + Math.random().toString(36).substring(2, 5);
+    setToasts((prev) => {
+      if (prev.some((t) => t.title === title && t.message === message)) return prev;
+      return [...prev, { id, type, title, message }];
+    });
     setTimeout(() => {
       removeToast(id);
     }, 4500);
@@ -1280,6 +1305,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       ...existingOverride,
       lastDispenseTime: now,
       foodGateOpen: true,
+      isManualGateHold: false,
       time: now,
     });
 
@@ -1307,8 +1333,15 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       prev.map((d) => (d.id === targetDeviceId ? { ...d, foodGateOpen: true, isManualGateHold: false } : d))
     );
 
-    // After 2.5 seconds (gate cycle completion on ESP32), gate closes
+    // After 2.5 seconds (gate cycle completion on ESP32), gate closes cleanly
     setTimeout(() => {
+      const currentOverride = pendingUserOverrides.get(targetDeviceId);
+      pendingUserOverrides.set(targetDeviceId, {
+        ...currentOverride,
+        foodGateOpen: false,
+        isManualGateHold: false,
+        time: Date.now(),
+      });
       setDevices((prev) =>
         prev.map((d) =>
           d.id === targetDeviceId
@@ -1322,6 +1355,13 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   const openGateDirect = async (deviceId: string, angle?: number, isManual: boolean = true) => {
+    const now = Date.now();
+    const lastOpen = lastOpenGateActionTimeMap.get(deviceId) || 0;
+    // Suppress rapid duplicate open requests within 1.5s
+    if (now - lastOpen < 1500) {
+      return;
+    }
+
     let effectiveAngle = angle;
     if (effectiveAngle === undefined || isNaN(effectiveAngle)) {
       if (typeof window !== 'undefined') {
@@ -1334,6 +1374,12 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     const finalAngle = effectiveAngle ?? 90;
 
     const dev = (devices ?? []).find((d) => d.id === deviceId);
+    // If gate is already open at the target angle and mode, ignore duplicate command
+    if (dev?.foodGateOpen && dev?.gateOpenDeg === finalAngle && dev?.isManualGateHold === isManual) {
+      return;
+    }
+    lastOpenGateActionTimeMap.set(deviceId, now);
+
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
 
@@ -1376,7 +1422,28 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   const closeGateDirect = async (deviceId: string) => {
+    const now = Date.now();
+    // 🔒 STRICT DEBOUNCE: suppress duplicate close commands within 2500ms
+    const lastClose = lastCloseGateActionTimeMap.get(deviceId) || 0;
+    if (now - lastClose < 2500) {
+      return;
+    }
+
+    // 🔒 ACTIVE DISPENSE GUARD: If ESP32 is currently executing an ideal meal dispense cycle,
+    // let hardware firmware handle automatic closure at the end of the kibble drop.
+    const override = pendingUserOverrides.get(deviceId);
+    if (override?.lastDispenseTime && (now - override.lastDispenseTime < 3500)) {
+      return;
+    }
+
     const dev = (devices ?? []).find((d) => d.id === deviceId);
+    // 🔒 ALREADY CLOSED GUARD: If gate is already confirmed closed in state and overrides, don't duplicate
+    if (dev && !dev.foodGateOpen && override?.foodGateOpen === false) {
+      return;
+    }
+
+    lastCloseGateActionTimeMap.set(deviceId, now);
+
     const petName = dev?.assignedPetName || 'Max';
     const petId = dev?.assignedPetId || 'PET-001';
 

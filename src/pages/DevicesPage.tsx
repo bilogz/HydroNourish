@@ -1554,7 +1554,7 @@ export const DevicesPage: React.FC = () => {
 
                           const handleStopFeeding = (e: React.MouseEvent) => {
                             e.stopPropagation();
-                            if (!isOnline) return;
+                            if (!isOnline || !isGateOpen) return;
                             closeGateDirect(featuredDevice.id);
                           };
 
@@ -1589,13 +1589,11 @@ export const DevicesPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={handleStopFeeding}
-                                disabled={!isOnline}
+                                disabled={!isOnline || !isGateOpen}
                                 className={`flex-1 py-2.5 px-2 font-bold transition-all flex items-center justify-center gap-1.5 border-l border-slate-200 ${
-                                  !isOnline
+                                  !isOnline || !isGateOpen
                                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                    : isGateOpen
-                                    ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs cursor-pointer active:scale-95 animate-pulse'
-                                    : 'bg-slate-900 text-white shadow-xs ring-1 ring-slate-800 cursor-pointer active:scale-95'
+                                    : 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs cursor-pointer active:scale-95 animate-pulse'
                                 }`}
                                 title={
                                   !isOnline

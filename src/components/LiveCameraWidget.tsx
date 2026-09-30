@@ -1211,7 +1211,6 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           setEatingSessionSeconds(0);
           setFeedingCycleCount(1);
           setServoMeteringPhase('idle');
-          showToast('info', '🔒 Gate Auto-Closed', 'No pet detected at smart bowl. Food gate locked.');
         }
 
         // Persist zeroed analytics record
@@ -1492,10 +1491,6 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     if (!isActivelyEating || is45sTimeoutActive || isReevaluatingAppetite) {
       if (!isActivelyEating && !is45sTimeoutActive && servoMeteringPhase !== 'idle') {
         setServoMeteringPhase('idle');
-      }
-      // STRICT SAFETY GUARD: If pet is not detected and gate was opened automatically (NOT manual hold), lock it shut!
-      if (!isPetDetected && activeDev?.foodGateOpen && !activeDev?.isManualGateHold) {
-        closeGateDirect(targetDevId);
       }
       return;
     }

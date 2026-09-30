@@ -608,10 +608,8 @@ export const FeedingPage: React.FC = () => {
                       if (!selectedDevice) return;
                       if (selectedDevice.foodGateOpen) {
                         await closeGateDirect(selectedDevice.id);
-                        showToast('info', 'Gate Closed', 'Dispenser gate manually closed.');
                       } else {
                         await openGateDirect(selectedDevice.id, undefined, true);
-                        showToast('info', 'Gate Opened', 'Dispenser gate opened and holding for pet.');
                       }
                     }}
                     className="py-1.5 px-2.5 rounded-lg text-[10px] font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all cursor-pointer disabled:opacity-40"
