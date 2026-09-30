@@ -178,7 +178,7 @@ export async function fetchSchedulesFromSupabase(): Promise<FeedingSchedule[] | 
       id: item.id,
       petId: item.pet_id,
       petName: item.pet_name,
-      foodType: item.food_type ?? 'Veterinary Dry Kibble',
+      foodType: (item as any).food_type ?? item.scheduled_time ?? 'Veterinary Dry Kibble',
       portionGrams: Number(item.portion_grams),
       scheduledTime: item.scheduled_time,
       dispenseStatus: item.dispense_status as FeedingSchedule['dispenseStatus'],
@@ -197,20 +197,16 @@ export async function insertScheduleToSupabase(schedule: FeedingSchedule): Promi
       id: schedule.id,
       pet_name: schedule.petName || 'galaxy destroyer',
       portion_grams: schedule.portionGrams || 75,
-      scheduled_time: schedule.scheduledTime || 'Instant Manual',
+      scheduled_time: schedule.foodType || schedule.scheduledTime || 'Instant Manual',
       dispense_status: 'Pending',
       device_id: schedule.deviceId || 'HN-NODE-F778',
     };
     if (schedule.petId && schedule.petId.length === 36 && schedule.petId.includes('-')) {
       payload.pet_id = schedule.petId;
     }
-    if (schedule.foodType) {
-      payload.food_type = schedule.foodType;
-    }
     const { error } = await supabase.from('feeding_schedules').upsert(payload);
     if (error) {
       delete payload.pet_id;
-      delete payload.food_type;
       const retry = await supabase.from('feeding_schedules').upsert(payload);
       if (retry.error) {
         console.error('[SUPABASE] insertSchedule error:', retry.error);
@@ -230,8 +226,11 @@ export async function updateScheduleInSupabase(id: string, updated: Partial<Feed
     const payload: Record<string, any> = {};
     if (updated.dispenseStatus !== undefined) payload.dispense_status = updated.dispenseStatus;
     if (updated.portionGrams !== undefined) payload.portion_grams = updated.portionGrams;
-    if (updated.scheduledTime !== undefined) payload.scheduled_time = updated.scheduledTime;
-    if (updated.foodType !== undefined) payload.food_type = updated.foodType;
+    if (updated.scheduledTime !== undefined) {
+      payload.scheduled_time = updated.scheduledTime;
+    } else if (updated.foodType !== undefined) {
+      payload.scheduled_time = updated.foodType;
+    }
 
     const { error } = await (supabase.from('feeding_schedules') as any).update(payload).eq('id', id);
     return !error;
