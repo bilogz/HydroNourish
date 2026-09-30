@@ -164,7 +164,7 @@ interface AppContextType {
   togglePumpMasterDirect: (deviceId: string) => Promise<void>;
   deactivatePumpDirect: (deviceId: string, deactivate?: boolean) => Promise<void>;
 
-  refillWater: (deviceId: string) => void;
+  refillWater: (deviceId: string) => Promise<void>;
 
   addAlert: (alertData: Omit<AIHealthAlert, 'id' | 'timestamp' | 'reviewStatus'>) => Promise<AIHealthAlert>;
   acknowledgeAlert: (alertId: string) => void;
@@ -2956,7 +2956,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   const updateDevice = async (id: string, updated: Partial<Device>) => {
-    setDevices((prev) => (prev ?? []).map((d) => d.id === id ? { ...d, ...updated } : d)));
+    setDevices((prev) => (prev ?? []).map((d) => d.id === id ? { ...d, ...updated } : d));
     await updateDeviceInSupabase(id, updated);
   };
 

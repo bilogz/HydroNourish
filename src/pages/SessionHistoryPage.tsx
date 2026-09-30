@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { useSession } from '../contexts/SessionContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useAppContext } from '../hooks/useAppContext';
 import { StatusBadge } from '../components/StatusBadge';
 import { Modal } from '../components/Modal';
 import { AssignPetOwnerModal } from '../components/session/AssignPetOwnerModal';
@@ -37,13 +38,16 @@ import {
   ExternalLink,
   Printer,
   FileText,
+  UserCheck,
 } from 'lucide-react';export const SessionHistoryPage: React.FC = () => {
   const navigate = useNavigate();
   const { sessions, activeSession, queuedSessions, hardware, admitNextFromQueue, admitSpecificFromQueue, removeFromQueue } = useSession();
   const { adminProfile } = useAuth();
+  const { pets } = useAppContext();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'queued' | 'completed' | 'cancelled'>('all');
+  const [selectedPetId, setSelectedPetId] = useState<string>('all');
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
@@ -63,9 +67,10 @@ import {
         s.deviceId.toLowerCase().includes(search.toLowerCase()) ||
         s.petSpecies.toLowerCase().includes(search.toLowerCase());
       const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesPet = selectedPetId === 'all' || s.petId === selectedPetId;
+      return matchesSearch && matchesStatus && matchesPet;
     });
-  }, [sessions, search, statusFilter]);
+  }, [sessions, search, statusFilter, selectedPetId]);
 
   const counts = useMemo(() => ({
     all: (sessions || []).length,
@@ -158,23 +163,45 @@ import {
             />
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-            <span className="text-slate-400 font-bold flex items-center gap-1 shrink-0 mr-1">
-              <Filter className="w-3.5 h-3.5" /> Filter:
-            </span>
-            {(['all', 'active', 'queued', 'completed', 'cancelled'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setStatusFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  statusFilter === f
-                    ? 'bg-rose-900 text-white shadow-xs'
-                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
+          <div className="flex items-center gap-2">
+            {/* Pet Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-bold flex items-center gap-1 shrink-0 text-xs">
+                <UserCheck className="w-3.5 h-3.5" /> Pet:
+              </span>
+              <select
+                value={selectedPetId}
+                onChange={(e) => setSelectedPetId(e.target.value)}
+                className="px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 rounded-lg focus:border-rose-500 focus:outline-none transition-colors cursor-pointer"
               >
-                {f === 'queued' ? '⏳ Queue' : f.charAt(0).toUpperCase() + f.slice(1)} ({counts[f]})
-              </button>
-            ))}
+                <option value="all">All Pets</option>
+                {(pets || []).map((pet) => (
+                  <option key={pet.id} value={pet.id}>
+                    {pet.name} ({pet.species})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+              <span className="text-slate-400 font-bold flex items-center gap-1 shrink-0 mr-1">
+                <Filter className="w-3.5 h-3.5" /> Status:
+              </span>
+              {(['all', 'active', 'queued', 'completed', 'cancelled'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setStatusFilter(f)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    statusFilter === f
+                      ? 'bg-rose-900 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  {f === 'queued' ? '⏳ Queue' : f.charAt(0).toUpperCase() + f.slice(1)} ({counts[f]})
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

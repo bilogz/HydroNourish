@@ -58,3 +58,165 @@ export const printReportWindow = (title: string, contentHtml: string) => {
     printWindow.close();
   }, 250);
 };
+
+export const generateClinicalReportHTML = (
+  reportType: string,
+  reportTitle: string,
+  dateRange: string,
+  customStartDate: string,
+  customEndDate: string,
+  filteredPetName: string,
+  isSpecific: boolean,
+  selectedCount: number,
+  pets: any[],
+  feedingLogs: any[],
+  hydrationLogs: any[],
+  alerts: any[],
+  compSections: { pets: boolean; feeding: boolean; hydration: boolean; alerts: boolean }
+): string => {
+  const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  
+  let tableHtml = '';
+
+  // Comprehensive Health - Pet profiles section
+  if (reportType === 'Comprehensive Health' && compSections.pets) {
+    tableHtml += `
+      <h3 style="color:#4f46e5; margin-top:20px; font-size:15px; border-bottom:1px solid #e0e7ff; padding-bottom:6px;">Patient Demographics & Medical Profiles</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Patient</th>
+            <th>Species / Breed</th>
+            <th>Age & Weight</th>
+            <th>Owner Details</th>
+            <th>Assigned Unit</th>
+            <th>Hydration Target</th>
+            <th>Health Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${pets.length > 0 ? pets.map(p => `
+            <tr>
+              <td><strong>${p.name}</strong> <span style="font-size:10px; color:#64748b;">(${p.id})</span></td>
+              <td>${p.species} - ${p.breed}</td>
+              <td>${p.age} yrs • ${p.weight} kg</td>
+              <td>${p.ownerName} (${p.ownerPhone})</td>
+              <td>${p.assignedDeviceId || 'Cage 1'}</td>
+              <td>${p.hydrationTarget} ml/day</td>
+              <td><strong>${p.healthStatus}</strong></td>
+            </tr>
+          `).join('') : '<tr><td colspan="7">No pet records match criteria.</td></tr>'}
+        </tbody>
+      </table>
+    `;
+  }
+
+  if ((reportType === 'Feeding Summary') || (reportType === 'Comprehensive Health' && compSections.feeding)) {
+    tableHtml += `
+      <h3 style="color:#0f766e; margin-top:24px; font-size:15px; border-bottom:1px solid #ccfbf1; padding-bottom:6px;">Feeding Dispense Telemetry Log</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Log ID</th>
+            <th>Pet Name</th>
+            <th>Portion (g)</th>
+            <th>Dispensed At</th>
+            <th>Status</th>
+            <th>Hardware Unit</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${feedingLogs.length > 0 ? feedingLogs.map(f => `
+            <tr>
+              <td><code>${f.id}</code></td>
+              <td><strong>${f.petName}</strong></td>
+              <td>${f.portionGrams}g</td>
+              <td>${f.dispensedAt}</td>
+              <td>${f.status}</td>
+              <td>${f.deviceId || 'Cage 1'}</td>
+            </tr>
+          `).join('') : '<tr><td colspan="6">No feeding logs recorded.</td></tr>'}
+        </tbody>
+      </table>
+    `;
+  }
+
+  if ((reportType === 'Hydration Log') || (reportType === 'Comprehensive Health' && compSections.hydration)) {
+    tableHtml += `
+      <h3 style="color:#0284c7; margin-top:24px; font-size:15px; border-bottom:1px solid #e0f2fe; padding-bottom:6px;">Hydration Intake Telemetry Log</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Log ID</th>
+            <th>Pet Name</th>
+            <th>Amount (ml)</th>
+            <th>Timestamp</th>
+            <th>Reservoir Level</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${hydrationLogs.length > 0 ? hydrationLogs.map(h => `
+            <tr>
+              <td><code>${h.id}</code></td>
+              <td><strong>${h.petName}</strong></td>
+              <td>${h.amountMl}ml</td>
+              <td>${h.timestamp}</td>
+              <td>${h.reservoirLevelPct}%</td>
+            </tr>
+          `).join('') : '<tr><td colspan="5">No hydration logs recorded.</td></tr>'}
+        </tbody>
+      </table>
+    `;
+  }
+
+  if ((reportType === 'AI Health Alerts') || (reportType === 'Comprehensive Health' && compSections.alerts)) {
+    tableHtml += `
+      <h3 style="color:#dc2626; margin-top:24px; font-size:15px; border-bottom:1px solid #fee2e2; padding-bottom:6px;">AI Health Alerts & Observations</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Alert ID</th>
+            <th>Pet Name</th>
+            <th>Observed Reading</th>
+            <th>AI Observation</th>
+            <th>Severity</th>
+            <th>Review Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${alerts.length > 0 ? alerts.map(a => `
+            <tr>
+              <td><code>${a.id}</code></td>
+              <td><strong>${a.petName}</strong></td>
+              <td>${a.observedReading}</td>
+              <td>${a.aiObservation}</td>
+              <td><strong>${a.severity}</strong></td>
+              <td>${a.reviewStatus}</td>
+            </tr>
+          `).join('') : '<tr><td colspan="6">No AI health alerts recorded.</td></tr>'}
+        </tbody>
+      </table>
+    `;
+  }
+
+  const content = `
+    <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #0d9488; padding-bottom: 16px;">
+      <h2 style="margin:0; color:#0d9488; font-size:22px;">Heritage Animal Clinic</h2>
+      <p style="margin:4px 0; color:#64748b; font-size:13px;">HydroNourish Smart Automated Telemetry System</p>
+      <h1 style="margin-top:12px; font-size:18px; color:#1e293b;">${reportTitle}</h1>
+      <p style="font-size:12px; color:#475569;">
+        <strong>Generated Date:</strong> ${dateStr} | 
+        <strong>Range:</strong> ${dateRange === 'Custom Range' ? `${customStartDate} to ${customEndDate}` : dateRange} | 
+        <strong>Patient:</strong> ${filteredPetName}
+        ${isSpecific ? ` | <strong style="color:#e11d48;">[SPECIFIC EXPORT: ${selectedCount} records]</strong>` : ''}
+      </p>
+    </div>
+    ${tableHtml}
+    <div style="margin-top: 40px; padding-top: 16px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; font-size: 11px; color: #64748b;">
+      <div>Attending Veterinarian Signature: _______________________</div>
+      <div>Clinic Seal & Stamp</div>
+    </div>
+  `;
+
+  return content;
+};

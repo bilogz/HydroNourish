@@ -55,12 +55,14 @@ import {
   Reply,
   MessageCircle,
   Eye,
+  Download,
+  Cloud,
 } from 'lucide-react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { compressImageFile } from '../utils/imageCompressor';
 import { ChatMessageItem, Pet, PetSession } from '../types';
 
-type OwnerTab = 'monitoring' | 'pets' | 'intake' | 'sessions' | 'messages';
+type OwnerTab = 'monitoring' | 'pets' | 'intake' | 'sessions' | 'messages' | 'reports';
 
 export const OwnerDashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -413,6 +415,10 @@ export const OwnerDashboardPage: React.FC = () => {
   const [messageText, setMessageText] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
 
+  // Report sending state
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<any>(null);
+
   // Currently active selected inquiry for the chatbox
   const activeInquiry = useMemo(() => {
     if (selectedInquiryId) {
@@ -465,6 +471,36 @@ export const OwnerDashboardPage: React.FC = () => {
       showToast('error', 'Send Failed', 'Could not send message. Please try again.');
     } finally {
       setIsSendingChat(false);
+    }
+  };
+
+  const handleSendReport = async (report: any) => {
+    if (!activeInquiry) {
+      showToast('error', 'No Active Chat', 'Please start a chat topic first to send reports.');
+      return;
+    }
+
+    try {
+      // Send report as a special message in the chat
+      const reportMessage = `[📊 REPORT ATTACHED]\n\n${report.reportType} Report for ${report.petName}\n\nGenerated: ${new Date(report.createdAt).toLocaleString()}\n\nClick the "View Report" button to see the full report.`;
+      
+      await sendOwnerFollowUpMessage(activeInquiry.id, reportMessage, currentOwner?.name || 'Pet Owner');
+      
+      // Also save the report data with the message for display
+      const reportKey = `hn_chat_report_${activeInquiry.id}_${Date.now()}`;
+      const chatReportData = {
+        reportId: report.id,
+        reportHTML: report.reportHTML,
+        reportType: report.reportType,
+        petName: report.petName,
+        createdAt: report.createdAt
+      };
+      localStorage.setItem(reportKey, JSON.stringify(chatReportData));
+      
+      showToast('success', 'Report Sent', 'Report sent to clinic staff via chat.');
+      setReportModalOpen(false);
+    } catch {
+      showToast('error', 'Send Failed', 'Could not send report. Please try again.');
     }
   };
 
@@ -636,6 +672,7 @@ export const OwnerDashboardPage: React.FC = () => {
             { id: 'intake', label: 'Intake History (' + (myFeedingLogs.length + myHydrationLogs.length) + ')', icon: Utensils },
             { id: 'sessions', label: 'Sessions (' + mySessions.length + ')', icon: Calendar },
             { id: 'messages', label: 'Message Clinic (' + myInquiries.length + ')', icon: MessageSquare },
+            { id: 'reports', label: 'Reports', icon: FileText },
           ].map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -1023,7 +1060,7 @@ export const OwnerDashboardPage: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-7">
-                <LiveCameraWidget isOnline={hardware.status === 'Online'} device={hardware} />
+                <LiveCameraWidget isOnline={hardware.status === 'Online'} device={hardware} showControls={false} />
               </div>
               <div className="lg:col-span-5 clinic-card p-6 space-y-4 flex flex-col justify-between">
                 <div className="space-y-3">
@@ -1522,7 +1559,35 @@ export const OwnerDashboardPage: React.FC = () => {
                                   Heritage Animal Clinic Response:
                                 </div>
                               )}
-                              {msg.message}
+                              {msg.message.includes('[📊 REPORT ATTACHED]') ? (
+                                <div>
+                                  <div className="mb-2">{msg.message}</div>
+                                  <button
+                                    onClick={() => {
+                                      // Try to find and open the report
+                                      const reportKeys = Object.keys(localStorage).filter(k => k.startsWith('hn_chat_report_'));
+                                      const inquiryReports = reportKeys
+                                        .filter(k => k.includes(activeInquiry?.id || ''))
+                                        .map(k => JSON.parse(localStorage.getItem(k) || '{}'))
+                                        .filter(r => r.reportId);
+                                      
+                                      if (inquiryReports.length > 0) {
+                                        const report = inquiryReports[inquiryReports.length - 1];
+                                        const reportWindow = window.open('', '_blank');
+                                        if (reportWindow) {
+                                          reportWindow.document.write(report.reportHTML);
+                                          reportWindow.document.close();
+                                        }
+                                      }
+                                    }}
+                                    className="mt-2 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" /> View Report
+                                  </button>
+                                </div>
+                              ) : (
+                                msg.message
+                              )}
                             </div>
 
                             {isOwner && (
@@ -1547,6 +1612,16 @@ export const OwnerDashboardPage: React.FC = () => {
                       onChange={(e) => setChatInputText(e.target.value)}
                       className="flex-1 p-3.5 rounded-2xl border border-slate-300 focus:border-rose-500 focus:outline-none text-xs leading-relaxed bg-slate-50/60"
                     />
+
+                    <button
+                      type="button"
+                      onClick={() => setReportModalOpen(true)}
+                      className="px-4 py-3.5 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer shrink-0"
+                      title="Send report to clinic"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span className="hidden sm:inline">Report</span>
+                    </button>
 
                     <button
                       type="submit"
@@ -1652,6 +1727,106 @@ export const OwnerDashboardPage: React.FC = () => {
                 </form>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ═══════════ TAB: REPORTS ═══════════ */}
+        {activeTab === 'reports' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900">Clinical Reports & Analytics</h2>
+                <p className="text-xs text-slate-500">View vision analytics and clinical reports saved by Heritage Animal Clinic.</p>
+              </div>
+            </div>
+
+            {/* Reports List */}
+            <div className="clinic-card border border-slate-200/90 bg-white shadow-sm overflow-hidden rounded-3xl">
+              <div className="p-5 bg-gradient-to-r from-slate-50 to-rose-50 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <Cloud className="w-5 h-5 text-rose-600" />
+                  <h3 className="text-sm font-extrabold text-slate-900">Available Reports</h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Reports saved by clinic staff for your pets</p>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {(() => {
+                  // Load reports from localStorage
+                  const reportsIndex = JSON.parse(localStorage.getItem('hn_owner_reports_index') || '[]');
+                  const myReports = reportsIndex
+                    .map((key: string) => {
+                      try {
+                        return JSON.parse(localStorage.getItem(key) || '{}');
+                      } catch {
+                        return null;
+                      }
+                    })
+                    .filter((r: any) => r && (!ownerEmail || r.ownerEmail === ownerEmail || myPets.some((p) => p.id === r.petId)));
+
+                  if (myReports.length === 0) {
+                    return (
+                      <div className="p-12 text-center">
+                        <FileText className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                        <p className="text-slate-800 font-bold text-sm">No reports available yet</p>
+                        <p className="text-slate-400 text-xs mt-1">
+                          Clinic staff will save vision analytics and clinical reports here for you to view.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return myReports.map((report: any) => (
+                    <div key={report.id} className="p-4 hover:bg-slate-50 transition-colors">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-bold uppercase">
+                              {report.reportType}
+                            </span>
+                            <h4 className="text-sm font-extrabold text-slate-900">{report.petName}</h4>
+                          </div>
+                          <p className="text-xs text-slate-500">
+                            Generated: {new Date(report.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => {
+                              const reportWindow = window.open('', '_blank');
+                              if (reportWindow) {
+                                reportWindow.document.write(report.reportHTML);
+                                reportWindow.document.close();
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                            title="View report"
+                          >
+                            <Eye className="w-3.5 h-3.5" /> View
+                          </button>
+                          <button
+                            onClick={() => {
+                              const blob = new Blob([report.reportHTML], { type: 'text/html' });
+                              const url = URL.createObjectURL(blob);
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.download = `${report.petName}_${report.reportType}_${Date.now()}.html`;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                            title="Download report"
+                          >
+                            <Download className="w-3.5 h-3.5" /> Download
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
           </div>
         )}
       </main>
@@ -2269,6 +2444,67 @@ export const OwnerDashboardPage: React.FC = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* ═══════════ MODAL: SELECT REPORT TO SEND ═══════════ */}
+      <Modal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        title="Send Report to Clinic"
+        subtitle="Select a report to share with Heritage Animal Clinic staff"
+        maxWidth="md"
+      >
+        <div className="space-y-4 text-xs">
+          {(() => {
+            const reportsIndex = JSON.parse(localStorage.getItem('hn_owner_reports_index') || '[]');
+            const myReports = reportsIndex
+              .map((key: string) => {
+                try {
+                  return JSON.parse(localStorage.getItem(key) || '{}');
+                } catch {
+                  return null;
+                }
+              })
+              .filter((r: any) => r && (!ownerEmail || r.ownerEmail === ownerEmail || myPets.some((p) => p.id === r.petId)));
+
+            if (myReports.length === 0) {
+              return (
+                <div className="p-8 text-center">
+                  <FileText className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                  <p className="text-slate-800 font-bold text-sm">No reports available</p>
+                  <p className="text-slate-400 text-xs mt-1">
+                    Clinic staff haven't saved any reports for your pets yet.
+                  </p>
+                </div>
+              );
+            }
+
+            return myReports.map((report: any) => (
+              <div
+                key={report.id}
+                className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-rose-300 transition-colors cursor-pointer"
+                onClick={() => handleSendReport(report)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-rose-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-slate-900">{report.petName}</h4>
+                      <p className="text-slate-500">{report.reportType}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-slate-400">
+                      {new Date(report.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ));
+          })()}
+        </div>
       </Modal>
     </div>
   );

@@ -24,8 +24,8 @@ import {
   ShieldCheck,
   RefreshCw,
   Trash2,
-  Send,
-  Mail
+  Database,
+  Cloud
 } from 'lucide-react';
 import {
   BarChart,
@@ -101,28 +101,47 @@ export const VisionAnalyticsModal: React.FC<VisionAnalyticsModalProps> = ({
 
   const handleSendToOwner = async () => {
     const pet = pets.find(p => p.id === petId);
-    if (!pet || !pet.ownerEmail) {
-      showToast('error', 'No Owner Email', 'Pet owner email not found. Please update pet profile.');
+    if (!pet) {
+      showToast('error', 'Pet Not Found', 'Could not find pet information.');
       return;
     }
 
     setIsSendingReport(true);
     try {
       const reportHTML = generateVisionAnalyticsReport(petId, petName);
-      const result = await sendVisionAnalyticsReport(
-        pet.ownerEmail,
-        pet.ownerName,
-        petName,
-        reportHTML
-      );
 
-      if (result.success) {
-        showToast('success', 'Report Sent', `Vision analytics report sent to ${pet.ownerName} (${pet.ownerEmail})`);
-      } else {
-        showToast('error', 'Send Failed', result.message);
+      // Save report to localStorage for owner portal access
+      const reportKey = `hn_report_${petId}_${Date.now()}`;
+      const reportData = {
+        id: reportKey,
+        petId: pet.id,
+        petName: pet.name,
+        ownerName: pet.ownerName,
+        reportType: 'Vision Analytics',
+        reportHTML: reportHTML,
+        createdAt: new Date().toISOString(),
+        status: 'available'
+      };
+
+      try {
+        // Save to localStorage for owner portal
+        localStorage.setItem(reportKey, JSON.stringify(reportData));
+
+        // Also save to a master index of owner reports
+        const ownerReportsIndex = JSON.parse(localStorage.getItem('hn_owner_reports_index') || '[]');
+        ownerReportsIndex.push(reportKey);
+        localStorage.setItem('hn_owner_reports_index', JSON.stringify(ownerReportsIndex));
+      } catch (e) {
+        console.warn('Could not save to localStorage:', e);
       }
+
+      showToast(
+        'success',
+        'Report Available in Owner Portal',
+        `Vision analytics report for ${pet.name} is now available in the Pet Owner Portal. The owner can view it anytime.`
+      );
     } catch (error) {
-      showToast('error', 'Send Failed', 'Failed to send vision analytics report. Please try again.');
+      showToast('error', 'Save Failed', 'Failed to save vision analytics report. Please try again.');
     } finally {
       setIsSendingReport(false);
     }
@@ -165,14 +184,14 @@ export const VisionAnalyticsModal: React.FC<VisionAnalyticsModalProps> = ({
               onClick={handleSendToOwner}
               disabled={isSendingReport}
               className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer text-xs font-bold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Send report to pet owner"
+              title="Save report to Owner Portal"
             >
               {isSendingReport ? (
                 <RefreshCw className="w-4 h-4 text-emerald-400 animate-spin" />
               ) : (
-                <Send className="w-4 h-4 text-emerald-400" />
+                <Cloud className="w-4 h-4 text-emerald-400" />
               )}
-              <span className="hidden sm:inline">{isSendingReport ? 'Sending...' : 'Send to Owner'}</span>
+              <span className="hidden sm:inline">{isSendingReport ? 'Saving...' : 'Save to Portal'}</span>
             </button>
             <button
               onClick={onClose}

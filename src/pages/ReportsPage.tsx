@@ -1,8 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { useAppContext } from '../hooks/useAppContext';
-import { downloadCSV, printReportWindow } from '../utils/exportUtils';
+import { downloadCSV, printReportWindow, generateClinicalReportHTML } from '../utils/exportUtils';
 import { StatusBadge } from '../components/StatusBadge';
+import { sendVisionAnalyticsReport } from '../services/emailService';
+import { getVisionAnalyticsRecords, calculateDailyVisionSummary, generateVisionAnalyticsReport } from '../services/visionAnalyticsService';
+import { VisionAnalyticsModal } from '../components/camera/VisionAnalyticsModal';
 import {
   FileText,
   Printer,
@@ -28,7 +31,11 @@ import {
   CheckCircle2,
   SlidersHorizontal,
   ChevronRight,
-  Info
+  Info,
+  Send,
+  Mail,
+  RefreshCw,
+  Eye
 } from 'lucide-react';
 import { FeedingLog, HydrationLog, AIHealthAlert, Pet } from '../types';
 
@@ -57,8 +64,17 @@ export const ReportsPage: React.FC = () => {
     pets: true,
     feeding: true,
     hydration: true,
-    alerts: true
+    alerts: true,
+    vision: true
   });
+
+  // Vision Analytics Modal state
+  const [visionModalOpen, setVisionModalOpen] = useState(false);
+  const [visionPetId, setVisionPetId] = useState<string>('All');
+  const [visionPetName, setVisionPetName] = useState<string>('All Patients');
+
+  // Individual pet report sending state
+  const [sendingPetId, setSendingPetId] = useState<string | null>(null);
 
   const filteredPetName = selectedPetId === 'All' ? 'All Patients' : (pets ?? []).find(p => p.id === selectedPetId)?.name || 'Patient';
 
@@ -192,6 +208,7 @@ export const ReportsPage: React.FC = () => {
     if (reportType === 'Feeding Summary') return filteredFeedingLogs;
     if (reportType === 'Hydration Log') return filteredHydrationLogs;
     if (reportType === 'AI Health Alerts') return filteredAlerts;
+    if (reportType === 'Vision Analytics') return [];
     return filteredPets;
   }, [reportType, filteredFeedingLogs, filteredHydrationLogs, filteredAlerts, filteredPets]);
 
@@ -375,6 +392,43 @@ export const ReportsPage: React.FC = () => {
       `;
     }
 
+    if ((reportType === 'Comprehensive Health' && compSections.vision)) {
+      const visionSummary = calculateDailyVisionSummary(selectedPetId === 'All' ? undefined : selectedPetId);
+      tableHtml += `
+        <h3 style="color:#ec4899; margin-top:24px; font-size:15px; border-bottom:1px solid:#fce7f3; padding-bottom:6px;">Vision Analytics Summary</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Today's Visits</strong></td>
+              <td>${visionSummary.totalVisits} (${visionSummary.averageConfidence}% AI Confidence)</td>
+            </tr>
+            <tr>
+              <td><strong>Feeding Dwell Time</strong></td>
+              <td>${visionSummary.feedingMinutes} minutes</td>
+            </tr>
+            <tr>
+              <td><strong>Hydration Dwell Time</strong></td>
+              <td>${visionSummary.hydrationMinutes} minutes</td>
+            </tr>
+            <tr>
+              <td><strong>Health & Vigor Score</strong></td>
+              <td>${visionSummary.averageHealthScore}/100</td>
+            </tr>
+            <tr>
+              <td><strong>Last Visit Time</strong></td>
+              <td>${visionSummary.lastVisitTime}</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+    }
+
     const content = `
       <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #0d9488; padding-bottom: 16px;">
         <h2 style="margin:0; color:#0d9488; font-size:22px;">Heritage Animal Clinic</h2>
@@ -494,6 +548,152 @@ export const ReportsPage: React.FC = () => {
   const handleDownloadPDF = () => {
     handlePrint();
     showToast('info', 'PDF Export Ready', 'In the print dialog, select "Save as PDF" to download your file.');
+  };
+
+  // ----------------------------------------------------
+  // HANDLER: Send Report to Pet Owner
+  // ----------------------------------------------------
+  const [isSendingReport, setIsSendingReport] = useState(false);
+  const [selectedOwnerEmail, setSelectedOwnerEmail] = useState<string | null>(null);
+
+  const handleSendToOwner = async () => {
+    // Determine the recipient
+    let recipientEmail: string | null = null;
+    let recipientName: string = 'Pet Owner';
+    let petName: string = 'Patient';
+
+    if (selectedPetId !== 'All') {
+      const pet = (pets ?? []).find(p => p.id === selectedPetId);
+      if (pet) {
+        recipientEmail = pet.ownerEmail || null;
+        recipientName = pet.ownerName;
+        petName = pet.name;
+      }
+    } else if (filteredPets.length === 1) {
+      // If only one pet is visible, use that pet's owner
+      const pet = filteredPets[0];
+      recipientEmail = pet.ownerEmail || null;
+      recipientName = pet.ownerName;
+      petName = pet.name;
+    }
+
+    if (!recipientEmail) {
+      showToast('error', 'No Owner Email', 'Pet owner email not found. Please update pet profile.');
+      return;
+    }
+
+    setIsSendingReport(true);
+    try {
+      // Generate report HTML
+      const isSpecific = selectedIds.size > 0;
+      const feedLogsToSend = isSpecific
+        ? filteredFeedingLogs.filter(f => selectedIds.has(f.id))
+        : filteredFeedingLogs;
+      const hydLogsToSend = isSpecific
+        ? filteredHydrationLogs.filter(h => selectedIds.has(h.id))
+        : filteredHydrationLogs;
+      const alertsToSend = isSpecific
+        ? filteredAlerts.filter(a => selectedIds.has(a.id))
+        : filteredAlerts;
+      const petsToSend = isSpecific
+        ? filteredPets.filter(p => selectedIds.has(p.id))
+        : filteredPets;
+
+      const reportHTML = generateClinicalReportHTML(
+        reportType,
+        `${reportType} Report — ${filteredPetName}`,
+        dateRange,
+        customStartDate,
+        customEndDate,
+        filteredPetName,
+        isSpecific,
+        selectedIds.size,
+        petsToSend,
+        feedLogsToSend,
+        hydLogsToSend,
+        alertsToSend,
+        compSections
+      );
+
+      const result = await sendVisionAnalyticsReport(
+        recipientEmail,
+        recipientName,
+        petName,
+        reportHTML
+      );
+
+      if (result.success) {
+        showToast('success', 'Report Sent', `Clinical report sent to ${recipientName} (${recipientEmail})`);
+      } else {
+        showToast('error', 'Send Failed', result.message);
+      }
+    } catch (error) {
+      showToast('error', 'Send Failed', 'Failed to send clinical report. Please try again.');
+    } finally {
+      setIsSendingReport(false);
+    }
+  };
+
+  // ----------------------------------------------------
+  // HANDLER: View Vision Analytics
+  // ----------------------------------------------------
+  const handleViewVisionAnalytics = () => {
+    setVisionPetId(selectedPetId);
+    setVisionPetName(filteredPetName);
+    setVisionModalOpen(true);
+  };
+
+  // ----------------------------------------------------
+  // HANDLER: Send Report to Specific Pet Owner
+  // ----------------------------------------------------
+  const handleSendToPetOwner = async (pet: Pet) => {
+    if (!pet.ownerEmail) {
+      showToast('error', 'No Owner Email', `${pet.name} has no owner email address configured.`);
+      return;
+    }
+
+    setSendingPetId(pet.id);
+
+    try {
+      // Generate report for this specific pet only
+      const feedLogsToSend = filteredFeedingLogs.filter(f => f.petId === pet.id);
+      const hydLogsToSend = filteredHydrationLogs.filter(h => h.petId === pet.id);
+      const alertsToSend = filteredAlerts.filter(a => a.petId === pet.id);
+      const petsToSend = [pet];
+
+      const reportHTML = generateClinicalReportHTML(
+        'Comprehensive Health',
+        `Comprehensive Health Report — ${pet.name}`,
+        dateRange,
+        customStartDate,
+        customEndDate,
+        pet.name,
+        false,
+        1,
+        petsToSend,
+        feedLogsToSend,
+        hydLogsToSend,
+        alertsToSend,
+        compSections
+      );
+
+      const result = await sendVisionAnalyticsReport(
+        pet.ownerEmail,
+        pet.ownerName,
+        pet.name,
+        reportHTML
+      );
+
+      if (result.success) {
+        showToast('success', 'Report Sent', `Clinical report sent to ${pet.ownerName} (${pet.ownerEmail}) for ${pet.name}`);
+      } else {
+        showToast('error', 'Send Failed', result.message);
+      }
+    } catch (error) {
+      showToast('error', 'Send Failed', 'Failed to send clinical report. Please try again.');
+    } finally {
+      setSendingPetId(null);
+    }
   };
 
   // ----------------------------------------------------
@@ -806,6 +1006,7 @@ export const ReportsPage: React.FC = () => {
                 <option value="Feeding Summary">Feeding Summary</option>
                 <option value="Hydration Log">Hydration Log</option>
                 <option value="AI Health Alerts">AI Observations Log</option>
+                <option value="Vision Analytics">Vision Analytics</option>
               </select>
             </div>
 
@@ -913,6 +1114,15 @@ export const ReportsPage: React.FC = () => {
                 className="w-3.5 h-3.5 rounded text-rose-600 focus:ring-rose-500"
               />
               AI Observations
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer font-medium text-slate-700 hover:text-slate-900">
+              <input
+                type="checkbox"
+                checked={compSections.vision}
+                onChange={e => setCompSections(prev => ({ ...prev, vision: e.target.checked }))}
+                className="w-3.5 h-3.5 rounded text-rose-600 focus:ring-rose-500"
+              />
+              Vision Analytics
             </label>
           </div>
         )}
@@ -1429,6 +1639,17 @@ export const ReportsPage: React.FC = () => {
                             >
                               <Printer className="w-3.5 h-3.5" />
                             </button>
+                            <button
+                              onClick={() => {
+                                setVisionPetId(p.id);
+                                setVisionPetName(p.name);
+                                setVisionModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-purple-700 hover:bg-purple-50 hover:border-purple-200 transition-colors"
+                              title={`View Vision Analytics for ${p.name}`}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1446,6 +1667,15 @@ export const ReportsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Vision Analytics Modal */}
+      <VisionAnalyticsModal
+        isOpen={visionModalOpen}
+        onClose={() => setVisionModalOpen(false)}
+        petId={visionPetId}
+        petName={visionPetName}
+        petSpecies={selectedPetId === 'All' ? 'All Species' : (pets ?? []).find(p => p.id === selectedPetId)?.species || 'Unknown'}
+      />
     </DashboardLayout>
   );
 };

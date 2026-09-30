@@ -69,6 +69,7 @@ interface LiveCameraWidgetProps {
   isOnline?: boolean;
   device?: Device;
   petContext?: { name?: string; species?: string; weightKg?: number };
+  showControls?: boolean;
 }
 
 interface ScannedNetwork {
@@ -85,6 +86,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   allowIpChange = true,
   device,
   petContext,
+  showControls = true,
 }) => {
   const {
     devices,
@@ -383,7 +385,31 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // ── AI Camera Control & Analytics Modes ────────────────────────────────────
-  const [cameraSource, setCameraSource] = useState<CameraSourceType>('esp32');
+  const [cameraSource, setCameraSource] = useState<CameraSourceType>(() => {
+    // Check localStorage for saved camera source to sync across pages
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('hn_camera_source');
+      if (saved === 'esp32' || saved === 'webcam' || saved === 'demo') {
+        return saved as CameraSourceType;
+      }
+    }
+    return 'esp32';
+  });
+
+  // Listen for camera source changes from other pages (admin/owner sync)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'hn_camera_source' && e.newValue) {
+        const newSource = e.newValue as CameraSourceType;
+        if (newSource === 'esp32' || newSource === 'webcam' || newSource === 'demo') {
+          setCameraSource(newSource);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
   const [aiControlMode, setAiControlMode] = useState<AIControlMode>('advisory');
   const [isWatchdogActive, setIsWatchdogActive] = useState(true);
   const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
@@ -2097,75 +2123,76 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       isFullscreen ? 'fixed inset-0 z-50 rounded-none p-6 flex flex-col justify-between' : ''
     }`}>
       {/* Header */}
-      <div className="p-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400">
-            <Video className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-sm text-slate-100">{title}</h3>
-              {(() => {
-                const isCamInSetupMode = Boolean(cleanIp === '192.168.4.1' || cleanIp.startsWith('192.168.4.') || currentDev?.cameraIp === '192.168.4.1');
-                return (
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all ${
-                    streamError
-                      ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-                      : isCamInSetupMode
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
-                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
-                  }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      streamError
-                        ? 'bg-rose-400'
-                        : isCamInSetupMode
-                        ? 'bg-amber-400 animate-pulse'
-                        : 'bg-emerald-400 animate-pulse'
-                    }`}></span>
-                    <span>{streamError ? 'STANDBY' : isCamInSetupMode ? '🛠️ SETUP MODE' : 'LIVE HD'}</span>
-                    {!streamError && cleanIp && (
-                      <span className={`font-mono text-[9px] pl-1 border-l ${
-                        isCamInSetupMode ? 'text-amber-200/90 border-amber-500/30' : 'text-emerald-200/90 border-emerald-500/30'
-                      }`}>
-                        {cleanIp}
-                      </span>
-                    )}
-                  </span>
-                );
-              })()}
+      {showControls ? (
+        <div className="p-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400">
+              <Video className="w-5 h-5" />
             </div>
-            <p className="text-[11px] text-slate-400 font-mono">
-              <span className="text-rose-400 font-bold">IP: {cleanIp}</span>
-              {' '}• {subtitle}
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-slate-100">{title}</h3>
+                {(() => {
+                  const isCamInSetupMode = Boolean(cleanIp === '192.168.4.1' || cleanIp.startsWith('192.168.4.') || currentDev?.cameraIp === '192.168.4.1');
+                  return (
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all ${
+                      streamError
+                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                        : isCamInSetupMode
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        streamError
+                          ? 'bg-rose-400'
+                          : isCamInSetupMode
+                          ? 'bg-amber-400 animate-pulse'
+                          : 'bg-emerald-400 animate-pulse'
+                      }`}></span>
+                      <span>{streamError ? 'STANDBY' : isCamInSetupMode ? '🛠️ SETUP MODE' : 'LIVE HD'}</span>
+                      {!streamError && cleanIp && (
+                        <span className={`font-mono text-[9px] pl-1 border-l ${
+                          isCamInSetupMode ? 'text-amber-200/90 border-amber-500/30' : 'text-emerald-200/90 border-emerald-500/30'
+                        }`}>
+                          {cleanIp}
+                        </span>
+                      )}
+                    </span>
+                  );
+                })()}
+              </div>
+              <p className="text-[11px] text-slate-400 font-mono">
+                <span className="text-rose-400 font-bold">IP: {cleanIp}</span>
+                {' '}• {subtitle}
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Visual Analytics Trigger */}
-          <button
-            onClick={() => setIsAnalyticsModalOpen(true)}
-            title="Open Station Visual Health & Dwell Analytics"
-            className="p-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold transition-all text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-            <span>Analytics</span>
-          </button>
+          {/* Action Controls */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Visual Analytics Trigger */}
+            <button
+              onClick={() => setIsAnalyticsModalOpen(true)}
+              title="Open Station Visual Health & Dwell Analytics"
+              className="p-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold transition-all text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>Analytics</span>
+            </button>
 
-          {/* AI Scanner HUD Toggle */}
-          <button
-            onClick={() => setIsScannerEnabled(!isScannerEnabled)}
-            title="Toggle AI Animal Detection Reticle"
-            className={`p-2 rounded-lg border transition-all text-xs flex items-center gap-1.5 font-bold cursor-pointer ${
-              isScannerEnabled
-                ? 'bg-rose-500/20 border-rose-400/50 text-rose-300 shadow-sm shadow-teal-500/20'
-                : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-400'
-            }`}
-          >
-            <Scan className={`w-3.5 h-3.5 ${isScannerEnabled ? 'animate-pulse text-rose-400' : ''}`} />
-            <span className="hidden sm:inline">AI Scanner</span>
-          </button>
+            {/* AI Scanner HUD Toggle */}
+            <button
+              onClick={() => setIsScannerEnabled(!isScannerEnabled)}
+              title="Toggle AI Animal Detection Reticle"
+              className={`p-2 rounded-lg border transition-all text-xs flex items-center gap-1.5 font-bold cursor-pointer ${
+                isScannerEnabled
+                  ? 'bg-rose-500/20 border-rose-400/50 text-rose-300 shadow-sm shadow-teal-500/20'
+                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-400'
+              }`}
+            >
+              <Scan className={`w-3.5 h-3.5 ${isScannerEnabled ? 'animate-pulse text-rose-400' : ''}`} />
+              <span className="hidden sm:inline">AI Scanner</span>
+            </button>
 
           {/* Stream Mode Switcher (MJPEG vs Snapshot) */}
           <div className="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/80">
@@ -2307,10 +2334,11 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
         </div>
-      </div>
+        </div>
+      ) : null}
 
       {/* Camera Setup Mode Banner */}
-      {(() => {
+      {showControls && (() => {
         const isCamInSetupMode = Boolean(cleanIp === '192.168.4.1' || cleanIp.startsWith('192.168.4.') || currentDev?.cameraIp === '192.168.4.1');
         if (!isCamInSetupMode) return null;
         return (
@@ -2334,13 +2362,17 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       })()}
 
       {/* AI Control & Optical Source Secondary Toolbar */}
+      {showControls && (
       <div className="px-4 py-2.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2 text-xs">
         <div className="flex items-center gap-2 flex-wrap">
           {/* Source Switcher */}
           <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5">
             <button
               type="button"
-              onClick={() => setCameraSource('esp32')}
+              onClick={() => {
+                setCameraSource('esp32');
+                localStorage.setItem('hn_camera_source', 'esp32');
+              }}
               className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
                 cameraSource === 'esp32'
                   ? 'bg-rose-600 text-white shadow-xs'
@@ -2351,7 +2383,10 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setCameraSource('webcam')}
+              onClick={() => {
+                setCameraSource('webcam');
+                localStorage.setItem('hn_camera_source', 'webcam');
+              }}
               className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
                 cameraSource === 'webcam'
                   ? 'bg-rose-600 text-white shadow-xs'
@@ -2362,7 +2397,10 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setCameraSource('demo')}
+              onClick={() => {
+                setCameraSource('demo');
+                localStorage.setItem('hn_camera_source', 'demo');
+              }}
               className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
                 cameraSource === 'demo'
                   ? 'bg-rose-600 text-white shadow-xs'
@@ -2487,9 +2525,10 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* Interactive AI Advisory Prompt Banner */}
-      {activeRecommendation && aiControlMode === 'advisory' && (
+      {showControls && activeRecommendation && aiControlMode === 'advisory' && (
         <div className="p-3 bg-gradient-to-r from-amber-950/90 via-slate-900/90 to-amber-950/90 border-b border-amber-500/40 flex items-center justify-between flex-wrap gap-2 text-xs animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
@@ -2533,7 +2572,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       <canvas ref={canvasRef} className="hidden" />
 
       {/* IP Configuration Banner */}
-      {isEditingIp && (
+      {showControls && isEditingIp && (
         <form onSubmit={handleSaveIp} className="p-3 bg-slate-950/95 border-b border-rose-500/30 flex items-center gap-2 text-xs">
           <span className="text-slate-400 font-mono">http://</span>
           <input
@@ -2554,7 +2593,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       )}
 
       {/* Wireless Wi-Fi Configuration Banner (100% Wireless Direct In-Page Setup) */}
-      {isWifiConfigOpen && (
+      {showControls && isWifiConfigOpen && (
         <div className="p-4 bg-slate-950/95 border-b border-amber-500/40 backdrop-blur-md animate-in slide-in-from-top-2 text-xs">
           <div className="max-w-2xl mx-auto space-y-3">
             <div className="flex items-center justify-between">
@@ -2735,7 +2774,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
         )}
 
         {/* AI VISION SCANNER HUD OVERLAY */}
-        {isScannerEnabled && !streamError && !isStreamLoading && (
+        {showControls && isScannerEnabled && !streamError && !isStreamLoading && (
           <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-4">
             {/* Animated Laser Scanline */}
             <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-75 shadow-lg shadow-teal-400/50 animate-bounce duration-1000 top-1/3" />
@@ -4005,33 +4044,37 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
       )}
 
       {/* Visual Analytics Telemetry & Health Modal */}
-      <VisionAnalyticsModal
-        isOpen={isAnalyticsModalOpen}
-        onClose={() => setIsAnalyticsModalOpen(false)}
-        petId={device?.assignedPetId || 'PET-001'}
-        petName={petName}
-        petSpecies={petSpecies}
-        onRunImmediateScan={() => handleRunAiScan(false)}
-      />
+      {showControls && (
+        <VisionAnalyticsModal
+          isOpen={isAnalyticsModalOpen}
+          onClose={() => setIsAnalyticsModalOpen(false)}
+          petId={device?.assignedPetId || 'PET-001'}
+          petName={petName}
+          petSpecies={petSpecies}
+          onRunImmediateScan={() => handleRunAiScan(false)}
+        />
+      )}
 
       {/* Camera Setup Studio & Performance Modal */}
-      <CameraSetupStudioModal
-        isOpen={isSetupStudioOpen}
-        onClose={() => setIsSetupStudioOpen(false)}
-        cameraIp={cameraIp}
-        onUpdateCameraIp={(newIp) => {
-          setCameraIp(newIp);
-          setInputIp(newIp);
-          setStreamPortIndex(0);
-          setStreamKey(Date.now());
-          setIsStreamLoading(true);
-          setStreamError(false);
-        }}
-        currentPreset={streamPreset}
-        onApplyPreset={handleApplyPreset}
-        deviceId={device?.id || 'HN-NODE-F778'}
-        isStreamOnline={!streamError && !isStreamLoading}
-      />
+      {showControls && (
+        <CameraSetupStudioModal
+          isOpen={isSetupStudioOpen}
+          onClose={() => setIsSetupStudioOpen(false)}
+          cameraIp={cameraIp}
+          onUpdateCameraIp={(newIp) => {
+            setCameraIp(newIp);
+            setInputIp(newIp);
+            setStreamPortIndex(0);
+            setStreamKey(Date.now());
+            setIsStreamLoading(true);
+            setStreamError(false);
+          }}
+          currentPreset={streamPreset}
+          onApplyPreset={handleApplyPreset}
+          deviceId={device?.id || 'HN-NODE-F778'}
+          isStreamOnline={!streamError && !isStreamLoading}
+        />
+      )}
     </div>
   );
 };
