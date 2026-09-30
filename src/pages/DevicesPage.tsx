@@ -70,6 +70,7 @@ export const DevicesPage: React.FC = () => {
     stopPumpDirect,
     toggleAutoRefillDirect,
     toggleAutoFlushDirect,
+    toggleAutoSprayDirect,
     togglePumpMasterDirect,
     deactivatePumpDirect,
     tareScaleDirect,
@@ -1182,6 +1183,13 @@ export const DevicesPage: React.FC = () => {
                   : true
               )
             );
+            const isAutoSprayOn = Boolean(
+              featuredDevice.autoSprayEnabled ?? (
+                typeof window !== 'undefined'
+                  ? localStorage.getItem(`hn_auto_spray_${featuredDevice.id}`) !== '0'
+                  : true
+              )
+            );
 
             return (
               <div className="clinic-card overflow-hidden bg-white border border-slate-200 shadow-xl rounded-2xl">
@@ -1950,6 +1958,19 @@ export const DevicesPage: React.FC = () => {
                             >
                               {isAutoFlushOn ? <Sparkles className="w-2.5 h-2.5" /> : <PowerOff className="w-2.5 h-2.5" />}
                               {isAutoFlushOn ? 'Auto-Flush: ON (5m)' : 'Auto-Flush: AUTO OFF'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => isOnline && toggleAutoSprayDirect(featuredDevice.id, !isAutoSprayOn)}
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border transition-all cursor-pointer flex items-center gap-1 ${
+                                isAutoSprayOn
+                                  ? 'bg-sky-100 text-sky-800 border-sky-300 hover:bg-sky-200'
+                                  : 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                              }`}
+                              title="Toggle auto-spray (30m no-pet / 2m after-eating)"
+                            >
+                              {isAutoSprayOn ? <Droplets className="w-2.5 h-2.5" /> : <PowerOff className="w-2.5 h-2.5" />}
+                              {isAutoSprayOn ? 'Auto-Spray: ON' : 'Auto-Spray: OFF'}
                             </button>
                           </div>
                         </div>

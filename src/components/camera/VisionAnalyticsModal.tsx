@@ -23,7 +23,9 @@ import {
   Zap,
   ShieldCheck,
   RefreshCw,
-  Trash2
+  Trash2,
+  Send,
+  Mail
 } from 'lucide-react';
 import {
   BarChart,
@@ -39,9 +41,12 @@ import {
   getVisionAnalyticsRecords,
   calculateDailyVisionSummary,
   exportVisionAnalyticsCSV,
-  clearVisionAnalyticsHistory
+  clearVisionAnalyticsHistory,
+  generateVisionAnalyticsReport
 } from '../../services/visionAnalyticsService';
-import { PetVisionAnalyticsRecord } from '../../types';
+import { sendVisionAnalyticsReport } from '../../services/emailService';
+import { PetVisionAnalyticsRecord, Pet } from '../../types';
+import { useAppContext } from '../../hooks/useAppContext';
 
 interface VisionAnalyticsModalProps {
   isOpen: boolean;
@@ -60,8 +65,10 @@ export const VisionAnalyticsModal: React.FC<VisionAnalyticsModalProps> = ({
   petSpecies = 'Canine (Dog)',
   onRunImmediateScan
 }) => {
+  const { pets, showToast } = useAppContext();
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedRecord, setSelectedRecord] = useState<PetVisionAnalyticsRecord | null>(null);
+  const [isSendingReport, setIsSendingReport] = useState(false);
 
   const summary = useMemo(() => {
     return calculateDailyVisionSummary(petId);
@@ -89,6 +96,35 @@ export const VisionAnalyticsModal: React.FC<VisionAnalyticsModalProps> = ({
     if (confirm('Clear local vision telemetry history for this station?')) {
       clearVisionAnalyticsHistory();
       setRefreshKey((prev) => prev + 1);
+    }
+  };
+
+  const handleSendToOwner = async () => {
+    const pet = pets.find(p => p.id === petId);
+    if (!pet || !pet.ownerEmail) {
+      showToast('error', 'No Owner Email', 'Pet owner email not found. Please update pet profile.');
+      return;
+    }
+
+    setIsSendingReport(true);
+    try {
+      const reportHTML = generateVisionAnalyticsReport(petId, petName);
+      const result = await sendVisionAnalyticsReport(
+        pet.ownerEmail,
+        pet.ownerName,
+        petName,
+        reportHTML
+      );
+
+      if (result.success) {
+        showToast('success', 'Report Sent', `Vision analytics report sent to ${pet.ownerName} (${pet.ownerEmail})`);
+      } else {
+        showToast('error', 'Send Failed', result.message);
+      }
+    } catch (error) {
+      showToast('error', 'Send Failed', 'Failed to send vision analytics report. Please try again.');
+    } finally {
+      setIsSendingReport(false);
     }
   };
 
@@ -124,6 +160,19 @@ export const VisionAnalyticsModal: React.FC<VisionAnalyticsModalProps> = ({
             >
               <Download className="w-4 h-4 text-sky-400" />
               <span className="hidden sm:inline">Export CSV</span>
+            </button>
+            <button
+              onClick={handleSendToOwner}
+              disabled={isSendingReport}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer text-xs font-bold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Send report to pet owner"
+            >
+              {isSendingReport ? (
+                <RefreshCw className="w-4 h-4 text-emerald-400 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 text-emerald-400" />
+              )}
+              <span className="hidden sm:inline">{isSendingReport ? 'Sending...' : 'Send to Owner'}</span>
             </button>
             <button
               onClick={onClose}

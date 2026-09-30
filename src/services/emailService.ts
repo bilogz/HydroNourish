@@ -11,6 +11,51 @@ import { supabase } from '../lib/supabase';
 export const SYSTEM_NAME = 'HydroNourish';
 export const SYSTEM_OTP_SENDER_EMAIL = 'heritagelink45@gmail.com';
 
+/**
+ * Send Vision Analytics Report to Pet Owner
+ */
+export async function sendVisionAnalyticsReport(
+  recipientEmail: string,
+  ownerName: string,
+  petName: string,
+  reportHTML: string
+): Promise<EmailDispatchResult> {
+  const subject = `📊 Vision Analytics Report - ${petName} - ${new Date().toLocaleDateString()}`;
+  
+  try {
+    const response = await fetch('/api/send-vision-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: recipientEmail,
+        name: ownerName,
+        petName: petName,
+        subject: subject,
+        htmlContent: reportHTML,
+      }),
+    });
+
+    if (response.ok) {
+      return {
+        success: true,
+        message: `Vision analytics report sent to ${recipientEmail}`,
+        sender: SYSTEM_OTP_SENDER_EMAIL,
+      };
+    } else {
+      throw new Error('Failed to send vision report via API');
+    }
+  } catch (err) {
+    console.error('Error sending vision analytics report:', err);
+    return {
+      success: false,
+      message: `Failed to send vision analytics report to ${recipientEmail}`,
+      sender: SYSTEM_OTP_SENDER_EMAIL,
+      hasError: true,
+      errorMessage: err instanceof Error ? err.message : 'Unknown error'
+    };
+  }
+}
+
 export interface EmailDispatchResult {
   success: boolean;
   message: string;

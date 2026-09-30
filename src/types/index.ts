@@ -141,6 +141,7 @@ export interface Device {
   isCleaningRinse?: boolean;
   autoRefillEnabled?: boolean;
   autoFlushEnabled?: boolean;
+  autoSprayEnabled?: boolean;
   isPumpDeactivated?: boolean;
   sanitationStatus?: 'idle' | 'pet_eating' | 'rinsing_water' | 'draining_19w' | 'completed' | 'aborted_pet_returned';
   foodGateOpen?: boolean;

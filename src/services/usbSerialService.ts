@@ -42,6 +42,7 @@ export interface USBTelemetry {
   lastIntakeFoodGrams?: number;
   lastIntakeWaterMl?: number;
   autoFlush?: boolean;
+  autoSpray?: boolean;
   offlineMode?: boolean;
 }
 
@@ -513,6 +514,11 @@ class USBSerialService {
   public async toggleAutoFlush(enabled?: boolean): Promise<boolean> {
     await this.sendRaw(enabled ? 'AUTO_FLUSH ON' : 'AUTO_FLUSH OFF');
     return this.sendCommand({ action: 'auto_flush', enabled });
+  }
+
+  public async toggleAutoSpray(enabled?: boolean): Promise<boolean> {
+    await this.sendRaw(enabled ? 'AUTO_SPRAY ON' : 'AUTO_SPRAY OFF');
+    return this.sendCommand({ action: 'auto_spray', enabled });
   }
 
   public async togglePumpMaster(locked?: boolean): Promise<boolean> {

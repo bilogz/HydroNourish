@@ -260,6 +260,7 @@ const TARE_LOCK_MS = 4000;
 const CAL_LOCK_MS = 6000;
 
 const roundGrams = (grams: number) => Math.max(0, Math.round(grams * 10) / 10);
+const roundMl = (ml: number) => Math.max(0, Math.round(ml));
 
 /** Keep dashboard bowl weight in lock-step with the ESP32 published value without 0.1g flicker. */
 const stabilizeBowlWeight = (
@@ -278,6 +279,26 @@ const stabilizeBowlWeight = (
   }
   if (delta < 0.4) return previous;
   if (delta < 2.5) return roundGrams(previous * 0.72 + next * 0.28);
+  return next;
+};
+
+/** Keep dashboard water volume stable without flickering. Similar to stabilizeBowlWeight but for ml. */
+const stabilizeWaterVolume = (
+  previous: number | undefined,
+  incoming: number | undefined,
+  options?: { force?: boolean; isPumping?: boolean }
+): number | undefined => {
+  if (typeof incoming !== 'number' || Number.isNaN(incoming)) return previous;
+  const next = roundMl(incoming);
+  if (options?.force || previous === undefined) return next;
+  const delta = Math.abs(next - previous);
+  if (next === 0 && previous <= 5) return 0;
+  if (options?.isPumping) {
+    if (delta < 2) return previous;
+    return next;
+  }
+  if (delta < 1) return previous;
+  if (delta < 10) return roundMl(previous * 0.75 + next * 0.25);
   return next;
 };
 
@@ -324,10 +345,14 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
         if (prev.waterScaleReady !== undefined) merged.waterScaleReady = prev.waterScaleReady;
         if (prev.foodLevelPct !== undefined) merged.foodLevelPct = prev.foodLevelPct;
         if (prev.wifiSignalDbm !== undefined && prev.wifiSignalDbm !== -60) merged.wifiSignalDbm = prev.wifiSignalDbm;
+        if (prev.autoFlushEnabled !== undefined) merged.autoFlushEnabled = prev.autoFlushEnabled;
+        if (prev.autoSprayEnabled !== undefined) merged.autoSprayEnabled = prev.autoSprayEnabled;
       }
 
       // 1. Check local storage preference for auto-refill
       const savedAuto = typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_refill_${d.id}`) : null;
+      const savedAutoFlush = typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_flush_${d.id}`) : null;
+      const savedAutoSpray = typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_spray_${d.id}`) : null;
       // 2. Check pending user overrides (within 30 seconds for manual gate, 15 seconds for others)
       const override = pendingUserOverrides.get(d.id);
       const hasRecentAutoOverride = override && override.autoRefillEnabled !== undefined && (now - override.time < 15000);
@@ -338,6 +363,14 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
         merged.autoRefillEnabled = override.autoRefillEnabled;
       } else if (savedAuto !== null) {
         merged.autoRefillEnabled = savedAuto === '1';
+      }
+
+      if (savedAutoFlush !== null) {
+        merged.autoFlushEnabled = savedAutoFlush === '1';
+      }
+
+      if (savedAutoSpray !== null) {
+        merged.autoSprayEnabled = savedAutoSpray === '1';
       }
 
       if (hasRecentPumpOverride) {
@@ -373,9 +406,21 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
         merged.waterMl = 0;
         merged.waterLiters = 0;
         merged.waterLevelPct = 0;
-      } else {
-        if (d.waterMl !== undefined) merged.waterMl = d.waterMl;
-        if (d.waterLiters !== undefined) merged.waterLiters = d.waterLiters;
+      } else if (isLiveStreaming && isCloudIncoming) {
+        merged.waterMl = prev.waterMl;
+        merged.waterLiters = prev.waterLiters;
+        merged.waterLevelPct = prev.waterLevelPct;
+      } else if (d.waterMl !== undefined) {
+        const forceCal = Boolean(tareLock?.calWater && (now - tareLock.calWater) < CAL_LOCK_MS);
+        merged.waterMl = stabilizeWaterVolume(prev.waterMl, d.waterMl, {
+          force: forceCal,
+          isPumping: merged.isPumping,
+        });
+        if (merged.waterMl !== undefined) {
+          merged.waterLiters = Number((merged.waterMl / 1000).toFixed(2));
+          const capacity = d.reservoirCapacityMl || 2500;
+          merged.waterLevelPct = Math.min(100, Math.max(0, Math.round((merged.waterMl / capacity) * 100)));
+        }
       }
 
       // Preserve Gate Open Angle (NVS configuration)
@@ -689,6 +734,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     force: Boolean(lanTareLock?.calFood && (lanNow - lanTareLock.calFood) < CAL_LOCK_MS),
                   });
                 }
+                let lanWaterMl = rawWaterMl;
+                if (lanTareLock?.water && (lanNow - lanTareLock.water) < TARE_LOCK_MS) {
+                  lanWaterMl = 0;
+                } else {
+                  lanWaterMl = stabilizeWaterVolume(prevMatch?.waterMl, rawWaterMl, {
+                    force: Boolean(lanTareLock?.calWater && (lanNow - lanTareLock.calWater) < CAL_LOCK_MS),
+                    isPumping: data.isPumping !== undefined ? Boolean(data.isPumping) : (data.pump_active !== undefined ? Boolean(data.pump_active) : false),
+                  });
+                }
                 const updatedFields: Partial<Device> = {
                   status: 'Online',
                   lastTransmission: 'Live — Wi-Fi LAN',
@@ -699,9 +753,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   foodBowlWeightGrams: lanWeight,
                   scaleReady: rawScaleReady !== undefined ? Boolean(rawScaleReady) : undefined,
                   foodLevelPct: rawFoodLevel,
-                  waterLevelPct: rawWaterLevel,
-                  waterMl: rawWaterMl,
-                  waterLiters: rawWaterMl !== undefined ? Number((rawWaterMl / 1000).toFixed(2)) : undefined,
+                  waterLevelPct: lanWaterMl !== undefined ? Math.min(100, Math.max(0, Math.round((lanWaterMl / (prevMatch?.reservoirCapacityMl || 2500)) * 100))) : rawWaterLevel,
+                  waterMl: lanWaterMl,
+                  waterLiters: lanWaterMl !== undefined ? Number((lanWaterMl / 1000).toFixed(2)) : undefined,
                   waterScaleReady: rawWaterScaleReady !== undefined ? Boolean(rawWaterScaleReady) : undefined,
                   waterQualityPpm: rawTds,
                   isPumping: data.isPumping !== undefined ? Boolean(data.isPumping) : (data.pump_active !== undefined ? Boolean(data.pump_active) : false),
@@ -727,14 +781,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     scaleReady: rawScaleReady !== undefined ? Boolean(rawScaleReady) : true,
                     lastIntakeFoodGrams: 0,
                     foodLevelPct: rawFoodLevel ?? 85,
-                    waterLevelPct: rawWaterLevel ?? 80,
-                    waterMl: rawWaterMl ?? 150,
-                    waterLiters: rawWaterMl !== undefined ? Number((rawWaterMl / 1000).toFixed(2)) : 0.15,
+                    waterLevelPct: lanWaterMl !== undefined ? Math.min(100, Math.max(0, Math.round((lanWaterMl / 2500) * 100))) : (rawWaterLevel ?? 80),
+                    waterMl: lanWaterMl ?? 150,
+                    waterLiters: lanWaterMl !== undefined ? Number((lanWaterMl / 1000).toFixed(2)) : 0.15,
                     waterScaleReady: rawWaterScaleReady !== undefined ? Boolean(rawWaterScaleReady) : true,
                     waterQualityPpm: rawTds ?? 120,
                     isPumping: data.isPumping !== undefined ? Boolean(data.isPumping) : (data.pump_active !== undefined ? Boolean(data.pump_active) : false),
                     autoRefillEnabled: data.autoRefill !== undefined ? Boolean(data.autoRefill) : (data.auto_refill_enabled !== undefined ? Boolean(data.auto_refill_enabled) : true),
                     autoFlushEnabled: true,
+                    autoSprayEnabled: true,
                     gateOpenDeg: 90,
                     foodGateOpen: data.foodGateOpen !== undefined ? Boolean(data.foodGateOpen) : (data.food_gate_open !== undefined ? Boolean(data.food_gate_open) : false),
                     currentServoAngle: typeof data.currentServoAngle === 'number' ? data.currentServoAngle : (typeof data.current_servo_angle === 'number' ? data.current_servo_angle : 0),
@@ -801,13 +856,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (usbTareLock?.water && (usbNow - usbTareLock.water) < TARE_LOCK_MS) {
                 stabilizedWaterMl = 0;
               } else {
-                stabilizedWaterMl = typeof telemetry.waterMl === 'number'
+                const incomingWaterMl = typeof telemetry.waterMl === 'number'
                   ? telemetry.waterMl
                   : (typeof telemetry.waterLiters === 'number'
                       ? Math.round(telemetry.waterLiters * 1000)
                       : (typeof telemetry.waterLevel === 'number'
                           ? Math.round((telemetry.waterLevel / 100) * (d.reservoirCapacityMl || 2500))
                           : d.waterMl));
+                stabilizedWaterMl = stabilizeWaterVolume(
+                  d.waterMl,
+                  incomingWaterMl,
+                  {
+                    force: Boolean(usbTareLock?.calWater && (usbNow - usbTareLock.calWater) < CAL_LOCK_MS),
+                    isPumping: telemetry.isPumping !== undefined ? telemetry.isPumping : d.isPumping,
+                  }
+                );
               }
 
               const updatedDev: Device = {
@@ -827,6 +890,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 waterQualityPpm: typeof telemetry.tds === 'number' ? telemetry.tds : d.waterQualityPpm,
                 isPumping: telemetry.isPumping !== undefined ? telemetry.isPumping : d.isPumping,
                 autoRefillEnabled: telemetry.autoRefill !== undefined ? telemetry.autoRefill : d.autoRefillEnabled,
+                autoFlushEnabled: typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_flush_${targetId}`) !== '0' : true,
+                autoSprayEnabled: typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_spray_${targetId}`) !== '0' : true,
                 gateOpenDeg: typeof telemetry.gateOpenDeg === 'number' ? telemetry.gateOpenDeg : d.gateOpenDeg,
                 foodGateOpen: telemetry.foodGateOpen !== undefined ? telemetry.foodGateOpen : d.foodGateOpen,
                 currentServoAngle: typeof telemetry.currentServoAngle === 'number' ? telemetry.currentServoAngle : d.currentServoAngle,
@@ -882,8 +947,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastIntakeFoodGrams: typeof telemetry.lastIntakeFoodGrams === 'number' ? telemetry.lastIntakeFoodGrams : 0,
           foodLevelPct: typeof telemetry.foodLevel === 'number' ? telemetry.foodLevel : 85,
           waterLevelPct: typeof telemetry.waterLevel === 'number' ? telemetry.waterLevel : 80,
-          waterMl: typeof telemetry.waterMl === 'number' ? telemetry.waterMl : 150,
-          waterLiters: 0.15,
+          waterMl: typeof telemetry.waterMl === 'number' ? roundMl(telemetry.waterMl) : 150,
+          waterLiters: typeof telemetry.waterMl === 'number' ? Number((roundMl(telemetry.waterMl) / 1000).toFixed(2)) : 0.15,
           waterScaleReady: telemetry.waterScaleReady !== undefined ? telemetry.waterScaleReady : true,
           waterQualityPpm: typeof telemetry.tds === 'number' ? telemetry.tds : 120,
           isPumping: telemetry.isPumping !== undefined ? telemetry.isPumping : false,
@@ -2559,6 +2624,43 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     );
   };
 
+  const toggleAutoSprayDirect = async (deviceId: string, enable?: boolean) => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const savedAuto = typeof window !== 'undefined' ? localStorage.getItem(`hn_auto_spray_${deviceId}`) : null;
+    const isCurrentlyOn = savedAuto !== null ? savedAuto === '1' : Boolean(dev?.autoSprayEnabled ?? true);
+    const shouldEnable = enable !== undefined ? enable : !isCurrentlyOn;
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`hn_auto_spray_${deviceId}`, shouldEnable ? '1' : '0');
+      window.dispatchEvent(new CustomEvent('hn-auto-spray-changed', { detail: { deviceId, enabled: shouldEnable } }));
+    }
+
+    const sprayPath = `/api/auto-spray?enabled=${shouldEnable ? '1' : '0'}`;
+    dispatchFastDeviceCommand(deviceId, sprayPath, {
+      method: 'GET',
+      usbAction: () => usbSerialService.toggleAutoSpray(shouldEnable),
+    });
+
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId
+          ? {
+              ...d,
+              autoSprayEnabled: shouldEnable,
+            }
+          : d
+      )
+    );
+
+    showToast(
+      shouldEnable ? 'success' : 'info',
+      shouldEnable ? '🚿 Auto-Spray Enabled' : '⏸️ Auto-Spray Disabled',
+      shouldEnable
+        ? `Node ${deviceId} will automatically spray after 30m no-pet or 2m after eating.`
+        : `Automated spray cleaning turned OFF for node ${deviceId}. Manual spray remains available.`
+    );
+  };
+
   const togglePumpMasterDirect = async (deviceId: string) => {
     const dev = (devices ?? []).find((d) => d.id === deviceId);
     
@@ -3185,6 +3287,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         runBowlSanitationCycle,
         toggleAutoRefillDirect,
         toggleAutoFlushDirect,
+        toggleAutoSprayDirect,
         togglePumpMasterDirect,
         deactivatePumpDirect,
         refillWater,
