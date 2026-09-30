@@ -79,15 +79,15 @@ export interface PetDetectionResult {
 
 // â”€â”€â”€ Per-class confidence thresholds â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const CLASS_CONFIDENCE: Record<string, number> = {
-  cat:         0.52,
-  dog:         0.50,
+  cat:         0.28,
+  dog:         0.28,
   person:      0.48,
-  bowl:        0.22,
-  cup:         0.22,
+  bowl:        0.20,
+  cup:         0.20,
   plate:       0.20,
   sink:        0.20,
   frisbee:     0.20,
-  bottle:      0.22,
+  bottle:      0.20,
   'dining table': 0.20,
 };
 
@@ -229,10 +229,9 @@ export async function detectPetRealTime(
   const defaultSpecies = petContext?.species || 'Canine / Feline';
   const speciesLower  = (petContext?.species || '').toLowerCase();
 
-  const targetClasses = new Set<string>();
-  if (speciesLower.includes('cat') || speciesLower.includes('feline'))      targetClasses.add('cat');
-  else if (speciesLower.includes('dog') || speciesLower.includes('canine')) targetClasses.add('dog');
-  else { targetClasses.add('cat'); targetClasses.add('dog'); }
+  const targetClasses = new Set<string>([
+    'dog', 'cat', 'bear', 'teddy bear', 'sheep', 'bird', 'horse'
+  ]);
 
   const defaultFoodBowlBox:  PetBoundingBox = { top: 70, left: 16, width: 22, height: 20 };
   const defaultWaterBowlBox: PetBoundingBox = { top: 70, left: 62, width: 22, height: 20 };
@@ -269,9 +268,9 @@ export async function detectPetRealTime(
     );
     const isHumanPresent = Boolean(humanPrediction);
 
-    // Require higher pet confidence when a human is in frame
-    const basePetThreshold = CLASS_CONFIDENCE[speciesLower.includes('cat') ? 'cat' : 'dog'] ?? 0.52;
-    const requiredPetScore = isHumanPresent ? Math.max(0.72, basePetThreshold) : basePetThreshold;
+    // Adaptive pet detection threshold (responsive to low lighting and camera compression)
+    const basePetThreshold = isHumanPresent ? 0.38 : 0.28;
+    const requiredPetScore = basePetThreshold;
 
     // â”€â”€ Pet predictions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const petPredictions = predictions

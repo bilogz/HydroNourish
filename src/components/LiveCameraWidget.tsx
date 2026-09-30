@@ -46,7 +46,8 @@ import {
   Clock,
   Utensils,
   Droplets,
-  PowerOff
+  PowerOff,
+  Dog,
 } from 'lucide-react';
 import { Device, AIControlMode, CameraSourceType, VisionActionRecommendation } from '../types';
 import { analyzePetVisionScan, PetVisionScanResult, extractFrameBase64 } from '../services/aiService';
@@ -359,16 +360,16 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const [scanTick, setScanTick] = useState(0);
 
   // Dynamic Live Smart Bowl Detection State (Food Bowl)
-  const [isBowlDetected, setIsBowlDetected] = useState(true);
+  const [isBowlDetected, setIsBowlDetected] = useState(false);
   const [bowlConfidence, setBowlConfidence] = useState(95);
   const [bowlStatus, setBowlStatus] = useState('Smart Food Bowl (Calibrated)');
-  const [bowlBoxPosition, setBowlBoxPosition] = useState({ top: 54, left: 16, width: 38, height: 38 });
+  const [bowlBoxPosition, setBowlBoxPosition] = useState({ top: 70, left: 16, width: 22, height: 20 });
 
   // Dynamic Live Water Fountain Detection State
-  const [isWaterBowlDetected, setIsWaterBowlDetected] = useState(true);
+  const [isWaterBowlDetected, setIsWaterBowlDetected] = useState(false);
   const [waterBowlConfidence, setWaterBowlConfidence] = useState(93);
   const [waterBowlStatus, setWaterBowlStatus] = useState('Water Fountain (Calibrated)');
-  const [waterBowlBoxPosition, setWaterBowlBoxPosition] = useState({ top: 54, left: 56, width: 36, height: 38 });
+  const [waterBowlBoxPosition, setWaterBowlBoxPosition] = useState({ top: 70, left: 62, width: 22, height: 20 });
 
   // Spatial Proximity & Cyber Rangefinder State
   const [petDistanceToFoodBowlCm, setPetDistanceToFoodBowlCm] = useState(65);
@@ -398,9 +399,29 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
   const petName = petContext?.name || 'Max';
   const petSpecies = petContext?.species || 'Canine (Dog)';
 
+  const currentDev = (devices || []).find((d) => d.id === (device?.id || 'HN-NODE-F778')) || device;
+  const isPetEating = Boolean(
+    currentDev?.petEatingActive ||
+    (currentDev as any)?.isPetEating ||
+    (isPetDetected && (trackingActivity === 'Feeding at Smart Bowl' || headPosture === 'Head In Bowl')) ||
+    (eatingSessionSeconds > 0)
+  );
+  const isPetPresentAtBowl = Boolean(
+    isPetEating ||
+    (isPetDetected && (
+      petDistanceToFoodBowlCm <= 40 ||
+      trackingActivity === 'Feeding at Smart Bowl' ||
+      trackingActivity === 'Approaching Station' ||
+      headPosture === 'Head In Bowl' ||
+      headPosture === 'Lowered Toward Bowl' ||
+      petWantsToEat
+    ))
+  );
+
   // ── Real-Time Neural Edge Pet Detection Loop (TensorFlow.js COCO-SSD) ────────
   const isDetectingRef = useRef(false);
   const consecutivePetFramesRef = useRef(0);
+  const consecutiveMissingFramesRef = useRef(0);
   const lastFeedingToastTimeRef = useRef(0);
   const aiControlModeRef = useRef(aiControlMode);
   useEffect(() => {
@@ -468,6 +489,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
         setProximityStatus(result.proximityStatus || 'Distant (> 50cm)');
 
         if (result.hasPet) {
+          consecutiveMissingFramesRef.current = 0;
           setIsPetDetected(true);
           setBoxPosition(result.boundingBox);
           setTrackingConfidence(result.score);
@@ -539,22 +561,27 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             setPetDrinkingDirect(targetDeviceId, true);
           }
         } else {
-          // Strictly reset consecutive detection frames to 0 when no pet is in frame
+          // Reset consecutive pet frames, increment missing frames counter
           consecutivePetFramesRef.current = 0;
-          setIsPetDetected(false);
-          setTrackingConfidence(0);
-          setPetWantsToEat(false);
-          setEatingIntentScore(0);
-          if (activeDev?.petEatingActive) {
-            setPetEatingDirect(targetDeviceId, false);
-          }
-          if (activeDev?.petDrinkingActive) {
-            setPetDrinkingDirect(targetDeviceId, false);
-          }
-          if (result.isHumanPresent) {
-            setTrackingActivity('Human Caregiver in View' as any);
-          } else {
-            setTrackingActivity('Resting near Dispenser');
+          consecutiveMissingFramesRef.current = (consecutiveMissingFramesRef.current || 0) + 1;
+
+          // Only clear detection after missing for at least 2 consecutive scan frames (~2.4s) to eliminate frame flicker
+          if (consecutiveMissingFramesRef.current >= 2) {
+            setIsPetDetected(false);
+            setTrackingConfidence(0);
+            setPetWantsToEat(false);
+            setEatingIntentScore(0);
+            if (activeDev?.petEatingActive && consecutiveMissingFramesRef.current >= 4) {
+              setPetEatingDirect(targetDeviceId, false);
+            }
+            if (activeDev?.petDrinkingActive && consecutiveMissingFramesRef.current >= 4) {
+              setPetDrinkingDirect(targetDeviceId, false);
+            }
+            if (result.isHumanPresent) {
+              setTrackingActivity('Human Caregiver in View' as any);
+            } else {
+              setTrackingActivity('Resting near Dispenser');
+            }
           }
 
           // Automated safety close: If gate was auto-opened and pet stepped away for > 5s, close gate
@@ -2356,7 +2383,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                 <div className="absolute -bottom-1.5 -right-1.5 w-4 h-4 border-b-2 border-r-2 border-emerald-300" />
 
                 {/* Top Label Badge */}
-                <div className="absolute -top-7 left-0 flex items-center gap-1.5">
+                <div className="absolute -top-7 left-0 flex items-center gap-1.5 flex-wrap">
                   <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-[10px] px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-lg tracking-wide uppercase backdrop-blur-md">
                     <Utensils className="w-3 h-3 text-emerald-200" />
                     <span>🥣 FOOD BOWL</span>
@@ -2364,6 +2391,12 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                       {bowlConfidence}%
                     </span>
                   </div>
+
+                  {isPetPresentAtBowl && (
+                    <div className="bg-emerald-500 text-slate-950 font-black text-[9px] px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-md uppercase tracking-wider animate-pulse">
+                      <span>🐾 PET PRESENT</span>
+                    </div>
+                  )}
 
                   {(() => {
                     const activeDev = (devices || []).find((d) => d.id === (device?.id || 'HN-NODE-F778')) || device;
@@ -2383,7 +2416,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
 
                 <div className="absolute bottom-1 right-1 bg-slate-950/85 border border-emerald-400/40 text-emerald-300 font-bold text-[8px] px-1.5 py-0.5 rounded-md flex items-center gap-1 font-mono pointer-events-none">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span>{bowlStatus}</span>
+                  <span>{isPetPresentAtBowl ? (isPetEating ? '🐾 PET EATING AT BOWL' : '🐾 PET PRESENT AT BOWL') : bowlStatus}</span>
                 </div>
               </div>
             )}
@@ -2490,7 +2523,8 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             )}
 
             {/* 4. STANDBY SEARCHING NOTICE */}
-            {!isPetDetected && !isBowlDetected && !isWaterBowlDetected && (
+            {/* 4. STANDBY SEARCHING NOTICE */}
+            {!isPetDetected && !isPetPresentAtBowl && !isBowlDetected && !isWaterBowlDetected && (
               <div className="absolute inset-8 sm:inset-12 border border-dashed border-rose-500/20 rounded-3xl pointer-events-none flex items-center justify-center">
                 <div className="text-center space-y-1 bg-slate-950/70 px-4 py-2.5 rounded-2xl border border-slate-800/80 backdrop-blur-xs shadow-xl">
                   <p className="text-[11px] font-mono text-slate-300 font-bold flex items-center justify-center gap-1.5">
@@ -2505,23 +2539,64 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             {/* Top OSD Bar */}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="bg-slate-950/85 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-700/60 text-[10px] font-mono text-slate-200 flex items-center gap-2 shadow-lg flex-wrap">
-                <span className={`w-2 h-2 rounded-full ${isPetDetected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400 animate-pulse'}`}></span>
-                <span className={isPetDetected ? 'text-emerald-300 font-bold' : 'text-slate-300'}>
-                  {isPetDetected 
-                    ? `🐾 PET: ${petName.toUpperCase()} LOCKED (${trackingConfidence}%)`
+                <span className="relative flex h-2 w-2 items-center justify-center shrink-0">
+                  {(isPetPresentAtBowl || isPetDetected) && (
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                      isPetPresentAtBowl ? 'bg-emerald-400' : 'bg-teal-400'
+                    }`} />
+                  )}
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                    isPetPresentAtBowl
+                      ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]'
+                      : isPetDetected
+                      ? 'bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.9)]'
+                      : 'bg-amber-400 animate-pulse shadow-[0_0_6px_rgba(251,191,36,0.7)]'
+                  }`} />
+                </span>
+                <span className={
+                  isPetPresentAtBowl
+                    ? 'text-emerald-300 font-extrabold'
+                    : isPetDetected
+                    ? 'text-teal-300 font-bold'
+                    : 'text-slate-300'
+                }>
+                  {isPetPresentAtBowl
+                    ? (isPetEating || currentDev?.petEatingActive || trackingActivity === 'Feeding at Smart Bowl')
+                      ? `🐾 PET AT BOWL: ${petName.toUpperCase()} (EATING${trackingConfidence > 0 ? ` · ${trackingConfidence}%` : ''})`
+                      : `🐾 PET PRESENT AT BOWL: ${petName.toUpperCase()}${trackingConfidence > 0 ? ` (${trackingConfidence}%)` : ''}`
+                    : isPetDetected 
+                    ? `🐾 PET IN VIEW: ${petName.toUpperCase()} (${trackingConfidence}%)`
                     : '🐾 PET: SCANNING...'}
                 </span>
                 <span className="text-slate-600 font-black">|</span>
-                <span className={`w-2 h-2 rounded-full ${isBowlDetected ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`}></span>
-                <span className={isBowlDetected ? 'text-emerald-300 font-bold' : 'text-slate-400'}>
-                  {isBowlDetected ? `🥣 FOOD: ${bowlConfidence}%` : '🥣 FOOD: STANDBY'}
+                <span className="relative flex h-2 w-2 items-center justify-center shrink-0">
+                  {(isBowlDetected || isPetPresentAtBowl) && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+                  )}
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                    (isBowlDetected || isPetPresentAtBowl) ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-slate-500'
+                  }`} />
+                </span>
+                <span className={(isBowlDetected || isPetPresentAtBowl) ? 'text-emerald-300 font-bold' : 'text-slate-400'}>
+                  {isPetPresentAtBowl
+                    ? `🥣 FOOD: PET PRESENT${bowlConfidence > 0 ? ` (${bowlConfidence}%)` : ''}`
+                    : isBowlDetected
+                    ? `🥣 FOOD: ${bowlConfidence}%`
+                    : '🥣 FOOD: STANDBY'}
                 </span>
                 <span className="text-slate-600 font-black">|</span>
-                <span className={`w-2 h-2 rounded-full ${isWaterBowlDetected ? 'bg-sky-400 animate-ping' : 'bg-slate-500'}`}></span>
+                <span className="relative flex h-2 w-2 items-center justify-center shrink-0">
+                  {isWaterBowlDetected && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-60" />
+                  )}
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                    isWaterBowlDetected ? 'bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.8)]' : 'bg-slate-500'
+                  }`} />
+                </span>
                 <span className={isWaterBowlDetected ? 'text-sky-300 font-bold' : 'text-slate-400'}>
                   {isWaterBowlDetected ? `💧 WATER: ${waterBowlConfidence}%` : '💧 WATER: STANDBY'}
                 </span>
-                {isPetDetected && (
+                {(isPetPresentAtBowl || isPetDetected) && (
                   <>
                     <span className="text-slate-600 font-black">|</span>
                     <span className="text-purple-300 font-bold">
@@ -2756,7 +2831,9 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               <div className="bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-300 flex items-center gap-1.5 shrink-0">
                 <Activity className="w-3 h-3 text-rose-400" />
                 <span>
-                  {isPetDetected 
+                  {isPetPresentAtBowl
+                    ? `OBSERVED: PET AT BOWL (${(isPetEating || currentDev?.petEatingActive) ? 'FEEDING' : 'PRESENT'})`
+                    : isPetDetected 
                     ? `OBSERVED: ${trackingActivity.toUpperCase()}`
                     : 'BOWL STATION: CLEAR'}
                 </span>
@@ -2843,6 +2920,55 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                 >
                   <Scan className="w-3 h-3" />
                   <span>{isPetDetected ? 'Clear Targets' : 'Detect Bowl & Pet'}</span>
+                </button>
+
+                {/* 1-Click Presence at Bowl Button */}
+                <button
+                  onClick={async () => {
+                    const targetDevId = device?.id || 'HN-NODE-F778';
+                    if (isPetPresentAtBowl) {
+                      // Reset / Clear Pet Presence
+                      setIsPetDetected(false);
+                      setTrackingConfidence(0);
+                      setPetWantsToEat(false);
+                      setEatingIntentScore(0);
+                      setEatingSessionSeconds(0);
+                      setFeedingCycleCount(1);
+                      setServoMeteringPhase('idle');
+                      setIs45sTimeoutActive(false);
+                      setPetDistanceToFoodBowlCm(65);
+                      setTrackingActivity('None Detected');
+                      setHeadPosture('Looking Away');
+                      await setPetEatingDirect(targetDevId, false);
+                      await closeGateDirect(targetDevId);
+                      showToast('info', 'Station Cleared', 'Pet left the bowl station. Optical scanner scanning...');
+                    } else {
+                      // Trigger Pet Present at Bowl
+                      setIsPetDetected(true);
+                      setTrackingConfidence(96);
+                      setBoxPosition({ top: 38, left: 18, width: 44, height: 48 });
+                      setTrackingActivity('Feeding at Smart Bowl');
+                      setHeadPosture('Head In Bowl');
+                      setPetDistanceToFoodBowlCm(12);
+                      setPetWantsToEat(true);
+                      setEatingIntentScore(97.5);
+                      setIsBowlDetected(true);
+                      setBowlBoxPosition({ top: 70, left: 16, width: 22, height: 20 });
+                      setBowlConfidence(95);
+                      setBowlStatus('Smart Food Bowl (Locked)');
+                      await setPetEatingDirect(targetDevId, true);
+                      showToast('success', '🐾 Pet Present at Bowl', `${petName} detected at the food bowl. Feeder station active!`);
+                    }
+                  }}
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 shadow-md cursor-pointer active:scale-95 ${
+                    isPetPresentAtBowl
+                      ? 'bg-emerald-600/90 hover:bg-emerald-500 text-white border-emerald-400/50 shadow-emerald-500/20 ring-1 ring-emerald-400/60'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                  }`}
+                  title="Toggle / Simulate Pet Present at Bowl"
+                >
+                  <Dog className="w-3 h-3 text-emerald-300" />
+                  <span>{isPetPresentAtBowl ? '🐾 Pet at Bowl (Present)' : '🐾 Test Pet at Bowl'}</span>
                 </button>
 
                 {/* Interactive Simulation: Wants to Eat toggle */}
