@@ -3529,9 +3529,19 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             <h4 className="font-extrabold text-base text-slate-100">
               ESP32-CAM Stream Standby
             </h4>
-            <p className="text-xs text-slate-400 max-w-md mt-1 mb-3">
-              Unable to reach camera stream at <code className="bg-slate-800 px-1.5 py-0.5 rounded text-rose-300 font-mono text-[11px]">{cleanIp}</code>. Let's get your camera stream online:
+            <p className="text-xs text-slate-400 max-w-md mt-1 mb-2">
+              Unable to reach camera stream at <code className="bg-slate-800 px-1.5 py-0.5 rounded text-rose-300 font-mono text-[11px]">{cleanIp}</code>.
             </p>
+
+            {typeof window !== 'undefined' && window.location.protocol === 'https:' && (
+              <div className="mb-3 px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-[11px] font-medium max-w-md text-left flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">HTTPS Mixed-Content Detected: </span>
+                  <span>Browsers block direct HTTP camera streams inside HTTPS pages. Click <strong>Open Stream in Tab</strong> or access this dashboard via <strong>http://{window.location.hostname}:3000</strong> on your local network.</span>
+                </div>
+              </div>
+            )}
 
             {/* Live Scan or Detection Status Feedback */}
             {detectedCamStatus && (
@@ -3581,7 +3591,21 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                 </div>
               </button>
 
-              {/* Option 3: Switch to Snapshot Mode */}
+              {/* Option 3: Direct Stream in New Tab */}
+              <a
+                href={currentStreamUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs flex items-center gap-2.5 cursor-pointer text-left transition-all"
+              >
+                <ExternalLink className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div>
+                  <div className="font-extrabold">Open Stream in Tab</div>
+                  <div className="text-[10px] text-slate-400 font-normal">Bypasses browser HTTPS blocks</div>
+                </div>
+              </a>
+
+              {/* Option 4: Switch to Snapshot Mode */}
               <button
                 type="button"
                 onClick={() => {
@@ -3594,20 +3618,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                 <Camera className="w-4 h-4 text-sky-400 shrink-0" />
                 <div>
                   <div className="font-extrabold">Try Snapshot Mode</div>
-                  <div className="text-[10px] text-slate-400 font-normal">Bypasses browser stream blocks</div>
-                </div>
-              </button>
-
-              {/* Option 4: Camera Studio / USB */}
-              <button
-                type="button"
-                onClick={() => setIsSetupStudioOpen(true)}
-                className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs flex items-center gap-2.5 cursor-pointer text-left transition-all"
-              >
-                <Sliders className="w-4 h-4 text-rose-400 shrink-0" />
-                <div>
-                  <div className="font-extrabold">USB & Camera Studio</div>
-                  <div className="text-[10px] text-slate-400 font-normal">Direct USB flash & diagnostics</div>
+                  <div className="text-[10px] text-slate-400 font-normal">Fast individual frame refresh</div>
                 </div>
               </button>
             </div>

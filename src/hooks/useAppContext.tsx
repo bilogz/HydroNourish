@@ -1963,6 +1963,19 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     const existingCal = pendingTares.get(deviceId) || {};
     pendingTares.set(deviceId, { ...existingCal, calFood: Date.now() });
 
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const calSch: FeedingSchedule = {
+      id: `SCH-CAL-${Date.now().toString().slice(-4)}`,
+      petId: dev?.assignedPetId || 'PET-001',
+      petName: dev?.assignedPetName || 'Max',
+      foodType: 'Calibrate Scale',
+      portionGrams: knownGrams || 100,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(calSch).catch(() => {});
+
     const query = knownGrams ? `known_grams=${knownGrams}` : `factor=${factor || 420.0}`;
     dispatchFastDeviceCommand(deviceId, `/api/scale/calibrate?${query}`, {
       usbAction: () => usbSerialService.calibrateScale(knownGrams, factor),
@@ -1993,7 +2006,7 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
         }
       } catch {}
     }
-    return null;
+    return dev?.foodBowlWeightGrams ?? null;
   };
 
   const dispenseWaterDirect = async (deviceId: string, durationMs: number = 10000) => {
@@ -2137,25 +2150,18 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
-    // Queue cloud command ONLY if device is not currently reachable via LAN or USB
-    // To prevent double execution (direct HTTP/USB + Supabase schedule polling)
-    const isUsb = usbSerialService.getIsConnected();
-    const devIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
-    const isDirectLan = Boolean(devIp && devIp !== '0.0.0.0');
-
-    if (!isUsb && !isDirectLan) {
-      const spraySch: FeedingSchedule = {
-        id: `SCH-SPRAY-${Date.now().toString().slice(-4)}`,
-        petId: dev?.assignedPetId || 'PET-001',
-        petName,
-        foodType: 'Spray Rinse',
-        portionGrams: durationMs,
-        scheduledTime: 'Instant Manual',
-        dispenseStatus: 'Pending',
-        deviceId,
-      };
-      insertScheduleToSupabase(spraySch).catch(() => {});
-    }
+    // Guaranteed Cloud Remote Actuation via Supabase (executes on hardware across all laptops/phones)
+    const spraySch: FeedingSchedule = {
+      id: `SCH-SPRAY-${Date.now().toString().slice(-4)}`,
+      petId: dev?.assignedPetId || 'PET-001',
+      petName,
+      foodType: 'Spray Rinse',
+      portionGrams: durationMs,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(spraySch).catch(() => {});
 
     dispatchFastDeviceCommand(deviceId, `/api/spray?duration=${durationMs}`, {
       usbAction: () => usbSerialService.dispenseCleaningWater(durationMs),
@@ -2192,24 +2198,18 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
       )
     );
 
-    // Queue cloud command ONLY if device is not currently reachable via LAN or USB
-    const isUsb = usbSerialService.getIsConnected();
-    const devIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
-    const isDirectLan = Boolean(devIp && devIp !== '0.0.0.0');
-
-    if (!isUsb && !isDirectLan) {
-      const drainSch: FeedingSchedule = {
-        id: `SCH-DRAIN-${Date.now().toString().slice(-4)}`,
-        petId: dev?.assignedPetId || 'PET-001',
-        petName,
-        foodType: 'Drain Pump',
-        portionGrams: durationMs,
-        scheduledTime: 'Instant Manual',
-        dispenseStatus: 'Pending',
-        deviceId,
-      };
-      insertScheduleToSupabase(drainSch).catch(() => {});
-    }
+    // Guaranteed Cloud Remote Actuation via Supabase
+    const drainSch: FeedingSchedule = {
+      id: `SCH-DRAIN-${Date.now().toString().slice(-4)}`,
+      petId: dev?.assignedPetId || 'PET-001',
+      petName,
+      foodType: 'Drain Pump',
+      portionGrams: durationMs,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(drainSch).catch(() => {});
 
     dispatchFastDeviceCommand(deviceId, `/api/drain?duration=${durationMs}`, {
       usbAction: () => usbSerialService.disposeWaste(durationMs),
@@ -2261,6 +2261,19 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
   };
 
   const invertDrainRelayDirect = async (deviceId: string): Promise<boolean> => {
+    const dev = (devices ?? []).find((d) => d.id === deviceId);
+    const invertSch: FeedingSchedule = {
+      id: `SCH-DRAININV-${Date.now().toString().slice(-4)}`,
+      petId: dev?.assignedPetId || 'PET-001',
+      petName: dev?.assignedPetName || 'Max',
+      foodType: 'Drain Invert',
+      portionGrams: 0,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(invertSch).catch(() => {});
+
     dispatchFastDeviceCommand(deviceId, '/api/drain/invert', {
       usbAction: () => usbSerialService.sendRaw('DRAIN INVERT'),
     });
@@ -2275,24 +2288,18 @@ const broadcastInquiryUpdate = (id: string, updates: Partial<ContactInquiry>) =>
     // Step 0: Ensure Food Gate is CLOSED before any water spray
     await closeGateDirect(deviceId);
 
-    // Queue autonomous hardware sanitation for remote ESP32 nodes ONLY if offline
-    const isUsb = usbSerialService.getIsConnected();
-    const devIp = dev?.ipAddress?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
-    const isDirectLan = Boolean(devIp && devIp !== '0.0.0.0');
-
-    if (!isUsb && !isDirectLan) {
-      const cleanSch: FeedingSchedule = {
-        id: `SCH-CLEAN-${Date.now().toString().slice(-4)}`,
-        petId: dev?.assignedPetId || 'PET-001',
-        petName,
-        foodType: 'Full Sanitation',
-        portionGrams: 24000,
-        scheduledTime: 'Instant Manual',
-        dispenseStatus: 'Pending',
-        deviceId,
-      };
-      insertScheduleToSupabase(cleanSch).catch(() => {});
-    }
+    // Guaranteed Cloud Remote Sanitation Cycle via Supabase
+    const cleanSch: FeedingSchedule = {
+      id: `SCH-CLEAN-${Date.now().toString().slice(-4)}`,
+      petId: dev?.assignedPetId || 'PET-001',
+      petName,
+      foodType: 'Full Sanitation',
+      portionGrams: 24000,
+      scheduledTime: 'Instant Manual',
+      dispenseStatus: 'Pending',
+      deviceId,
+    };
+    insertScheduleToSupabase(cleanSch).catch(() => {});
 
     showToast('info', '🔄 19-Second Sanitation Initiated', `Phase 1: Food gate closed & dispensing clean rinse water (GPIO 18 - 3s) for ${petName}...`);
 
