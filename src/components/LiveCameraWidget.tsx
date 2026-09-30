@@ -145,17 +145,24 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
 
   // Auto-discover camera IP from passed device prop or Supabase device telemetry
   const discoveredIp = React.useMemo(() => {
-    // 1. Check directly from the passed device prop (highest priority)
+    // 0. Check saved camera IP from localStorage (persists after Wi-Fi setup)
+    const cached = typeof window !== 'undefined' ? localStorage.getItem('hn_camera_ip') : null;
+
+    // 1. Check directly from the passed device prop (highest priority — this is Supabase data)
     if (device) {
       if (device.cameraIp && device.cameraIp.trim().length > 0) {
-        return device.cameraIp.trim();
+        const ip = device.cameraIp.trim();
+        if (ip !== '192.168.4.1' && ip !== '0.0.0.0') {
+          if (typeof window !== 'undefined') localStorage.setItem('hn_camera_ip', ip);
+          return ip;
+        }
       }
       if (device.firmwareVersion) {
         const match = device.firmwareVersion.match(/CAM:([0-9.]+)/i);
-        if (match && match[1]) return match[1].trim();
-      }
-      if (device.ipAddress && device.ipAddress.trim().length > 0) {
-        return device.ipAddress.trim();
+        if (match && match[1] && match[1] !== '192.168.4.1' && match[1] !== '0.0.0.0') {
+          if (typeof window !== 'undefined') localStorage.setItem('hn_camera_ip', match[1].trim());
+          return match[1].trim();
+        }
       }
     }
 
@@ -163,23 +170,33 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
     if (devices && devices.length > 0) {
       for (const d of devices) {
         if (d.cameraIp && d.cameraIp.trim().length > 0) {
-          return d.cameraIp.trim();
+          const ip = d.cameraIp.trim();
+          if (ip !== '192.168.4.1' && ip !== '0.0.0.0') {
+            if (typeof window !== 'undefined') localStorage.setItem('hn_camera_ip', ip);
+            return ip;
+          }
         }
         if (d.firmwareVersion) {
           const match = d.firmwareVersion.match(/CAM:([0-9.]+)/i);
-          if (match && match[1]) return match[1].trim();
-        }
-        if (d.ipAddress && d.ipAddress.trim().length > 0) {
-          return d.ipAddress.trim();
+          if (match && match[1] && match[1] !== '192.168.4.1' && match[1] !== '0.0.0.0') {
+            if (typeof window !== 'undefined') localStorage.setItem('hn_camera_ip', match[1].trim());
+            return match[1].trim();
+          }
         }
       }
+    }
+
+    // 3. localStorage cache — survives page refresh and Supabase delays after Wi-Fi setup
+    if (cached && cached.trim().length > 0 && cached !== '192.168.4.1' && cached !== '0.0.0.0') {
+      return cached.trim();
     }
 
     return defaultIp || '192.168.100.159';
   }, [device, devices, defaultIp]);
 
   const [cameraIp, setCameraIp] = useState<string>(() => {
-    return discoveredIp || defaultIp;
+    const cached = typeof window !== 'undefined' ? localStorage.getItem('hn_camera_ip') : null;
+    return discoveredIp || cached || defaultIp;
   });
 
   // Whenever a new camera IP is announced from Supabase, switch the stream immediately!
