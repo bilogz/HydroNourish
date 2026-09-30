@@ -299,17 +299,8 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
       // --- Calibration lock: suppress stale readings for CAL_LOCK_MS after calibrate ---
       if (tareLock?.food && (now - tareLock.food) < TARE_LOCK_MS) {
         merged.foodBowlWeightGrams = 0.0;
-      } else if (tareLock?.calFood && (now - tareLock.calFood) < CAL_LOCK_MS) {
-        // Keep whatever value firmware sends after calibration (pass-through, no deadband lock)
+      } else if (d.foodBowlWeightGrams !== undefined) {
         merged.foodBowlWeightGrams = d.foodBowlWeightGrams;
-      } else if (
-        prev.foodBowlWeightGrams !== undefined &&
-        d.foodBowlWeightGrams !== undefined &&
-        Math.abs(d.foodBowlWeightGrams - prev.foodBowlWeightGrams) < 0.25 &&
-        d.foodBowlWeightGrams > 0.5 &&
-        prev.foodBowlWeightGrams > 0.5
-      ) {
-        merged.foodBowlWeightGrams = prev.foodBowlWeightGrams;
       }
 
       // --- Water scale tare lock: force 0 for TARE_LOCK_MS after tare ---
@@ -317,17 +308,9 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
         merged.waterMl = 0;
         merged.waterLiters = 0;
         merged.waterLevelPct = 0;
-      } else if (tareLock?.calWater && (now - tareLock.calWater) < CAL_LOCK_MS) {
-        merged.waterMl = d.waterMl;
-        merged.waterLiters = d.waterLiters;
-      } else if (
-        prev.waterMl !== undefined &&
-        d.waterMl !== undefined &&
-        Math.abs(d.waterMl - prev.waterMl) < 2 &&
-        d.waterMl > 5 &&
-        prev.waterMl > 5
-      ) {
-        merged.waterMl = prev.waterMl;
+      } else {
+        if (d.waterMl !== undefined) merged.waterMl = d.waterMl;
+        if (d.waterLiters !== undefined) merged.waterLiters = d.waterLiters;
       }
 
       // Preserve Gate Open Angle (NVS configuration)
@@ -580,20 +563,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }, 1500);
 
-    // 📶 Autonomous Local LAN / Wi-Fi Standalone Poller (Every 2.5s)
+    // 📶 Autonomous Local LAN / Wi-Fi Standalone Poller (Every 1000ms)
     // Connects web app directly to ESP32 over Wi-Fi without requiring USB or cloud!
+    let activeLanHost: string | null = null;
     const lanPollInterval = setInterval(async () => {
       const savedIp = typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') : null;
-      const targets = [savedIp, 'hydronourish.local', 'hydronourish-feeder.local', '192.168.4.1'].filter(Boolean) as string[];
+      const targets = [activeLanHost, savedIp, 'hydronourish.local', '192.168.4.1'].filter(Boolean) as string[];
+      // Deduplicate targets
+      const uniqueTargets = Array.from(new Set(targets));
 
-      for (const host of targets) {
+      for (const host of uniqueTargets) {
         if (!host || host === 'Direct USB' || host === '0.0.0.0') continue;
         try {
           const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 1200);
+          const timer = setTimeout(() => ctrl.abort(), 800);
           const res = await fetch(`http://${host}/api/status`, { signal: ctrl.signal });
           clearTimeout(timer);
           if (res.ok) {
+            activeLanHost = host;
             const data = await res.json();
             if (data && (data.deviceId || data.success)) {
               if (typeof window !== 'undefined' && data.ip && data.ip !== '0.0.0.0') {
@@ -663,7 +650,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch {}
       }
-    }, 2500);
+    }, 1000);
 
     // Direct USB WebSerial Live Telemetry Wire
     const unsubUsb = usbSerialService.onTelemetry((telemetry) => {
@@ -681,41 +668,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               let stabilizedWeight: number | undefined;
               if (usbTareLock?.food && (usbNow - usbTareLock.food) < TARE_LOCK_MS) {
                 stabilizedWeight = 0.0;
-              } else if (usbTareLock?.calFood && (usbNow - usbTareLock.calFood) < CAL_LOCK_MS) {
-                // Calibration lock: pass firmware value through without deadband
-                stabilizedWeight = typeof telemetry.foodBowlWeightGrams === 'number' ? telemetry.foodBowlWeightGrams : d.foodBowlWeightGrams;
               } else {
-                const incomingWeight = typeof telemetry.foodBowlWeightGrams === 'number' ? telemetry.foodBowlWeightGrams : d.foodBowlWeightGrams;
-                stabilizedWeight = (
-                  d.foodBowlWeightGrams !== undefined &&
-                  incomingWeight !== undefined &&
-                  Math.abs(incomingWeight - d.foodBowlWeightGrams) < 0.25 &&
-                  incomingWeight > 0.5 &&
-                  d.foodBowlWeightGrams > 0.5
-                ) ? d.foodBowlWeightGrams : incomingWeight;
+                stabilizedWeight = typeof telemetry.foodBowlWeightGrams === 'number'
+                  ? telemetry.foodBowlWeightGrams
+                  : d.foodBowlWeightGrams;
               }
 
               // Water tare lock
               let stabilizedWaterMl: number | undefined;
               if (usbTareLock?.water && (usbNow - usbTareLock.water) < TARE_LOCK_MS) {
                 stabilizedWaterMl = 0;
-              } else if (usbTareLock?.calWater && (usbNow - usbTareLock.calWater) < CAL_LOCK_MS) {
-                stabilizedWaterMl = typeof telemetry.waterMl === 'number' ? telemetry.waterMl : d.waterMl;
               } else {
-                const rawWaterMl = typeof telemetry.waterMl === 'number'
+                stabilizedWaterMl = typeof telemetry.waterMl === 'number'
                   ? telemetry.waterMl
                   : (typeof telemetry.waterLiters === 'number'
                       ? Math.round(telemetry.waterLiters * 1000)
                       : (typeof telemetry.waterLevel === 'number'
                           ? Math.round((telemetry.waterLevel / 100) * (d.reservoirCapacityMl || 2500))
                           : d.waterMl));
-                stabilizedWaterMl = (
-                  d.waterMl !== undefined &&
-                  rawWaterMl !== undefined &&
-                  Math.abs(rawWaterMl - d.waterMl) < 2 &&
-                  rawWaterMl > 5 &&
-                  d.waterMl > 5
-                ) ? d.waterMl : rawWaterMl;
               }
 
               const updatedDev: Device = {

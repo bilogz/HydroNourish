@@ -42,6 +42,7 @@ export interface USBTelemetry {
   lastIntakeFoodGrams?: number;
   lastIntakeWaterMl?: number;
   autoFlush?: boolean;
+  offlineMode?: boolean;
 }
 
 export interface USBResponse {
@@ -223,12 +224,12 @@ class USBSerialService {
     this.stopTelemetryLoop();
     this.telemetryTimer = setInterval(() => {
       if (this.isConnected) {
-        // Query status/telemetry via USB serial every 1.8s so live scale & water levels update offline
+        // Query status/telemetry via USB serial every 500ms for responsive real-time scale display
         this.sendCommand({ action: 'status' }).catch(() => {});
       } else {
         this.stopTelemetryLoop();
       }
-    }, 1800);
+    }, 500);
   }
 
   private stopTelemetryLoop() {
@@ -588,6 +589,16 @@ class USBSerialService {
   public async setSimulatedWater(ml: number): Promise<boolean> {
     await this.sendRaw(`SETWATER:${ml}`);
     return this.sendCommand({ action: 'set_water', ml, waterMl: ml });
+  }
+
+  public async readScales(): Promise<boolean> {
+    await this.sendRaw('READ_SCALES');
+    return this.sendCommand({ action: 'read_scales' });
+  }
+
+  public async setOfflineMode(offline: boolean): Promise<boolean> {
+    await this.sendRaw(offline ? 'OFFLINE' : 'ONLINE');
+    return this.sendCommand({ action: offline ? 'offline' : 'online', enabled: offline });
   }
 }
 
