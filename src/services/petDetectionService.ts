@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ============================================================================
  * ENHANCED REAL-TIME NEURAL PET OBJECT DETECTION SERVICE (TensorFlow.js COCO-SSD)
  * ============================================================================
@@ -234,24 +234,21 @@ export async function detectPetRealTime(
   else if (speciesLower.includes('dog') || speciesLower.includes('canine')) targetClasses.add('dog');
   else { targetClasses.add('cat'); targetClasses.add('dog'); }
 
-  const defaultFoodBowlBox:  PetBoundingBox = { top: 54, left: 16, width: 38, height: 38 };
-  const defaultWaterBowlBox: PetBoundingBox = { top: 54, left: 56, width: 36, height: 38 };
+  const defaultFoodBowlBox:  PetBoundingBox = { top: 70, left: 16, width: 22, height: 20 };
+  const defaultWaterBowlBox: PetBoundingBox = { top: 70, left: 62, width: 22, height: 20 };
 
   const defaultEmptyResult: PetDetectionResult = {
     hasPet: false, detectedClass: 'none', label: 'None Detected', score: 0,
     boundingBox: { top: 20, left: 22, width: 56, height: 60 },
     headPosture: 'Looking Away', wantsToEat: false, eatingIntentScore: 0,
     activity: 'None Detected', isHumanPresent: false, rawPredictions: [],
-    isBowlDetected: true,      bowlBoundingBox: defaultFoodBowlBox,
-    bowlScore: 95,             bowlStatus: 'Smart Food Bowl (Calibrated)', hasFoodInBowl: false,
-    isWaterBowlDetected: true, waterBowlBoundingBox: defaultWaterBowlBox,
-    waterBowlScore: 93,        waterBowlStatus: 'Water Fountain (Calibrated)',
+    isBowlDetected: false,      bowlBoundingBox: defaultFoodBowlBox,
+    bowlScore: 0,              bowlStatus: 'Smart Food Bowl (Calibrated)', hasFoodInBowl: false,
+    isWaterBowlDetected: false, waterBowlBoundingBox: defaultWaterBowlBox,
+    waterBowlScore: 0,         waterBowlStatus: 'Water Fountain (Calibrated)',
     petDistanceToFoodBowlCm: 65, petDistanceToWaterBowlCm: 70,
     proximityStatus: 'Distant (> 50cm)',
-    detectedObjects: [
-      { id: 'food-bowl-cal',  type: 'food_bowl',  label: 'Smart Food Bowl', confidence: 95, boundingBox: defaultFoodBowlBox,  color: '#10b981', status: 'Calibrated Station' },
-      { id: 'water-bowl-cal', type: 'water_bowl', label: 'Water Fountain',  confidence: 93, boundingBox: defaultWaterBowlBox, color: '#06b6d4', status: 'Calibrated Station' }
-    ]
+    detectedObjects: []
   };
 
   const model = await getPetDetectionModel();
@@ -321,17 +318,19 @@ export async function detectPetRealTime(
     const rightCandidates = receptaclePredictions.filter((p) => { const [bx,,bw] = p.bbox; return ((bx + bw/2) / imgWidth) >= 0.45; });
 
     const foodBowlPred = leftCandidates[0] || rightCandidates[0];
+    const isFoodBowlReal = Boolean(foodBowlPred);
     if (foodBowlPred) {
       rawFoodBowlBox = toPctBox(foodBowlPred);
       foodBowlScore  = Math.round(foodBowlPred.score * 100);
-      foodBowlStatus = `Food Bowl Locked (${foodBowlPred.class.toUpperCase()} Â· ${foodBowlScore}%)`;
+      foodBowlStatus = `Food Bowl Locked (${foodBowlPred.class.toUpperCase()} · ${foodBowlScore}%)`;
     }
 
     const waterBowlPred = rightCandidates.find((p) => p !== foodBowlPred) || leftCandidates.find((p) => p !== foodBowlPred);
+    const isWaterBowlReal = Boolean(waterBowlPred);
     if (waterBowlPred) {
       rawWaterBowlBox = toPctBox(waterBowlPred);
       waterBowlScore  = Math.round(waterBowlPred.score * 100);
-      waterBowlStatus = `Water Fountain Locked (${waterBowlPred.class.toUpperCase()} Â· ${waterBowlScore}%)`;
+      waterBowlStatus = `Water Fountain Locked (${waterBowlPred.class.toUpperCase()} · ${waterBowlScore}%)`;
     }
 
     // Smooth bowls at low alpha (they're static objects)
@@ -366,11 +365,13 @@ export async function detectPetRealTime(
     const foodLabel            = foodInBowl ? foodInBowl.class : (objectInBowlZone ? 'Receptacle Content' : undefined);
     const estimatedFoodFillPct = isFoodDetected ? Math.min(95, 58 + (foodConfidence / 3)) : 0;
 
-    // â”€â”€ Build detected objects list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const detectedObjects: DetectedStationObject[] = [
-      { id: 'food-bowl',  type: 'food_bowl',  label: 'Smart Food Bowl', confidence: foodBowlScore,  boundingBox: smoothedFoodBowlBox,  color: '#10b981', status: foodBowlStatus  },
-      { id: 'water-bowl', type: 'water_bowl', label: 'Water Fountain',  confidence: waterBowlScore, boundingBox: smoothedWaterBowlBox, color: '#06b6d4', status: waterBowlStatus }
-    ];
+    const detectedObjects: DetectedStationObject[] = [];
+    if (isFoodBowlReal) {
+      detectedObjects.push({ id: 'food-bowl', type: 'food_bowl', label: 'Smart Food Bowl', confidence: foodBowlScore, boundingBox: smoothedFoodBowlBox, color: '#10b981', status: foodBowlStatus });
+    }
+    if (isWaterBowlReal) {
+      detectedObjects.push({ id: 'water-bowl', type: 'water_bowl', label: 'Water Fountain', confidence: waterBowlScore, boundingBox: smoothedWaterBowlBox, color: '#06b6d4', status: waterBowlStatus });
+    }
 
     if (isHumanPresent && humanPrediction) {
       const [hx, hy, hw, hh] = humanPrediction.bbox;
@@ -382,7 +383,6 @@ export async function detectPetRealTime(
       });
     }
 
-    // â”€â”€ No pet case â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (petPredictions.length === 0) {
       clearPetConfidenceBuffer();
       boxCache.pet = undefined;
@@ -392,9 +392,9 @@ export async function detectPetRealTime(
         label: isHumanPresent ? 'Human Caregiver in View' : 'None Detected',
         activity: isHumanPresent ? 'Human Caregiver in View' : 'None Detected',
         isHumanPresent, rawPredictions: predictions,
-        isFoodDetected, foodConfidence, foodLabel, estimatedFoodFillPct,
-        isBowlDetected: true,      bowlBoundingBox: smoothedFoodBowlBox,  bowlScore: foodBowlScore,  bowlStatus: foodBowlStatus,  hasFoodInBowl: isFoodDetected,
-        isWaterBowlDetected: true, waterBowlBoundingBox: smoothedWaterBowlBox, waterBowlScore, waterBowlStatus,
+        isFoodDetected: isFoodBowlReal && isFoodDetected, foodConfidence, foodLabel, estimatedFoodFillPct,
+        isBowlDetected: isFoodBowlReal,      bowlBoundingBox: smoothedFoodBowlBox,  bowlScore: isFoodBowlReal ? foodBowlScore : 0,  bowlStatus: isFoodBowlReal ? foodBowlStatus : 'No Bowl in View',  hasFoodInBowl: isFoodBowlReal && isFoodDetected,
+        isWaterBowlDetected: isWaterBowlReal, waterBowlBoundingBox: smoothedWaterBowlBox, waterBowlScore: isWaterBowlReal ? waterBowlScore : 0, waterBowlStatus: isWaterBowlReal ? waterBowlStatus : 'No Fountain in View',
         petDistanceToFoodBowlCm: 65, petDistanceToWaterBowlCm: 70,
         proximityStatus: 'Distant (> 50cm)', detectedObjects
       };
@@ -475,9 +475,9 @@ export async function detectPetRealTime(
       hasPet: true, detectedClass: petClass, label,
       score: smoothedScorePct, boundingBox: smoothedPetBox,
       headPosture, wantsToEat, eatingIntentScore, activity, isHumanPresent,
-      rawPredictions: predictions, isFoodDetected, foodConfidence, foodLabel, estimatedFoodFillPct,
-      isBowlDetected: true,      bowlBoundingBox: smoothedFoodBowlBox,  bowlScore: foodBowlScore,  bowlStatus: foodBowlStatus,  hasFoodInBowl: isFoodDetected,
-      isWaterBowlDetected: true, waterBowlBoundingBox: smoothedWaterBowlBox, waterBowlScore, waterBowlStatus,
+      rawPredictions: predictions, isFoodDetected: isFoodBowlReal && isFoodDetected, foodConfidence, foodLabel, estimatedFoodFillPct,
+      isBowlDetected: isFoodBowlReal,      bowlBoundingBox: smoothedFoodBowlBox,  bowlScore: isFoodBowlReal ? foodBowlScore : 0,  bowlStatus: isFoodBowlReal ? foodBowlStatus : 'Standby',  hasFoodInBowl: isFoodBowlReal && isFoodDetected,
+      isWaterBowlDetected: isWaterBowlReal, waterBowlBoundingBox: smoothedWaterBowlBox, waterBowlScore: isWaterBowlReal ? waterBowlScore : 0, waterBowlStatus: isWaterBowlReal ? waterBowlStatus : 'Standby',
       petDistanceToFoodBowlCm, petDistanceToWaterBowlCm, proximityStatus, detectedObjects
     };
 

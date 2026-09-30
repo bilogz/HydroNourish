@@ -447,7 +447,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
         // Update Smart Food Bowl & Water Fountain detection state
         if (result.isBowlDetected) {
           setIsBowlDetected(true);
-          setBowlBoxPosition(result.bowlBoundingBox || { top: 54, left: 16, width: 38, height: 38 });
+          setBowlBoxPosition(result.bowlBoundingBox || { top: 70, left: 16, width: 22, height: 20 });
           setBowlConfidence(result.bowlScore || 95);
           setBowlStatus(result.bowlStatus || 'Food Bowl Locked');
         } else {
@@ -456,7 +456,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
 
         if (result.isWaterBowlDetected) {
           setIsWaterBowlDetected(true);
-          setWaterBowlBoxPosition(result.waterBowlBoundingBox || { top: 54, left: 56, width: 36, height: 38 });
+          setWaterBowlBoxPosition(result.waterBowlBoundingBox || { top: 70, left: 62, width: 22, height: 20 });
           setWaterBowlConfidence(result.waterBowlScore || 93);
           setWaterBowlStatus(result.waterBowlStatus || 'Water Fountain Locked');
         } else {
@@ -2381,7 +2381,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                   })()}
                 </div>
 
-                <div className="absolute -bottom-6 right-0 bg-slate-950/85 border border-emerald-400/40 text-emerald-300 font-bold text-[8px] px-2 py-0.5 rounded-md flex items-center gap-1 font-mono">
+                <div className="absolute bottom-1 right-1 bg-slate-950/85 border border-emerald-400/40 text-emerald-300 font-bold text-[8px] px-1.5 py-0.5 rounded-md flex items-center gap-1 font-mono pointer-events-none">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                   <span>{bowlStatus}</span>
                 </div>
@@ -2426,7 +2426,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                   })()}
                 </div>
 
-                <div className="absolute -bottom-6 right-0 bg-slate-950/85 border border-sky-400/40 text-sky-300 font-bold text-[8px] px-2 py-0.5 rounded-md flex items-center gap-1 font-mono">
+                <div className="absolute bottom-1 right-1 bg-slate-950/85 border border-sky-400/40 text-sky-300 font-bold text-[8px] px-1.5 py-0.5 rounded-md flex items-center gap-1 font-mono pointer-events-none">
                   <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
                   <span>{waterBowlStatus}</span>
                 </div>
@@ -2482,7 +2482,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
                   )}
                 </div>
 
-                <div className="absolute -bottom-7 right-0 bg-slate-950/85 border border-rose-400/40 text-rose-300 font-bold text-[9px] px-2.5 py-0.5 rounded-md flex items-center gap-1 font-mono">
+                <div className="absolute bottom-1 right-1 bg-slate-950/85 border border-rose-400/40 text-rose-300 font-bold text-[9px] px-2 py-0.5 rounded-md flex items-center gap-1 font-mono pointer-events-none">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                   <span>{trackingActivity} • {headPosture}</span>
                 </div>
@@ -2752,8 +2752,8 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
             })()}
 
             {/* Bottom OSD Bar */}
-            <div className="flex items-center justify-between">
-              <div className="bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-300 flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-300 flex items-center gap-1.5 shrink-0">
                 <Activity className="w-3 h-3 text-rose-400" />
                 <span>
                   {isPetDetected 
@@ -2763,7 +2763,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
               </div>
 
               {/* Interactive Detection Controls */}
-              <div className="pointer-events-auto flex items-center gap-1.5">
+              <div className="pointer-events-auto flex items-center gap-1.5 flex-wrap">
                 <button
                   onClick={async () => {
                     if (isPetDetected) {
@@ -2793,7 +2793,7 @@ export const LiveCameraWidget: React.FC<LiveCameraWidgetProps> = ({
 
                         if (res.isBowlDetected) {
                           setIsBowlDetected(true);
-                          setBowlBoxPosition(res.bowlBoundingBox || { top: 54, left: 24, width: 52, height: 40 });
+                          setBowlBoxPosition(res.bowlBoundingBox || { top: 70, left: 16, width: 22, height: 20 });
                           setBowlConfidence(res.bowlScore || 95);
                           setBowlStatus(res.bowlStatus || 'Target Bowl Locked');
                         }

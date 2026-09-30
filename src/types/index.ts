@@ -29,6 +29,9 @@ export interface Pet {
     portionGrams: number;
     timesPerDay: number;
     foodType: string;
+    mealsPerDay?: number;
+    dailyTargetGrams?: number;
+    dispenseTimes?: string[];
   };
   hydrationTarget: number; // ml per day
   latestVitals?: {
@@ -346,7 +349,8 @@ export type NotificationType =
   | 'owner_deactivated'
   | 'hardware_available'
   | 'hardware_maintenance'
-  | 'inquiry_received';
+  | 'inquiry_received'
+  | 'health_alert';
 
 export interface SystemNotification {
   id: string;

@@ -10,13 +10,14 @@
  * then redirects to /admin/login.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { ToastContainer } from '../components/ToastContainer';
 import { useAppContext } from '../hooks/useAppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useSession } from '../contexts/SessionContext';
+import { usbSerialService } from '../services/usbSerialService';
 import {
   Home,
   Dog,
@@ -45,6 +46,8 @@ import {
   Mail,
   MessageSquare,
   CheckCircle2,
+  Usb,
+  Wifi,
 } from 'lucide-react';
 import { AIAssistantModal } from '../components/AIAssistantModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -68,7 +71,34 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     alerts,
     inquiries,
     unreadInquiriesCount,
+    devices,
   } = useAppContext();
+
+  const [isUsbConnected, setIsUsbConnected] = useState<boolean>(() => usbSerialService.getIsConnected());
+  const [usbTelemetry, setUsbTelemetry] = useState<any>(() => usbSerialService.getLastTelemetry());
+
+  useEffect(() => {
+    const unsubStatus = usbSerialService.onStatus((status) => {
+      setIsUsbConnected(status);
+    });
+    const unsubTelem = usbSerialService.onTelemetry((telem) => {
+      setUsbTelemetry(telem);
+    });
+    return () => {
+      unsubStatus();
+      unsubTelem();
+    };
+  }, []);
+
+  const isWifiConnected = Boolean(
+    (isUsbConnected && usbTelemetry?.wifiConnected) ||
+    (!isUsbConnected && devices?.some(d => d.status === 'Online' && d.wifiSsid && d.wifiSsid !== 'Offline' && d.ipAddress !== 'Direct USB')) ||
+    (usbTelemetry?.wifiConnected)
+  );
+
+  const activeWifiSsid = (isUsbConnected && usbTelemetry?.ssid)
+    ? usbTelemetry.ssid
+    : (devices?.find(d => d.wifiSsid && d.wifiSsid !== 'Offline')?.wifiSsid || 'Clinic_WiFi');
 
   const { adminProfile, signOut, isAdmin, isStaff } = useAuth();
   const { activeSession, sessions } = useSession();
@@ -524,6 +554,58 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Live Hardware Connection Status Pill */}
+            <Link
+              to="/app/devices"
+              className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs hover:scale-[1.02] cursor-pointer ${
+                isUsbConnected && isWifiConnected
+                  ? 'bg-gradient-to-r from-teal-50 to-indigo-50 border-teal-300 text-teal-900 ring-1 ring-teal-400/40'
+                  : isUsbConnected
+                  ? 'bg-teal-50 border-teal-300 text-teal-800 ring-1 ring-teal-400/40'
+                  : isWifiConnected
+                  ? 'bg-indigo-50 border-indigo-300 text-indigo-800 ring-1 ring-indigo-400/40'
+                  : 'bg-slate-100/80 border-slate-200 text-slate-500 hover:text-slate-700'
+              }`}
+              title="Click to view hardware connection & pair Wi-Fi"
+            >
+              <span className="relative flex h-2 w-2">
+                {(isUsbConnected || isWifiConnected) ? (
+                  <>
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                      isUsbConnected ? 'bg-teal-400' : 'bg-indigo-400'
+                    }`} />
+                    <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                      isUsbConnected ? 'bg-teal-500' : 'bg-indigo-500'
+                    }`} />
+                  </>
+                ) : (
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-400" />
+                )}
+              </span>
+
+              {isUsbConnected && isWifiConnected ? (
+                <>
+                  <Zap className="w-3.5 h-3.5 text-teal-600 animate-pulse" />
+                  <span>Dual: Flash Direct + Wi-Fi</span>
+                </>
+              ) : isUsbConnected ? (
+                <>
+                  <Usb className="w-3.5 h-3.5 text-teal-600 animate-pulse" />
+                  <span>Flash Direct: ON</span>
+                </>
+              ) : isWifiConnected ? (
+                <>
+                  <Wifi className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Wi-Fi: {activeWifiSsid}</span>
+                </>
+              ) : (
+                <>
+                  <Cpu className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Nodes: Offline</span>
+                </>
+              )}
+            </Link>
+
             {/* Search */}
             <div className="relative hidden lg:block w-64">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
