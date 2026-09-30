@@ -697,8 +697,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (lanPollInFlight) return;
       lanPollInFlight = true;
       let pollOk = false;
+      
+      // Try to get IP from Supabase device data first (cloud-based, works across devices)
+      const cloudDevice = devices?.find(d => d.id === 'HN-NODE-F778');
+      const cloudIp = cloudDevice?.ipAddress && cloudDevice.ipAddress !== '0.0.0.0' ? cloudDevice.ipAddress : null;
+      
+      // Fallback to localStorage (browser-specific)
       const savedIp = typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') : null;
-      const targets = [activeLanHost, savedIp, 'hydronourish.local', '192.168.4.1'].filter(Boolean) as string[];
+      
+      const targets = [activeLanHost, cloudIp, savedIp, 'hydronourish.local', '192.168.4.1'].filter(Boolean) as string[];
       const uniqueTargets = Array.from(new Set(targets));
 
       try {
