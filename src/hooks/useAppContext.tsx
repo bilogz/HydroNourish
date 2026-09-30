@@ -75,6 +75,13 @@ import {
 import { generateTelemetryDelta, processTelemetryPayload } from '../services/telemetryService';
 import { usbSerialService } from '../services/usbSerialService';
 import {
+  applyStatusStrikes,
+  hasFreshLiveLink,
+  isLiveTransmissionLabel,
+  markDeviceLiveLink,
+  recordLanPollResult,
+} from '../utils/devicePresence';
+import {
   AiLearnedBehaviorProfile,
   getStoredProfile,
   trainAiModelFromHistory,
@@ -289,12 +296,25 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
     if (prev) {
       // 🛡️ Live Priority Guard: If device is streaming real-time via USB or LAN,
       // prevent background Supabase cloud polling from overwriting active sensor readings!
-      const isLiveStreaming = prev.lastTransmission?.includes('Live — Direct USB') || prev.lastTransmission?.includes('Live — Wi-Fi LAN');
-      const isCloudIncoming = !d.lastTransmission?.includes('Live — Direct USB') && !d.lastTransmission?.includes('Live — Wi-Fi LAN');
+      const isLiveStreaming =
+        isLiveTransmissionLabel(prev.lastTransmission) || hasFreshLiveLink(d.id, now);
+      const isCloudIncoming = !isLiveTransmissionLabel(d.lastTransmission);
 
-      const merged: Device = { ...prev, ...d };
+      // Never clobber live fields with `undefined` from a sparse cloud row.
+      const merged: Device = { ...prev };
+      (Object.keys(d) as (keyof Device)[]).forEach((key) => {
+        const value = d[key];
+        if (value !== undefined) {
+          (merged as Record<string, unknown>)[key as string] = value;
+        }
+      });
+      merged.status = applyStatusStrikes(d.id, prev.status, d.status ?? prev.status);
 
       if (isLiveStreaming && isCloudIncoming) {
+        merged.status = prev.status === 'Online' ? 'Online' : merged.status;
+        merged.lastTransmission = prev.lastTransmission;
+        if (prev.wifiSsid) merged.wifiSsid = prev.wifiSsid;
+        if (prev.ipAddress) merged.ipAddress = prev.ipAddress;
         if (prev.foodBowlWeightGrams !== undefined) merged.foodBowlWeightGrams = prev.foodBowlWeightGrams;
         if (prev.scaleReady !== undefined) merged.scaleReady = prev.scaleReady;
         if (prev.waterQualityPpm !== undefined) merged.waterQualityPpm = prev.waterQualityPpm;
@@ -304,7 +324,6 @@ export const mergeDeviceUpdates = (existing: Device[], incoming: Device[]): Devi
         if (prev.waterScaleReady !== undefined) merged.waterScaleReady = prev.waterScaleReady;
         if (prev.foodLevelPct !== undefined) merged.foodLevelPct = prev.foodLevelPct;
         if (prev.wifiSignalDbm !== undefined && prev.wifiSignalDbm !== -60) merged.wifiSignalDbm = prev.wifiSignalDbm;
-        merged.lastTransmission = prev.lastTransmission;
       }
 
       // 1. Check local storage preference for auto-refill
@@ -601,28 +620,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     syncAllDataFromSupabase();
 
-    // Fast 1.5-second polling for active ESP32 hardware telemetry
+    // Cloud telemetry poll. Status drops are 3-strike gated inside mergeDeviceUpdates.
     const devicePollInterval = setInterval(async () => {
       const devData = await fetchDevicesFromSupabase();
       if (devData) {
         setDevices((prev) => mergeDeviceUpdates(prev, devData));
       }
-    }, 1500);
+    }, 2500);
 
-    // 📶 Autonomous Local LAN / Wi-Fi Standalone Poller (Every 1000ms)
-    // Connects web app directly to ESP32 over Wi-Fi without requiring USB or cloud!
+    // 📶 Autonomous Local LAN / Wi-Fi Standalone Poller
+    // Skip overlapping fetches; 1.5s timeout; 3 consecutive misses before dropping Online.
     let activeLanHost: string | null = null;
+    let lanPollInFlight = false;
+    let lastLanDeviceId = 'HN-NODE-F778';
+    const LAN_POLL_MS = 2000;
+    const LAN_TIMEOUT_MS = 1500;
     const lanPollInterval = setInterval(async () => {
+      if (lanPollInFlight) return;
+      lanPollInFlight = true;
+      let pollOk = false;
       const savedIp = typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') : null;
       const targets = [activeLanHost, savedIp, 'hydronourish.local', '192.168.4.1'].filter(Boolean) as string[];
-      // Deduplicate targets
       const uniqueTargets = Array.from(new Set(targets));
 
+      try {
       for (const host of uniqueTargets) {
         if (!host || host === 'Direct USB' || host === '0.0.0.0') continue;
         try {
           const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 800);
+          const timer = setTimeout(() => ctrl.abort(), LAN_TIMEOUT_MS);
           const res = await fetch(`http://${host}/api/status`, { signal: ctrl.signal });
           clearTimeout(timer);
           if (res.ok) {
@@ -636,6 +662,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const cleanMac = data.mac || data.mac_address || '';
               const macSuffix = cleanMac ? cleanMac.replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase() : '';
               const targetId = data.deviceId || data.device_id || (macSuffix ? `HN-NODE-${macSuffix}` : 'HN-NODE-F778');
+              lastLanDeviceId = targetId;
+              recordLanPollResult(targetId, true);
+              pollOk = true;
 
               const rawScaleReady = data.scaleReady !== undefined ? data.scaleReady : data.scale_ready;
               const rawWaterScaleReady = data.waterScaleReady !== undefined ? data.waterScaleReady : data.water_scale_ready;
@@ -722,12 +751,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch {}
       }
-    }, 1000);
+      } finally {
+        if (!pollOk) {
+          const dropped = recordLanPollResult(lastLanDeviceId, false);
+          if (dropped && !usbSerialService.getIsConnected()) {
+            setDevices((prev) =>
+              prev.map((d) =>
+                d.id === lastLanDeviceId && isLiveTransmissionLabel(d.lastTransmission)
+                  ? { ...d, status: 'Offline' as Device['status'], lastTransmission: 'Offline (LAN heartbeat lost)' }
+                  : d
+              )
+            );
+          }
+        }
+        lanPollInFlight = false;
+      }
+    }, LAN_POLL_MS);
 
     // Direct USB WebSerial Live Telemetry Wire
     const unsubUsb = usbSerialService.onTelemetry((telemetry) => {
       if (!telemetry) return;
       const targetId = telemetry.deviceId || 'HN-NODE-F778';
+      markDeviceLiveLink(targetId);
       setDevices((prev) => {
         const hasMatch = prev.some((d) => d.id === targetId);
         if (hasMatch) {
@@ -859,6 +904,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Plug-and-Play USB Connection State Watchdog
     const unsubUsbStatus = usbSerialService.onStatus((connected) => {
       if (connected) {
+        markDeviceLiveLink('HN-NODE-F778');
         playNotificationChime();
         showToast(
           'success',

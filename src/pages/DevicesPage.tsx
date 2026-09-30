@@ -10,6 +10,7 @@ import { usbSerialService, ScannedWifiNetwork, USBTelemetry } from '../services/
 import { sendWifiProvisionToSupabase, clearWifiProvisionInSupabase } from '../services/supabase';
 import { useAppContext } from '../hooks/useAppContext';
 import { Device, Pet, getDeviceWaterMl, getDeviceFoodGrams } from '../types';
+import { isNodeOnline, isStationWifiOnline } from '../utils/devicePresence';
 import {
   Cpu,
   Wifi,
@@ -930,22 +931,32 @@ export const DevicesPage: React.FC = () => {
   };
 
   const isFlashDirectConnected = isUsbConnected;
-  const isWifiConnected = Boolean(
-    (usbTelemetry?.wifiConnected) ||
-    (featuredDevice?.status !== 'Offline' && featuredDevice?.wifiSsid && featuredDevice.wifiSsid !== 'Offline') ||
-    (featuredDevice?.status !== 'Offline' && isRealHost(featuredDevice?.ipAddress))
-  );
+  // ── Online status MUST come from the DEVICE telemetry, never from browser's own WiFi ──
+  // Loose check `status !== 'Offline'` would keep the banner green during Connecting flips.
+  // Require strict Online status so the banner ↔ card body ↔ detail rows ALWAYS agree.
+  const deviceStrictlyOnline = featuredDevice?.status === 'Online';
+  const isWifiConnected = isStationWifiOnline({
+    usbConnected: isUsbConnected,
+    usbWifiConnected: Boolean(isUsbConnected && usbTelemetry?.wifiConnected),
+    deviceStatus: featuredDevice?.status,
+    wifiSsid: featuredDevice?.wifiSsid,
+    ipAddress: featuredDevice?.ipAddress,
+  });
   const activeWifiSsid = (isUsbConnected && usbTelemetry?.ssid)
     ? usbTelemetry.ssid
-    : (featuredDevice?.wifiSsid && featuredDevice.wifiSsid !== 'Offline'
+    : (deviceStrictlyOnline && featuredDevice?.wifiSsid && featuredDevice.wifiSsid !== 'Offline'
         ? featuredDevice.wifiSsid
-        : (isWifiConnected ? ((typeof window !== 'undefined' ? localStorage.getItem('hydronourish_paired_ssid') : null) || 'Garcia Wifi 4G Wifi') : 'Offline'));
+        : (isUsbConnected && usbTelemetry?.wifiConnected
+            ? ((typeof window !== 'undefined' ? localStorage.getItem('hydronourish_paired_ssid') : null) || 'Garcia Wifi 4G Wifi')
+            : 'Offline'));
   const activeWifiIp = (isUsbConnected && usbTelemetry?.ip && isRealHost(usbTelemetry.ip))
     ? usbTelemetry.ip
-    : (isRealHost(featuredDevice?.ipAddress) ? featuredDevice!.ipAddress : (typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') : null));
+    : (deviceStrictlyOnline && isRealHost(featuredDevice?.ipAddress)
+        ? featuredDevice!.ipAddress
+        : (isUsbConnected && usbTelemetry?.wifiConnected ? (typeof window !== 'undefined' ? localStorage.getItem('hn_last_known_ip') : null) : null));
   const activeWifiRssi = (isUsbConnected && typeof usbTelemetry?.rssi === 'number')
     ? usbTelemetry.rssi
-    : (featuredDevice?.wifiSignalDbm || null);
+    : (deviceStrictlyOnline ? (featuredDevice?.wifiSignalDbm || null) : null);
 
   const connectionMode: 'usb' | 'wifi' | 'offline' = 
     isWifiConnected
@@ -1120,9 +1131,17 @@ export const DevicesPage: React.FC = () => {
           </div>
         ) : (
           (() => {
-            const isOnline = featuredDevice
-              ? (featuredDevice.status === 'Online' || isWifiConnected || isUsbConnected)
-              : (isWifiConnected || isUsbConnected);
+            // ── Online status MUST come from the DEVICE, never from the browser's own Wi-Fi. ──
+            // The previous `|| isWifiConnected || isUsbConnected` logic was the direct
+            // cause of the "sudden disconnect and connect" flickering: the browser's
+            // local `isWifiConnected` would mask the DEVICE's true state, so when the
+            // device's 3s-telemetry heartbeat briefly fell behind (12.5s on a 4G retry),
+            // the header still showed 🟢 Online but the body rows rendered the device's
+            // actual Offline pills, producing a contradiction exactly like the screenshots
+            // (header: HN-NODE-F778 = Offline/Offline, but body: "Connected Wi-Fi: Garcia
+            // Wifi 4G Wifi, Signal: -66 dBm Good" vs "Offline" on the same card).
+            const deviceIsOnline = featuredDevice?.status === 'Online';
+            const isOnline = isNodeOnline(isUsbConnected, featuredDevice?.status);
             const isConnecting = !isOnline && !isUsbConnected && featuredDevice?.status === ('Connecting' as typeof featuredDevice.status);
             const isOffline = !isOnline && !isConnecting;
 
@@ -1376,35 +1395,68 @@ export const DevicesPage: React.FC = () => {
 
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-slate-500 font-medium">Connected Wi-Fi:</span>
-                          <span className="font-bold text-indigo-700 flex items-center gap-1 bg-indigo-50/90 border border-indigo-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
-                            <Wifi className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            {featuredDevice.wifiSsid || 'GlobeAtHome_F83DB'}
-                          </span>
+                          {/* Only show SSID when device is genuinely Online. While Offline/Connecting,
+                              showing the *last-seen* SSID as if it's current makes the header's
+                              "Offline" pill and this row contradict, which users perceive as
+                              "sudden disconnects and reconnects". */}
+                          {isOnline && featuredDevice.wifiSsid ? (
+                            <span className="font-bold text-indigo-700 flex items-center gap-1 bg-indigo-50/90 border border-indigo-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                              <Wifi className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                              {featuredDevice.wifiSsid}
+                            </span>
+                          ) : isConnecting ? (
+                            <span className="font-bold text-amber-700 flex items-center gap-1 bg-amber-50/90 border border-amber-200 px-2.5 py-0.5 rounded-lg shadow-2xs animate-pulse">
+                              <Wifi className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              Reconnecting…
+                            </span>
+                          ) : (
+                            <span className="font-bold text-slate-400 flex items-center gap-1 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                              <Wifi className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              Off (No Station Link)
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-slate-500 font-medium">Wi-Fi Signal:</span>
-                          <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                            <Signal className="w-3.5 h-3.5 text-indigo-500" />
-                            <span className="font-bold text-slate-800">{featuredDevice.wifiSignalDbm} dBm</span>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                              featuredDevice.wifiSignalDbm >= -60
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : featuredDevice.wifiSignalDbm >= -75
-                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}>
-                              {featuredDevice.wifiSignalDbm >= -60 ? 'Strong' : featuredDevice.wifiSignalDbm >= -75 ? 'Good' : 'Fair'}
+                          {isOnline && typeof featuredDevice.wifiSignalDbm === 'number' ? (
+                            <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                              <Signal className="w-3.5 h-3.5 text-indigo-500" />
+                              <span className="font-bold text-slate-800">{featuredDevice.wifiSignalDbm} dBm</span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                featuredDevice.wifiSignalDbm >= -60
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : featuredDevice.wifiSignalDbm >= -75
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              }`}>
+                                {featuredDevice.wifiSignalDbm >= -60 ? 'Strong' : featuredDevice.wifiSignalDbm >= -75 ? 'Good' : 'Fair'}
+                              </span>
                             </span>
-                          </span>
+                          ) : isConnecting ? (
+                            <span className="font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded animate-pulse">
+                              Awaiting Beacon…
+                            </span>
+                          ) : (
+                            <span className="font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
+                              N/A (Offline)
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-slate-500 font-medium">Power Source:</span>
-                          <span className="font-semibold text-slate-700 flex items-center gap-1">
-                            <Zap className="w-3.5 h-3.5 text-amber-500" />
-                            {featuredDevice.isPluggedIn ? 'AC Mains Plugged' : `${featuredDevice.batteryPct}% Battery`}
-                          </span>
+                          {isOnline ? (
+                            <span className="font-semibold text-slate-700 flex items-center gap-1">
+                              <Zap className="w-3.5 h-3.5 text-amber-500" />
+                              {featuredDevice.isPluggedIn ? 'AC Mains Plugged' : `${featuredDevice.batteryPct}% Battery`}
+                            </span>
+                          ) : (
+                            <span className="font-semibold text-slate-400 flex items-center gap-1">
+                              <Zap className="w-3.5 h-3.5 text-slate-400" />
+                              Unknown (No Telemetry)
+                            </span>
+                          )}
                         </div>
 
                         {/* Real-Time Sensor Telemetry Grid */}

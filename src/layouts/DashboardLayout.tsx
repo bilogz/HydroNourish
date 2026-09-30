@@ -18,6 +18,7 @@ import { useAppContext } from '../hooks/useAppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useSession } from '../contexts/SessionContext';
 import { usbSerialService } from '../services/usbSerialService';
+import { isStationWifiOnline } from '../utils/devicePresence';
 import {
   Home,
   Dog,
@@ -90,15 +91,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     };
   }, []);
 
-  const isWifiConnected = Boolean(
-    (usbTelemetry?.wifiConnected) ||
-    (devices?.some(d => d.status === 'Online' && d.wifiSsid && d.wifiSsid !== 'Offline')) ||
-    (devices?.some(d => d.status === 'Online' && d.ipAddress && d.ipAddress !== 'Direct USB' && d.ipAddress !== '0.0.0.0'))
-  );
+  const isWifiConnected = isStationWifiOnline({
+    usbConnected: isUsbConnected,
+    usbWifiConnected: Boolean(isUsbConnected && usbTelemetry?.wifiConnected),
+    deviceStatus: devices?.find((d) => d.status === 'Online')?.status,
+    wifiSsid: devices?.find((d) => d.status === 'Online' && d.wifiSsid && d.wifiSsid !== 'Offline')?.wifiSsid,
+    ipAddress: devices?.find((d) => d.status === 'Online')?.ipAddress,
+  });
 
   const activeWifiSsid = (isUsbConnected && usbTelemetry?.ssid)
     ? usbTelemetry.ssid
-    : (devices?.find(d => d.status === 'Online' && d.wifiSsid && d.wifiSsid !== 'Offline')?.wifiSsid || 
+    : (devices?.find(d => d.status === 'Online' && d.wifiSsid && d.wifiSsid !== 'Offline')?.wifiSsid ||
        (isWifiConnected ? 'Garcia Wifi 4G Wifi' : 'Offline'));
 
   const { adminProfile, signOut, isAdmin, isStaff } = useAuth();

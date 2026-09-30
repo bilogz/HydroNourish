@@ -61,7 +61,7 @@ export interface ScannedWifiNetwork {
 }
 
 export type USBLogListener = (log: string, type?: 'info' | 'rx' | 'tx' | 'error' | 'telemetry') => void;
-export type USBTelemetryListener = (telemetry: USBTelemetry) => void;
+export type USBTelemetryListener = (telemetry: USBTelemetry | null) => void;
 export type USBStatusListener = (connected: boolean, portInfo?: any) => void;
 export type USBWifiScanListener = (networks: ScannedWifiNetwork[]) => void;
 
@@ -80,6 +80,8 @@ class USBSerialService {
   private rxBuffer: string = '';
   private telemetryTimer: any = null;
   private autoConnectAttempted: boolean = false;
+  private wifiFalseStrikes: number = 0;
+  private reportedWifiConnected: boolean = false;
 
   constructor() {
     this.initPlugAndPlay();
@@ -105,7 +107,13 @@ class USBSerialService {
         this.stopTelemetryLoop();
         this.readLoopActive = false;
         this.port = null;
+        this.lastTelemetry = null;
+        this.wifiFalseStrikes = 0;
+        this.reportedWifiConnected = false;
         this.emitStatus(false);
+        this.telemetryListeners.forEach((fn) => {
+          try { fn(null); } catch {}
+        });
       });
 
       // Attempt auto-connect on startup/page load for any previously-paired port
@@ -153,7 +161,7 @@ class USBSerialService {
   }
 
   public isWifiConnected(): boolean {
-    return Boolean(this.lastTelemetry?.wifiConnected);
+    return this.isConnected && this.reportedWifiConnected;
   }
 
   public getWifiSsid(): string {
@@ -206,6 +214,11 @@ class USBSerialService {
 
   private emitStatus(connected: boolean) {
     this.isConnected = connected;
+    if (!connected) {
+      this.lastTelemetry = null;
+      this.wifiFalseStrikes = 0;
+      this.reportedWifiConnected = false;
+    }
     this.statusListeners.forEach((fn) => {
       try { fn(connected, this.port?.getInfo?.()); } catch {}
     });
@@ -319,6 +332,9 @@ class USBSerialService {
     } finally {
       this.emitStatus(false);
       this.emitLog('🔌 USB Serial Port Disconnected.', 'info');
+      this.telemetryListeners.forEach((fn) => {
+        try { fn(null); } catch {}
+      });
     }
   }
 
@@ -367,6 +383,17 @@ class USBSerialService {
             if (typeof parsed.foodBowlWeightGrams !== 'number' && parsed.food_bowl_weight_grams !== undefined) {
               parsed.foodBowlWeightGrams = Number(parsed.food_bowl_weight_grams);
             }
+            const rawWifi = Boolean(parsed.wifiConnected);
+            if (rawWifi) {
+              this.wifiFalseStrikes = 0;
+              this.reportedWifiConnected = true;
+            } else {
+              this.wifiFalseStrikes += 1;
+              if (this.wifiFalseStrikes >= 3) {
+                this.reportedWifiConnected = false;
+              }
+            }
+            parsed.wifiConnected = this.reportedWifiConnected;
             this.lastTelemetry = parsed as USBTelemetry;
             this.telemetryListeners.forEach((fn) => {
               try { fn(parsed); } catch {}

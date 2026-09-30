@@ -106,16 +106,46 @@ export function mapPayloadToDeviceRow(payload: DeviceTelemetryPayload, receivedA
 }
 
 /**
- * Maps Supabase `devices` database row to frontend `Device` model
+ * In-memory sticky-status cache for mapDeviceRowToModel (parallel to the
+ * supabase.ts cache; they share the same semantics so hysteresis applies
+ * consistently regardless of which code path computed the status).
+ */
+const _mapperStatusCache = new Map<string, Device['status']>();
+const _mapperStatusCacheSeen = new Map<string, number>();
+const MAPPER_STATUS_CACHE_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+function _pruneMapperStatusCache(nowMs: number) {
+  for (const [k, v] of Array.from(_mapperStatusCacheSeen.entries())) {
+    if (nowMs - v > MAPPER_STATUS_CACHE_MAX_AGE_MS) {
+      _mapperStatusCache.delete(k);
+      _mapperStatusCacheSeen.delete(k);
+    }
+  }
+}
+
+/**
+ * Maps Supabase `devices` database row to frontend `Device` model.
+ *
+ * NOTE: Status computation MUST be IDENTICAL to `getHeartbeatStatus` in
+ * `supabase.ts` (120s Online / 420s Connecting windows + STICKY-online
+ * 2× / 1.5× hysteresis) so we never produce contradictory/flapping status
+ * values across different call-sites (the #1 cause of "sudden disconnect and
+ * connect" flickering on the device card header).
  */
 export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Device {
+  // Periodically prune the sticky-status cache to avoid unbounded growth.
+  if (Math.random() < 0.1) _pruneMapperStatusCache(nowMs);
+
   const lastSeenCandidates = [
     item.last_transmission,
     item.last_seen_at,
     item.updated_at,
   ].filter(Boolean);
 
-  let computedStatus: Device['status'] = item.status === 'Online' ? 'Online' : 'Offline';
+  const deviceId: string = item.id || 'unknown';
+  const cachedPrevStatus: Device['status'] | undefined = _mapperStatusCache.get(deviceId);
+
+  let computedStatus: Device['status'] = (item.status === 'Online') ? 'Online' : 'Offline';
   let ageSec = 0;
 
   const validParsed: number[] = [];
@@ -130,18 +160,39 @@ export function mapDeviceRowToModel(item: any, nowMs: number = Date.now()): Devi
   if (validParsed.length > 0) {
     const latestParsed = Math.max(...validParsed);
     ageSec = Math.max(0, Math.round((nowMs - latestParsed) / 1000));
+
     if (item.status === 'Offline' || item.status === 'offline' || item.status === 'maintenance') {
-      computedStatus = 'Offline';
-    } else if (ageSec <= 12) {
-      computedStatus = 'Online';
-    } else if (ageSec <= 25) {
-      computedStatus = 'Connecting' as Device['status'];
+      // Explicit database override: force Offline (but still preserve 'maintenance' as Warning elsewhere)
+      computedStatus = (item.status === 'maintenance') ? ('Warning' as Device['status']) : 'Offline';
     } else {
-      computedStatus = 'Offline';
+      // ── Stability windows with STICKY-online hysteresis ──────────────
+      // A device that was Online in the last poll tolerates 2× the normal
+      // silence before dropping — one retried/late packet will never flip
+      // it Offline.  Connecting tolerates 1.5×.
+      const ONLINE_WINDOW_S = 120;
+      const CONNECTING_WINDOW_S = 420;
+      const hysteresisFactor =
+        cachedPrevStatus === 'Online' ? 2.0 :
+        cachedPrevStatus === 'Connecting' ? 1.5 :
+        1.0;
+      const onlineCutoff = Math.round(ONLINE_WINDOW_S * hysteresisFactor);
+      const connectingCutoff = Math.round(CONNECTING_WINDOW_S * hysteresisFactor);
+
+      if (ageSec <= onlineCutoff) {
+        computedStatus = 'Online';
+      } else if (ageSec <= connectingCutoff) {
+        computedStatus = 'Connecting' as Device['status'];
+      } else {
+        computedStatus = 'Offline';
+      }
     }
   } else {
     computedStatus = 'Offline';
   }
+
+  // Persist status for hysteresis on the NEXT call for the same device.
+  _mapperStatusCache.set(deviceId, computedStatus);
+  _mapperStatusCacheSeen.set(deviceId, nowMs);
 
   let displayTransmission = 'Live — Synchronized';
   if (computedStatus === 'Online') {

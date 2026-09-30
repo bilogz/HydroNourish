@@ -440,7 +440,16 @@ function getHeartbeatStatus(
   lastTransmission: string | null | undefined,
   dbStatus?: string,
   updatedAt?: string | null,
-  lastSeenAt?: string | null
+  lastSeenAt?: string | null,
+  /**
+   * Hysteresis: the previous status for this device.
+   * When the caller passes `previousStatus`, we apply STICKY-online rules so a
+   * single late/retried packet NEVER flips Online → Connecting/Offline:
+   *   - Previously Online: tolerate 2× the normal silence before dropping
+   *   - Previously Connecting: tolerate 1.5× the normal window
+   *   - Previously Offline / unknown: apply normal thresholds
+   */
+  previousStatus?: Device['status'] | null
 ): { status: Device['status']; ageSec: number } {
   // Parse all candidate timestamps first
   const candidates: number[] = [];
@@ -471,9 +480,21 @@ function getHeartbeatStatus(
   const nowMs = Date.now();
   const ageSec = Math.max(0, Math.round((nowMs - latestParsed) / 1000));
 
-  // If device transmitted packets within 120s (2 minutes), it is unequivocally Online!
-  // This graceful window easily absorbs packet retries on weak RF signals (-75 to -85 dBm).
-  if (ageSec <= 120) {
+  // ── STABILITY WINDOWS (with hysteresis multipliers) ──────────────────────
+  // Baseline windows were chosen to tolerate 4G/WiFi retries at -60…-85 dBm.
+  // The *Sticky Online* rule prevents sudden disconnect/reconnect flapping.
+  const ONLINE_WINDOW_S = 120;              // 2m of silence still = Online
+  const CONNECTING_WINDOW_S = 420;          // Up to 7m = Connecting
+  const hysteresisFactor =
+    previousStatus === 'Online' ? 2.0 :     // 4m of silence before drop
+    previousStatus === 'Connecting' ? 1.5 : // 10.5m before Offline
+    1.0;                                    // Fresh state: normal thresholds
+
+  const onlineCutoff = Math.round(ONLINE_WINDOW_S * hysteresisFactor);
+  const connectingCutoff = Math.round(CONNECTING_WINDOW_S * hysteresisFactor);
+
+  // If device transmitted within the (sticky) online window, it is Online.
+  if (ageSec <= onlineCutoff) {
     return { status: 'Online', ageSec };
   }
 
@@ -482,11 +503,32 @@ function getHeartbeatStatus(
     return { status: 'Warning' as Device['status'], ageSec };
   }
 
-  if (ageSec <= 420) {
+  if (ageSec <= connectingCutoff) {
     return { status: 'Connecting' as Device['status'], ageSec };
   }
 
   return { status: 'Offline', ageSec };
+}
+
+/**
+ * In-memory per-device previous-status cache used to drive STICKY-online
+ * hysteresis across repeated `fetchDevicesFromSupabase()` / realtime calls.
+ * Without this, each call to getHeartbeatStatus is stateless and the
+ * hysteresis never kicks in, so a single 121s gap still produces a flip.
+ */
+const _deviceLastStatusCache = new Map<string, Device['status']>();
+/** Max age of a cache entry before we forget it (avoids memory growth for old devices). */
+const _deviceLastStatusCacheMaxAgeMs = 2 * 60 * 60 * 1000; // 2 hours
+const _deviceLastStatusCacheSeen = new Map<string, number>();
+
+function _pruneStatusCacheLocked() {
+  const now = Date.now();
+  for (const [k, v] of Array.from(_deviceLastStatusCacheSeen.entries())) {
+    if (now - v > _deviceLastStatusCacheMaxAgeMs) {
+      _deviceLastStatusCache.delete(k);
+      _deviceLastStatusCacheSeen.delete(k);
+    }
+  }
 }
 
 export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
@@ -495,13 +537,26 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
     const { data, error } = await supabase.from('devices').select('*').order('created_at', { ascending: false });
     if (error || !data) return null;
 
+    // Periodically prune the sticky-status cache so we don't grow unbounded
+    // for devices the user removed long ago. Runs once every ~10 calls.
+    if (Math.random() < 0.1) _pruneStatusCacheLocked();
+
+    const now = Date.now();
     return (data as any[]).map((item) => {
+      const deviceId: string = item.id || 'unknown';
+      const cachedPrevStatus = _deviceLastStatusCache.get(deviceId) ?? null;
+
       const { status: computedStatus, ageSec } = getHeartbeatStatus(
         item.last_transmission,
         item.status,
         item.updated_at,
-        item.last_seen_at
+        item.last_seen_at,
+        cachedPrevStatus
       );
+
+      // Update sticky-status cache for the next poll / realtime event.
+      _deviceLastStatusCache.set(deviceId, computedStatus);
+      _deviceLastStatusCacheSeen.set(deviceId, now);
 
       let displayTransmission = 'Live — Synchronized';
       if (computedStatus === 'Online') {
@@ -561,7 +616,10 @@ export async function fetchDevicesFromSupabase(): Promise<Device[] | null> {
           }
           if (p.startsWith('GATE:')) {
             const val = Number(p.replace('GATE:', '').trim());
-            if (!isNaN(val) && val >= 10 && val <= 180) parsedGateOpenDeg = val;
+            if (!isNaN(g) && g >= 10 && g <= 180) parsedGateOpenDeg = val;
+          }
+          if (p.startsWith('SSID:')) {
+            parsedSsid = p.replace('SSID:', '').trim();
           }
         }
       }
