@@ -9,6 +9,7 @@ import { DirectUSBConsoleWidget } from '../components/DirectUSBConsoleWidget';
 import { usbSerialService, ScannedWifiNetwork, USBTelemetry } from '../services/usbSerialService';
 import { sendWifiProvisionToSupabase, clearWifiProvisionInSupabase } from '../services/supabase';
 import { useAppContext } from '../hooks/useAppContext';
+import { useSession } from '../contexts/SessionContext';
 import { Device, Pet, getDeviceWaterMl, getDeviceFoodGrams } from '../types';
 import { isNodeOnline, isStationWifiOnline } from '../utils/devicePresence';
 import {
@@ -56,6 +57,7 @@ const isRealHost = (h: string | undefined | null): boolean => {
 };
 
 export const DevicesPage: React.FC = () => {
+  const { addNotification } = useSession();
   const {
     devices,
     pets,
@@ -98,6 +100,24 @@ export const DevicesPage: React.FC = () => {
   const [showUsbConsole, setShowUsbConsole] = useState(true);
 
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [notifiedDryTank, setNotifiedDryTank] = useState(false);
+
+  // Monitor water tank level and send notification when dry
+  useEffect(() => {
+    const featuredDevice = devices?.[0];
+    if (featuredDevice && (featuredDevice.waterQualityPpm ?? 0) === 0 && !notifiedDryTank) {
+      addNotification(
+        'hardware_alert',
+        'Water Tank Empty',
+        'TDS probe detected no water in reservoir. Please refill clean water tank.',
+        'critical',
+        { deviceId: featuredDevice.id }
+      );
+      setNotifiedDryTank(true);
+    } else if (featuredDevice && (featuredDevice.waterQualityPpm ?? 0) > 0 && notifiedDryTank) {
+      setNotifiedDryTank(false);
+    }
+  }, [devices, notifiedDryTank, addNotification]);
   const [assignPetModalOpen, setAssignPetModalOpen] = useState(false);
   const [petSearchQuery, setPetSearchQuery] = useState('');
   const [isUsbConnected, setIsUsbConnected] = useState<boolean>(() => usbSerialService.getIsConnected());
@@ -1589,17 +1609,6 @@ export const DevicesPage: React.FC = () => {
                               </div>
                             </div>
                           </div>
-
-                          {/* TDS Dry Doctor / Vet Refill Notice */}
-                          {((featuredDevice.waterQualityPpm ?? 0) === 0) && (
-                            <div className="p-3 bg-amber-50/90 border border-amber-300 rounded-xl text-xs text-amber-950 flex items-center gap-2.5 animate-in fade-in">
-                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
-                              <div className="min-w-0">
-                                <p className="font-extrabold text-amber-950 text-[11px]">⚠️ Doctor / Staff Alert: Water Tank is Dry (0 PPM)</p>
-                                <p className="text-[10px] text-amber-700">TDS probe detected no water in reservoir. Please refill clean water tank.</p>
-                              </div>
-                            </div>
-                          )}
 
                           {/* Level Progress Bars */}
                           <div>

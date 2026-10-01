@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { useAppContext } from '../hooks/useAppContext';
-import { downloadCSV, printReportWindow, generateClinicalReportHTML } from '../utils/exportUtils';
+import { downloadCSV, downloadHTML, printReportWindow, generateClinicalReportHTML, generatePatientProfileHTML } from '../utils/exportUtils';
 import { StatusBadge } from '../components/StatusBadge';
 import { sendVisionAnalyticsReport } from '../services/emailService';
 import { getVisionAnalyticsRecords, calculateDailyVisionSummary, generateVisionAnalyticsReport } from '../services/visionAnalyticsService';
@@ -756,11 +756,23 @@ export const ReportsPage: React.FC = () => {
         DailyPortionGrams: item.feedingPlan?.portionGrams || 100,
         ExportTimestamp: new Date().toISOString()
       };
-      filename = `HydroNourish_PatientProfile_${item.id}_${item.name}`;
+      // Sanitize pet name for filename (remove special characters, spaces)
+      const sanitizedName = item.name.replace(/[^a-zA-Z0-9]/g, '');
+      filename = `HydroNourish_PatientProfile_${item.id}_${sanitizedName}`;
     }
 
     downloadCSV(filename, [row]);
-    showToast('success', 'Specific Record Downloaded', `Downloaded record ${item.id} (${filename}.csv)`);
+    
+    // Also generate HTML for pet profiles
+    if (type === 'Pet') {
+      const sanitizedName = item.name.replace(/[^a-zA-Z0-9]/g, '');
+      const htmlFilename = `HydroNourish_PatientProfile_${item.id}_${sanitizedName}`;
+      const htmlContent = generatePatientProfileHTML(item);
+      downloadHTML(htmlFilename, htmlContent);
+      showToast('success', 'Record Downloaded', `Downloaded ${item.id} as CSV and HTML`);
+    } else {
+      showToast('success', 'Specific Record Downloaded', `Downloaded record ${item.id} (${filename}.csv)`);
+    }
   };
 
   const handlePrintSingleRecord = (item: any, type: string) => {

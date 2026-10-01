@@ -25,6 +25,17 @@ export const downloadCSV = (filename: string, rows: Record<string, any>[]) => {
   document.body.removeChild(link);
 };
 
+export const downloadHTML = (filename: string, htmlContent: string) => {
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `${filename}.html`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 export const printReportWindow = (title: string, contentHtml: string) => {
   const printWindow = window.open('', '_blank');
   if (!printWindow) return;
@@ -81,31 +92,31 @@ export const generateClinicalReportHTML = (
   // Comprehensive Health - Pet profiles section
   if (reportType === 'Comprehensive Health' && compSections.pets) {
     tableHtml += `
-      <h3 style="color:#4f46e5; margin-top:20px; font-size:15px; border-bottom:1px solid #e0e7ff; padding-bottom:6px;">Patient Demographics & Medical Profiles</h3>
-      <table>
+      <h3 style="color:#4f46e5; margin-top:20px; font-size:16px; font-weight:700; border-bottom:2px solid #e0e7ff; padding-bottom:8px; background:linear-gradient(135deg, #e0e7ff 0%, #f5f3ff 100%); padding:12px; border-radius:8px;">Patient Demographics & Medical Profiles</h3>
+      <table style="width:100%; border-collapse:collapse; margin-top:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1); border-radius:8px; overflow:hidden;">
         <thead>
-          <tr>
-            <th>Patient</th>
-            <th>Species / Breed</th>
-            <th>Age & Weight</th>
-            <th>Owner Details</th>
-            <th>Assigned Unit</th>
-            <th>Hydration Target</th>
-            <th>Health Status</th>
+          <tr style="background:linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color:white;">
+            <th style="padding:12px; text-align:left; font-weight:600;">Patient</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Species / Breed</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Age & Weight</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Owner Details</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Assigned Unit</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Hydration Target</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Health Status</th>
           </tr>
         </thead>
         <tbody>
-          ${pets.length > 0 ? pets.map(p => `
-            <tr>
-              <td><strong>${p.name}</strong> <span style="font-size:10px; color:#64748b;">(${p.id})</span></td>
-              <td>${p.species} - ${p.breed}</td>
-              <td>${p.age} yrs • ${p.weight} kg</td>
-              <td>${p.ownerName} (${p.ownerPhone})</td>
-              <td>${p.assignedDeviceId || 'Cage 1'}</td>
-              <td>${p.hydrationTarget} ml/day</td>
-              <td><strong>${p.healthStatus}</strong></td>
+          ${pets.length > 0 ? pets.map((p, i) => `
+            <tr style="${i % 2 === 0 ? 'background:#f8fafc;' : 'background:#ffffff;'}">
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;"><strong>${p.name}</strong> <span style="font-size:11px; color:#64748b; margin-left:8px;">(${p.id})</span></td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${p.species} - ${p.breed}</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${p.age} yrs • ${p.weight} kg</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${p.ownerName} <span style="color:#64748b; font-size:11px;">(${p.ownerPhone})</span></td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${p.assignedDeviceId || 'Cage 1'}</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${p.hydrationTarget} ml/day</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;"><span style="padding:4px 12px; border-radius:12px; font-weight:600; font-size:11px; ${p.healthStatus === 'Healthy' ? 'background:#dcfce7; color:#166534;' : p.healthStatus === 'Attention Needed' ? 'background:#fef9c3; color:#b45309;' : 'background:#fee2e2; color:#dc2626;'}">${p.healthStatus}</span></td>
             </tr>
-          `).join('') : '<tr><td colspan="7">No pet records match criteria.</td></tr>'}
+          `).join('') : '<tr><td colspan="8" style="padding:16px; text-align:center; color:#64748b;">No pet records match criteria.</td></tr>'}
         </tbody>
       </table>
     `;
@@ -113,29 +124,29 @@ export const generateClinicalReportHTML = (
 
   if ((reportType === 'Feeding Summary') || (reportType === 'Comprehensive Health' && compSections.feeding)) {
     tableHtml += `
-      <h3 style="color:#0f766e; margin-top:24px; font-size:15px; border-bottom:1px solid #ccfbf1; padding-bottom:6px;">Feeding Dispense Telemetry Log</h3>
-      <table>
+      <h3 style="color:#0f766e; margin-top:32px; font-size:16px; font-weight:700; border-bottom:2px solid #ccfbf1; padding-bottom:8px; background:linear-gradient(135deg, #ccfbf1 0%, #f0fdf4 100%); padding:12px; border-radius:8px;">Feeding Dispense Telemetry Log</h3>
+      <table style="width:100%; border-collapse:collapse; margin-top:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1); border-radius:8px; overflow:hidden;">
         <thead>
-          <tr>
-            <th>Log ID</th>
-            <th>Pet Name</th>
-            <th>Portion (g)</th>
-            <th>Dispensed At</th>
-            <th>Status</th>
-            <th>Hardware Unit</th>
+          <tr style="background:linear-gradient(135deg, #059669 0%, #10b981 100%); color:white;">
+            <th style="padding:12px; text-align:left; font-weight:600;">Log ID</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Pet Name</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Portion (g)</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Dispensed At</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Status</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Hardware Unit</th>
           </tr>
         </thead>
         <tbody>
-          ${feedingLogs.length > 0 ? feedingLogs.map(f => `
-            <tr>
-              <td><code>${f.id}</code></td>
-              <td><strong>${f.petName}</strong></td>
-              <td>${f.portionGrams}g</td>
-              <td>${f.dispensedAt}</td>
-              <td>${f.status}</td>
-              <td>${f.deviceId || 'Cage 1'}</td>
+          ${feedingLogs.length > 0 ? feedingLogs.map((f, i) => `
+            <tr style="${i % 2 === 0 ? 'background:#f0fdf4;' : 'background:#ffffff;'}">
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-family:monospace; font-size:11px;">${f.id}</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;"><strong>${f.petName}</strong></td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#059669;">${f.portionGrams}g</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${f.dispensedAt}</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;"><span style="padding:4px 8px; border-radius:12px; font-size:10px; font-weight:600; ${f.status === 'Success' ? 'background:#dcfce7; color:#166534;' : 'background:#fef3c7; color:#d97706;'}">${f.status}</span></td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-family:monospace;">${f.deviceId || 'Cage 1'}</td>
             </tr>
-          `).join('') : '<tr><td colspan="6">No feeding logs recorded.</td></tr>'}
+          `).join('') : '<tr><td colspan="6" style="padding:16px; text-align:center; color:#64748b;">No feeding logs recorded.</td></tr>'}
         </tbody>
       </table>
     `;
@@ -143,27 +154,27 @@ export const generateClinicalReportHTML = (
 
   if ((reportType === 'Hydration Log') || (reportType === 'Comprehensive Health' && compSections.hydration)) {
     tableHtml += `
-      <h3 style="color:#0284c7; margin-top:24px; font-size:15px; border-bottom:1px solid #e0f2fe; padding-bottom:6px;">Hydration Intake Telemetry Log</h3>
-      <table>
+      <h3 style="color:#0284c7; margin-top:32px; font-size:16px; font-weight:700; border-bottom:2px solid #e0f2fe; padding-bottom:8px; background:linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); padding:12px; border-radius:8px;">Hydration Intake Telemetry Log</h3>
+      <table style="width:100%; border-collapse:collapse; margin-top:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1); border-radius:8px; overflow:hidden;">
         <thead>
-          <tr>
-            <th>Log ID</th>
-            <th>Pet Name</th>
-            <th>Amount (ml)</th>
-            <th>Timestamp</th>
-            <th>Reservoir Level</th>
+          <tr style="background:linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%); color:white;">
+            <th style="padding:12px; text-align:left; font-weight:600;">Log ID</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Pet Name</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Amount (ml)</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Timestamp</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Reservoir Level</th>
           </tr>
         </thead>
         <tbody>
-          ${hydrationLogs.length > 0 ? hydrationLogs.map(h => `
-            <tr>
-              <td><code>${h.id}</code></td>
-              <td><strong>${h.petName}</strong></td>
-              <td>${h.amountMl}ml</td>
-              <td>${h.timestamp}</td>
-              <td>${h.reservoirLevelPct}%</td>
+          ${hydrationLogs.length > 0 ? hydrationLogs.map((h, i) => `
+            <tr style="${i % 2 === 0 ? 'background:#e0f2fe;' : 'background:#ffffff;'}">
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-family:monospace; font-size:11px;">${h.id}</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;"><strong>${h.petName}</strong></td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#0284c7;">${h.amountMl}ml</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${h.timestamp}</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;"><span style="padding:4px 8px; border-radius:12px; font-size:10px; font-weight:600; ${h.reservoirLevelPct > 50 ? 'background:#dcfce7; color:#166534;' : 'background:#fef3c7; color:#d97706;'}">${h.reservoirLevelPct}%</span></td>
             </tr>
-          `).join('') : '<tr><td colspan="5">No hydration logs recorded.</td></tr>'}
+          `).join('') : '<tr><td colspan="5" style="padding:16px; text-align:center; color:#64748b;">No hydration logs recorded.</td></tr>'}
         </tbody>
       </table>
     `;
@@ -171,52 +182,193 @@ export const generateClinicalReportHTML = (
 
   if ((reportType === 'AI Health Alerts') || (reportType === 'Comprehensive Health' && compSections.alerts)) {
     tableHtml += `
-      <h3 style="color:#dc2626; margin-top:24px; font-size:15px; border-bottom:1px solid #fee2e2; padding-bottom:6px;">AI Health Alerts & Observations</h3>
-      <table>
+      <h3 style="color:#dc2626; margin-top:32px; font-size:16px; font-weight:700; border-bottom:2px solid #fee2e2; padding-bottom:8px; background:linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding:12px; border-radius:8px;">AI Health Alerts & Observations</h3>
+      <table style="width:100%; border-collapse:collapse; margin-top:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1); border-radius:8px; overflow:hidden;">
         <thead>
-          <tr>
-            <th>Alert ID</th>
-            <th>Pet Name</th>
-            <th>Observed Reading</th>
-            <th>AI Observation</th>
-            <th>Severity</th>
-            <th>Review Status</th>
+          <tr style="background:linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color:white;">
+            <th style="padding:12px; text-align:left; font-weight:600;">Alert ID</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Pet Name</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Observed Reading</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">AI Observation</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Severity</th>
+            <th style="padding:12px; text-align:left; font-weight:600;">Review Status</th>
           </tr>
         </thead>
         <tbody>
-          ${alerts.length > 0 ? alerts.map(a => `
-            <tr>
-              <td><code>${a.id}</code></td>
-              <td><strong>${a.petName}</strong></td>
-              <td>${a.observedReading}</td>
-              <td>${a.aiObservation}</td>
-              <td><strong>${a.severity}</strong></td>
-              <td>${a.reviewStatus}</td>
+          ${alerts.length > 0 ? alerts.map((a, i) => `
+            <tr style="${i % 2 === 0 ? 'background:#fee2e2;' : 'background:#ffffff;'}">
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-family:monospace; font-size:11px;">${a.id}</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;"><strong>${a.petName}</strong></td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${a.observedReading}</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${a.aiObservation}</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;"><span style="padding:4px 8px; border-radius:12px; font-size:10px; font-weight:600; ${a.severity === 'Critical' ? 'background:#fee2e2; color:#dc2626;' : a.severity === 'Warning' ? 'background:#fef3c7; color:#d97706;' : 'background:#dcfce7; color:#166534;'}">${a.severity}</span></td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;"><span style="padding:4px 8px; border-radius:12px; font-size:10px; font-weight:600; ${a.reviewStatus === 'Resolved' ? 'background:#dcfce7; color:#166534;' : a.reviewStatus === 'In Review' ? 'background:#fef3c7; color:#d97706;' : 'background:#f1f5f9; color:#64748b;'}">${a.reviewStatus}</span></td>
             </tr>
-          `).join('') : '<tr><td colspan="6">No AI health alerts recorded.</td></tr>'}
+          `).join('') : '<tr><td colspan="6" style="padding:16px; text-align:center; color:#64748b;">No AI health alerts recorded.</td></tr>'}
         </tbody>
       </table>
     `;
   }
 
   const content = `
-    <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #0d9488; padding-bottom: 16px;">
-      <h2 style="margin:0; color:#0d9488; font-size:22px;">Heritage Animal Clinic</h2>
-      <p style="margin:4px 0; color:#64748b; font-size:13px;">HydroNourish Smart Automated Telemetry System</p>
-      <h1 style="margin-top:12px; font-size:18px; color:#1e293b;">${reportTitle}</h1>
-      <p style="font-size:12px; color:#475569;">
-        <strong>Generated Date:</strong> ${dateStr} | 
-        <strong>Range:</strong> ${dateRange === 'Custom Range' ? `${customStartDate} to ${customEndDate}` : dateRange} | 
-        <strong>Patient:</strong> ${filteredPetName}
-        ${isSpecific ? ` | <strong style="color:#e11d48;">[SPECIFIC EXPORT: ${selectedCount} records]</strong>` : ''}
-      </p>
-    </div>
-    ${tableHtml}
-    <div style="margin-top: 40px; padding-top: 16px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; font-size: 11px; color: #64748b;">
-      <div>Attending Veterinarian Signature: _______________________</div>
-      <div>Clinic Seal & Stamp</div>
+    <div style="max-width:900px; margin: 0 auto; padding: 32px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #fdfbfb 0%, #ffffff 100%);">
+      <!-- Header Section -->
+      <div style="text-align: center; margin-bottom: 32px; padding: 32px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:16px; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);">
+        <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:12px;">
+          <div style="width:50px; height:50px; background:white; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+            <span style="font-size:24px;">🐾</span>
+          </div>
+          <div>
+            <h2 style="margin:0; color:white; font-size:28px; font-weight:800; letter-spacing:-0.5px;">Heritage Animal Clinic</h2>
+            <p style="margin:4px 0 0 0; color:rgba(255,255,255,0.9); font-size:14px; font-weight:500;">HydroNourish Smart Automated Telemetry System</p>
+          </div>
+        </div>
+        <h1 style="margin:0; color:white; font-size:22px; font-weight:700; padding-top:16px; border-top:1px solid rgba(255,255,255,0.2);">${reportTitle}</h1>
+        <div style="margin-top:12px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; color:rgba(255,255,255,0.95); font-size:13px;">
+          <span style="background:rgba(255,255,255,0.2); padding:6px 12px; border-radius:20px;"><strong>Generated:</strong> ${dateStr}</span>
+          <span style="background:rgba(255,255,255,0.2); padding:6px 12px; border-radius:20px;"><strong>Range:</strong> ${dateRange === 'Custom Range' ? `${customStartDate} to ${customEndDate}` : dateRange}</span>
+          <span style="background:rgba(255,255,255,0.2); padding:6px 12px; border-radius:20px;"><strong>Patient:</strong> ${filteredPetName}</span>
+          ${isSpecific ? `<span style="background:rgba(255,255,255,0.3); padding:6px 12px; border-radius:20px; border:1px solid rgba(255,255,255,0.4); font-weight:600;">[SPECIFIC: ${selectedCount} records]</span>` : ''}
+        </div>
+      </div>
+
+      <!-- Report Content -->
+      ${tableHtml}
+
+      <!-- Footer Section -->
+      <div style="margin-top:48px; padding:24px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius:12px; border:1px solid #e2e8f0; display: flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+        <div style="font-size:12px; color:#64748b;">
+          <div style="margin-bottom:8px;"><strong>Attending Veterinarian Signature:</strong> _______________________</div>
+          <div><strong>Date:</strong> ${dateStr}</div>
+        </div>
+        <div style="text-align:right; font-size:12px; color:#64748b;">
+          <div style="margin-bottom:8px;"><strong>Clinic Seal & Stamp</strong></div>
+          <div>Heritage Animal Clinic Official Record</div>
+        </div>
+      </div>
+
+      <!-- Footer Watermark -->
+      <div style="margin-top:24px; text-align:center; padding-top:16px; border-top:1px solid #e2e8f0; font-size:11px; color:#94a3b8;">
+        <p style="margin:0;">Generated by HydroNourish Automated Pet Care System — Heritage Animal Clinic</p>
+        <p style="margin:4px 0 0 0; font-size:10px;">Confidential Medical Record • Not for distribution without authorization</p>
+      </div>
     </div>
   `;
 
   return content;
+};
+
+export const generatePatientProfileHTML = (pet: any): string => {
+  const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  
+  return `
+    <div style="max-width:800px; margin: 0 auto; padding: 32px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #fdfbfb 0%, #ffffff 100%);">
+      <!-- Header Section -->
+      <div style="text-align: center; margin-bottom: 32px; padding: 32px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:16px; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);">
+        <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:12px;">
+          <div style="width:50px; height:50px; background:white; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+            <span style="font-size:24px;">🐾</span>
+          </div>
+          <div>
+            <h2 style="margin:0; color:white; font-size:28px; font-weight:800; letter-spacing:-0.5px;">Heritage Animal Clinic</h2>
+            <p style="margin:4px 0 0 0; color:rgba(255,255,255,0.9); font-size:14px; font-weight:500;">Patient Medical Profile Record</p>
+          </div>
+        </div>
+        <h1 style="margin:0; color:white; font-size:24px; font-weight:700; padding-top:16px; border-top:1px solid rgba(255,255,255,0.2);">${pet.name}</h1>
+        <div style="margin-top:12px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; color:rgba(255,255,255,0.95); font-size:13px;">
+          <span style="background:rgba(255,255,255,0.2); padding:6px 12px; border-radius:20px;"><strong>Pet ID:</strong> ${pet.id}</span>
+          <span style="background:rgba(255,255,255,0.2); padding:6px 12px; border-radius:20px;"><strong>Generated:</strong> ${dateStr}</span>
+        </div>
+      </div>
+
+      <!-- Patient Information -->
+      <div style="margin-bottom:24px;">
+        <h3 style="color:#4f46e5; font-size:16px; font-weight:700; border-bottom:2px solid #e0e7ff; padding-bottom:8px; background:linear-gradient(135deg, #e0e7ff 0%, #f5f3ff 100%); padding:12px; border-radius:8px; margin-bottom:16px;">Patient Demographics</h3>
+        <table style="width:100%; border-collapse:collapse; box-shadow:0 1px 3px rgba(0,0,0,0.1); border-radius:8px; overflow:hidden;">
+          <tbody>
+            <tr style="background:#f8fafc;">
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#475569; width:40%;">Pet Name</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#0f172a;">${pet.name}</td>
+            </tr>
+            <tr>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#475569;">Species</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${pet.species}</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#475569;">Breed</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${pet.breed}</td>
+            </tr>
+            <tr>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#475569;">Age</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${pet.age} years</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#475569;">Weight</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#0f172a;">${pet.weight} kg</td>
+            </tr>
+            <tr>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#475569;">Health Status</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;"><span style="padding:4px 12px; border-radius:12px; font-weight:600; font-size:11px; ${pet.healthStatus === 'Healthy' ? 'background:#dcfce7; color:#166534;' : pet.healthStatus === 'Attention Needed' ? 'background:#fef9c3; color:#b45309;' : 'background:#fee2e2; color:#dc2626;'}">${pet.healthStatus}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Owner Information -->
+      <div style="margin-bottom:24px;">
+        <h3 style="color:#0f766e; font-size:16px; font-weight:700; border-bottom:2px solid #ccfbf1; padding-bottom:8px; background:linear-gradient(135deg, #ccfbf1 0%, #f0fdf4 100%); padding:12px; border-radius:8px; margin-bottom:16px;">Owner Information</h3>
+        <table style="width:100%; border-collapse:collapse; box-shadow:0 1px 3px rgba(0,0,0,0.1); border-radius:8px; overflow:hidden;">
+          <tbody>
+            <tr style="background:#f0fdf4;">
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#475569; width:40%;">Owner Name</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#0f172a;">${pet.ownerName}</td>
+            </tr>
+            <tr>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#475569;">Owner Phone</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0;">${pet.ownerPhone}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Medical Care Plan -->
+      <div style="margin-bottom:24px;">
+        <h3 style="color:#0284c7; font-size:16px; font-weight:700; border-bottom:2px solid #e0f2fe; padding-bottom:8px; background:linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); padding:12px; border-radius:8px; margin-bottom:16px;">Medical Care Plan</h3>
+        <table style="width:100%; border-collapse:collapse; box-shadow:0 1px 3px rgba(0,0,0,0.1); border-radius:8px; overflow:hidden;">
+          <tbody>
+            <tr style="background:#e0f2fe;">
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#475569; width:40%;">Assigned Unit</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-family:monospace; font-weight:700; color:#0f172a;">${pet.assignedDeviceId || 'Cage 1'}</td>
+            </tr>
+            <tr>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#475569;">Daily Hydration Target</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#0284c7;">${pet.hydrationTarget} ml/day</td>
+            </tr>
+            <tr style="background:#e0f2fe;">
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:600; color:#475569;">Daily Portion Size</td>
+              <td style="padding:12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#0284c7;">${pet.feedingPlan?.portionGrams || 100} grams</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Footer Section -->
+      <div style="margin-top:48px; padding:24px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius:12px; border:1px solid #e2e8f0; display: flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+        <div style="font-size:12px; color:#64748b;">
+          <div style="margin-bottom:8px;"><strong>Attending Veterinarian Signature:</strong> _______________________</div>
+          <div><strong>Date:</strong> ${dateStr}</div>
+        </div>
+        <div style="text-align:right; font-size:12px; color:#64748b;">
+          <div style="margin-bottom:8px;"><strong>Clinic Seal & Stamp</strong></div>
+          <div>Heritage Animal Clinic Official Record</div>
+        </div>
+      </div>
+
+      <!-- Footer Watermark -->
+      <div style="margin-top:24px; text-align:center; padding-top:16px; border-top:1px solid #e2e8f0; font-size:11px; color:#94a3b8;">
+        <p style="margin:0;">Generated by HydroNourish Automated Pet Care System — Heritage Animal Clinic</p>
+        <p style="margin:4px 0 0 0; font-size:10px;">Confidential Medical Record • Not for distribution without authorization</p>
+      </div>
+    </div>
+  `;
 };

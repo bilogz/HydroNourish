@@ -448,19 +448,6 @@ export const HydrationPage: React.FC = () => {
               </div>
             </div>
 
-            {/* TDS Dry Doctor / Staff Alert Banner */}
-            {(selectedDevice.waterQualityPpm ?? 0) === 0 && (
-              <div className="p-3.5 bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-orange-500/10 border-2 border-amber-300 rounded-2xl text-xs text-amber-950 flex items-center gap-2.5 animate-in fade-in shadow-xs">
-                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-800 shrink-0">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping inline-block" />
-                </div>
-                <div>
-                  <p className="font-black text-amber-950 text-xs sm:text-sm">🚨 Attending Doctor / Staff Alert: Water Tank is Dry (0 PPM)</p>
-                  <p className="text-[11px] text-amber-800 mt-0.5">TDS probe detects 0 PPM. Clean water tank reservoir is empty or dry. Attending veterinarian please refill water tank.</p>
-                </div>
-              </div>
-            )}
-
             {/* Pump Live Control Toolbar */}
             <div className="space-y-2">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
