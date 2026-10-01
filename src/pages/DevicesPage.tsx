@@ -1283,12 +1283,11 @@ export const DevicesPage: React.FC = () => {
                             <StatusBadge status={featuredDevice.status} size="sm" />
                           )}
                         </div>
-                        <div className="text-right">
-                          <span className="block text-[11px] font-mono text-slate-500 font-bold">{featuredDevice.macAddress}</span>
-                          <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                        <div className="text-right min-w-0">
+                          <div className="flex items-center justify-end gap-1.5">
                             {/* Explicit Independent Status Indicators */}
                             <span
-                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-colors ${
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-colors shrink-0 ${
                                 isFlashDirectConnected
                                   ? 'bg-teal-50 border-teal-200 text-teal-700'
                                   : 'bg-slate-50 border-slate-200 text-slate-400'
@@ -1300,7 +1299,7 @@ export const DevicesPage: React.FC = () => {
                             </span>
 
                             <span
-                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-colors ${
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-colors shrink-0 ${
                                 isWifiConnected
                                   ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
                                   : 'bg-slate-50 border-slate-200 text-slate-400'
@@ -1311,6 +1310,7 @@ export const DevicesPage: React.FC = () => {
                               {isWifiConnected ? activeWifiSsid : 'Wi-Fi: OFF'}
                             </span>
                           </div>
+                          <span className="block text-[10px] font-mono text-slate-400 font-bold mt-1 truncate" title={featuredDevice.macAddress}>{featuredDevice.macAddress}</span>
                         </div>
                       </div>
 
